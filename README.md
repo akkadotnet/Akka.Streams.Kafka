@@ -2,6 +2,9 @@
 
 Akka Streams Kafka is an Akka Streams connector for Apache Kafka.
 
+## Builds
+[![Build status](https://ci.appveyor.com/api/projects/status/uveg350ptdydkes9/branch/dev?svg=true)](https://ci.appveyor.com/project/ravengerUA/akka-streams-kafka/branch/dev)
+
 ## Producer
 
 A producer publishes messages to Kafka topics. The message itself contains information about what topic and partition to publish to so you can publish to different topics with the same producer.
