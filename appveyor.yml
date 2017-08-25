@@ -39,7 +39,7 @@
     provider: NuGet
     server: https://www.myget.org/F/akkadotnet-contrib/api/v2/package
     api_key:
-      secure: yoMgcchmDuXbvT90bgrUTOUNYgAId6QI0nofIOtnlfWzMjDEWfOqNqqTGPY+02M+
+      secure: jQuBpocHZDGvdofamuCCsDUJFjl6G6dycO+m/BFFzsHSJEUKCz+hIDKetYxJWT/V
     skip_symbols: false
     symbol_server: https://www.myget.org/F/akkadotnet-contrib/symbols/api/v2/package
     artifact: /.*\.nupkg/
