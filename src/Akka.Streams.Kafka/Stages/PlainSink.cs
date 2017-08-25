@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Pattern;
@@ -7,9 +6,8 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 
-namespace Akka.Streams.Kafka
+namespace Akka.Streams.Kafka.Stages
 {
     internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Result<K, V>>>>
     {
@@ -49,8 +47,6 @@ namespace Akka.Streams.Kafka
                     var msg = Grab<ProduceRecord<K, V>>(In);
 
                     var task = producer.ProduceAsync(msg.Topic, msg.Key, msg.Value).GetAwaiter().GetResult();
-                    Console.WriteLine($"Partition: {task.Partition}, Offset: {task.Offset}");
-
                     Push(Out, Task.FromResult(new Result<K, V>(task, msg)));
                 },
                 onUpstreamFinish: () =>

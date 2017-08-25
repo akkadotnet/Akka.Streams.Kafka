@@ -2,6 +2,7 @@
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Stages;
 
 namespace Akka.Streams.Kafka.Dsl
 {
@@ -18,7 +19,12 @@ namespace Akka.Streams.Kafka.Dsl
         // TODO: work on naming
         public static Flow<ProduceRecord<TKey, TValue>, Task<Result<TKey, TValue>>, NotUsed> CreateFlow<TKey, TValue>(ProducerSettings<TKey, TValue> settings)
         {
-            return Flow.FromGraph(new ProducerStage<TKey, TValue>(settings));
+            var flow = Flow.FromGraph(new ProducerStage<TKey, TValue>(settings))
+                .SelectAsync(settings.Parallelism, Task.FromResult);
+
+            return string.IsNullOrEmpty(settings.DispatcherId) 
+                ? flow
+                : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
         }
     }
 }
