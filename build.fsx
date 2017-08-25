@@ -57,14 +57,23 @@ Target "Build" (fun _ ->
 //--------------------------------------------------------------------------------
 
 Target "CreateNuget" (fun _ ->
-    DotNetCli.Pack
-        (fun p -> 
-            { p with
-                Project = "./src/Akka.Streams.Kafka/Akka.Streams.Kafka.csproj"
-                Configuration = configuration
-                AdditionalArgs = ["--include-symbols"]
-                VersionSuffix = versionSuffix
-                OutputPath = outputNuGet })
+    let envBuildNumber = environVarOrDefault "APPVEYOR_BUILD_NUMBER" "0"
+    let branch =  environVarOrDefault "APPVEYOR_REPO_BRANCH" ""
+    let versionSuffix = if branch.Equals("dev") then (sprintf "beta-%s" envBuildNumber) else ""
+
+    let projects = !! "./**/Akka.Streams.Kafka.csproj"
+
+    let runSingleProject project =
+        DotNetCli.Pack
+            (fun p -> 
+                { p with
+                    Project = project
+                    Configuration = configuration
+                    AdditionalArgs = ["--include-symbols"]
+                    VersionSuffix = versionSuffix
+                    OutputPath = outputNuGet })
+
+    projects |> Seq.iter (runSingleProject)
 )
 
 //--------------------------------------------------------------------------------
