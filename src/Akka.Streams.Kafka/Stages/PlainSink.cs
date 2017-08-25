@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Akka.Pattern;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
@@ -28,9 +27,9 @@ namespace Akka.Streams.Kafka.Stages
 
     internal sealed class ProducerStageLogic<K, V> : GraphStageLogic
     {
-        private volatile bool inIsClosed;
-        private readonly Producer<K, V> producer;
-        private TaskCompletionSource<bool> completionState = new TaskCompletionSource<bool>();
+        private volatile bool _isClosed;
+        private readonly Producer<K, V> _producer;
+        private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
 
         private Inlet In { get; }
         private Outlet Out { get; }
@@ -39,26 +38,26 @@ namespace Akka.Streams.Kafka.Stages
         {
             In = shape.Inlets.FirstOrDefault();
             Out = shape.Outlets.FirstOrDefault();
-            producer = new Producer<K, V>(settings.Properties, settings.KeySerializer, settings.ValueSerializer);
+            _producer = new Producer<K, V>(settings.Properties, settings.KeySerializer, settings.ValueSerializer);
 
             SetHandler(In, 
                 onPush: () =>
                 {
                     var msg = Grab<ProduceRecord<K, V>>(In);
 
-                    var task = producer.ProduceAsync(msg.Topic, msg.Key, msg.Value).GetAwaiter().GetResult();
-                    Push(Out, Task.FromResult(new Result<K, V>(task, msg)));
+                    var result = SendToProducer(msg);
+                    Push(Out, result);
                 },
                 onUpstreamFinish: () =>
                 {
-                    inIsClosed = true;
-                    completionState.SetResult(true);
+                    _isClosed = true;
+                    _completionState.SetResult(NotUsed.Instance);
                     CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
                 {
-                    inIsClosed = true;
-                    completionState.SetException(exception);
+                    _isClosed = true;
+                    _completionState.SetException(exception);
                     CheckForCompletion();
                 });
 
@@ -72,27 +71,31 @@ namespace Akka.Streams.Kafka.Stages
         {
             if (IsClosed(In))
             {
-                if (!completionState.Task.IsFaulted && completionState.Task.Result)
+                var completionTask = _completionState.Task;
+
+                if (completionTask.IsFaulted || completionTask.IsCanceled)
+                {
+                    FailStage(completionTask.Exception);
+                }
+                else if (completionTask.IsCompleted)
                 {
                     CompleteStage();
                 }
-                else if (completionState.Task.IsFaulted)
-                {
-                    FailStage(completionState.Task.Exception);
-                }
-                else
-                {
-                    FailStage(new IllegalStateException("Stage completed, but there is no info about status"));
-                }
             }
+        }
+
+        private async Task<Result<K, V>> SendToProducer(ProduceRecord<K, V> msg)
+        {
+            var task = await _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value);
+            return new Result<K, V>(task, msg);
         }
 
         public override void PostStop()
         {
             Log.Debug("Stage completed");
 
-            producer.Flush(TimeSpan.FromSeconds(2));
-            producer.Dispose();
+            _producer.Flush(TimeSpan.FromSeconds(2));
+            _producer.Dispose();
             Log.Debug("Producer closed");
 
             base.PostStop();
