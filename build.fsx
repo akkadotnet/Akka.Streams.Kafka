@@ -13,7 +13,7 @@ open Fake.DocFxHelper
 let configuration = "Release"
 
 // Directories
-let output = __SOURCE_DIRECTORY__  @@ "bin"
+let output = __SOURCE_DIRECTORY__  @@ "build"
 let outputTests = output @@ "tests"
 let outputBinaries = output @@ "binaries"
 let outputNuGet = output @@ "nuget"

@@ -35,7 +35,7 @@ Source
 The materialized value of the sink is a `Task` which is completed with result when the stream completes or with exception if an error occurs.
 
 ### Producer as a Flow
-Sometimes there is a need for publishing messages in the middle of the stream processing, not as the last step, and then you can use Producer.flow
+Sometimes there is a need for publishing messages in the middle of the stream processing, not as the last step, and then you can use `Producer.CreateFlow`
 
 ```C#
 Source
