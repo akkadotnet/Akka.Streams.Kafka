@@ -1,8 +1,11 @@
-﻿using System.Linq;
+﻿using System.Collections.Immutable;
+using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
+using Akka.Util.Internal;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages
 {
@@ -34,6 +37,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly Outlet _out;
         private IActorRef consumer;
         private StageActorRef Self;
+        private IImmutableSet<TopicPartition> tps = ImmutableHashSet<TopicPartition>.Empty;
         
         public SingleSourceLogic(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
@@ -56,17 +60,29 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
+            var extendedActorSystem = ActorMaterializerHelper.Downcast(Materializer).System.AsInstanceOf<ExtendedActorSystem>();
+            var name = $"kafka-consumer-{KafkaConsumerActor.NextNumber()}";
+            consumer = extendedActorSystem.SystemActorOf(KafkaConsumerActor.Props(_settings), name);
+
             Self.Watch(consumer);
+
+            object rebalanceListener = null;
 
             switch (_subscription)
             {
                 case TopicSubscription ts:
+                    consumer.Tell(new Internal.Subscribe(ts.Topics, rebalanceListener), Self);
                     break;
                 case TopicSubscriptionPattern tsp:
+                    // TODO: implement
                     break;
                 case Assignment a:
+                    consumer.Tell(new Internal.Assign(a.TopicPartitions), Self);
+                    tps = tps.Union(a.TopicPartitions);
                     break;
                 case AssignmentWithOffset awo:
+                    consumer.Tell(new Internal.AssignWithOffset(awo.TopicPartitions), Self);
+                    tps = tps.Union(awo.TopicPartitions.Keys);
                     break;
             }
         }
