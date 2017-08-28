@@ -37,7 +37,7 @@ namespace SimpleProducer
             Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>("akka5", null, elem))
+                .Select(elem => new ProduceRecord<Null, string>("akka10", null, elem))
                 .Via(Producer.CreateFlow(producerSettings))
                 .Select(result =>
                 {

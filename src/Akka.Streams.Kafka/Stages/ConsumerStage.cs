@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Settings;
@@ -34,7 +35,8 @@ namespace Akka.Streams.Kafka.Stages
         private readonly ISubscription _subscription;
         private readonly Outlet _out;
         private Consumer<K, V> _consumer;
-        private Action<Message<K, V>> _callback;
+        private Action<Message<K, V>> _messagesReceived;
+        private const string TimerKey = "PollTimer";
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
@@ -42,25 +44,12 @@ namespace Akka.Streams.Kafka.Stages
             _subscription = subscription;
             _out = shape.Outlets.FirstOrDefault();
 
-            SetHandler(_out,
-                onPull: () =>
-                {
-
-                },
-                onDownstreamFinish: () =>
-                {
-
-                });
+            SetHandler(_out, PullQueue);
         }
 
         public override void PreStart()
         {
             base.PreStart();
-
-            _callback = GetAsyncCallback<Message<K, V>>(data =>
-            {
-                Push(_out, data);
-            });
 
             _consumer = _settings.CreateKafkaConsumer();
             _consumer.OnMessage += OnMessage;
@@ -80,12 +69,14 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
+            _messagesReceived = GetAsyncCallback<Message<K, V>>(OnMessagesReceived);
+
             ScheduleRepeatedly("poll", _settings.PollInterval);
         }
         
         private void OnMessage(object sender, Message<K, V> message)
         {
-            _callback.Invoke(message);
+            _messagesReceived.Invoke(message);
         }
 
         private void OnConsumeError(object sender, Message message)
@@ -98,6 +89,21 @@ namespace Akka.Streams.Kafka.Stages
             Log.Error(error.Reason);
         }
 
+        private void OnMessagesReceived(Message<K, V> message)
+        {
+            if (message.Error.HasError)
+            {
+                if (message.Error.Code == ErrorCode.BrokerNotAvailable)
+                    FailStage(new Exception("Broker is not available"));
+                else
+                    ScheduleOnce(TimerKey, _settings.PollTimeout);
+                return;
+            }
+
+            Push(_out, message);
+            ScheduleOnce(TimerKey, _settings.PollTimeout);
+        }
+
         public override void PostStop()
         {
             base.PostStop();
@@ -105,10 +111,8 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.Dispose();
         }
 
-        protected override void OnTimer(object timerKey)
-        {
-            if (timerKey.Equals("poll"))
-                _consumer.Poll(_settings.PollTimeout);
-        }
+        private void PullQueue() => _consumer.Poll(_settings.PollTimeout);
+
+        protected override void OnTimer(object timerKey) => PullQueue();
     }
 }
