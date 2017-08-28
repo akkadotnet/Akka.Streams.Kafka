@@ -17,16 +17,6 @@ namespace Akka.Streams.Kafka.Settings
         public IImmutableSet<string> Topics { get; }
     }
 
-    internal sealed class TopicSubscriptionPattern : IAutoSubscription
-    {
-        public TopicSubscriptionPattern(string pattern)
-        {
-            Pattern = pattern;
-        }
-
-        public string Pattern { get; }
-    }
-
     internal sealed class Assignment : IManualSubscription
     {
         public Assignment(IImmutableSet<TopicPartition> topicPartitions)
@@ -39,9 +29,8 @@ namespace Akka.Streams.Kafka.Settings
 
     public static class Subscriptions
     {
-        public static IAutoSubscription Topics(params string[] topics) => new TopicSubscription(topics.ToImmutableHashSet());
-
-        public static IAutoSubscription TopicPattern(string pattern) => new TopicSubscriptionPattern(pattern);
+        public static IAutoSubscription Topics(params string[] topics) =>
+            new TopicSubscription(topics.ToImmutableHashSet());
 
         public static IManualSubscription Assignment(params TopicPartition[] topicPartitions) =>
             new Assignment(topicPartitions.ToImmutableHashSet());

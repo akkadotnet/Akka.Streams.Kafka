@@ -35,18 +35,6 @@ namespace Akka.Streams.Kafka.Stages
             public IImmutableSet<TopicPartition> TopicPartitions { get; }
         }
 
-        internal struct AssignWithOffset
-        {
-            public AssignWithOffset(IImmutableDictionary<TopicPartition, long> topicPartitions)
-            {
-                TopicPartitions = topicPartitions;
-            }
-
-            public IImmutableDictionary<TopicPartition, long> TopicPartitions { get; }
-        }
-
-        // TODO: AssignOffsetsForTimes
-
         internal struct Subscribe
         {
             public Subscribe(IImmutableSet<string> topics, object listener)
@@ -56,18 +44,6 @@ namespace Akka.Streams.Kafka.Stages
             }
 
             public IImmutableSet<string> Topics { get; }
-            public object Listener { get; }
-        }
-
-        internal struct SubscribePattern
-        {
-            public SubscribePattern(string topicPattern, object listener)
-            {
-                TopicPattern = topicPattern;
-                Listener = listener;
-            }
-
-            public string TopicPattern { get; }
             public object Listener { get; }
         }
 
@@ -201,22 +177,6 @@ namespace Akka.Streams.Kafka.Stages
                 consumer.Assign(previousAssigned);
             });
 
-            Receive<Internal.AssignWithOffset>(assign =>
-            {
-                // TODO: scheduleFirstPollTask()
-                var topicPartitions = assign.TopicPartitions.Keys.ToImmutableHashSet();
-                CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
-                var assigned = consumer.Assignment;
-                assigned.AddRange(topicPartitions);
-                consumer.Assign(assigned);
-
-                foreach (var entry in assign.TopicPartitions)
-                {
-                    // TODO: Seek is not implemented in Kafka driver
-                    //consumer.Seek(entry.Key, entry.Value);
-                }
-            });
-
             Receive<Internal.Commit>(commit =>
             {
                 var commitMap = commit.Offsets
@@ -253,11 +213,6 @@ namespace Akka.Streams.Kafka.Stages
             Receive<Internal.Subscribe>(subscribe =>
             {
                 consumer.Subscribe(subscribe.Topics);
-            });
-
-            Receive<Internal.SubscribePattern>(subscribe =>
-            {
-                consumer.Subscribe(subscribe.TopicPattern);
             });
 
             Receive<Poll<TKey, TValue>>(poll =>
@@ -315,9 +270,7 @@ namespace Akka.Streams.Kafka.Stages
             Receive<Internal.RequestMessages>(x => Sender.Tell(new Status.Failure(new StoppingException())));
 
             Receive<Internal.Assign>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
-            Receive<Internal.AssignWithOffset>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
             Receive<Internal.Subscribe>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
-            Receive<Internal.SubscribePattern>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
         }
 
         protected override void PreStart()

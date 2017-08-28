@@ -108,9 +108,6 @@ namespace Akka.Streams.Kafka.Stages
                 case TopicSubscription ts:
                     consumer.Tell(new Internal.Subscribe(ts.Topics, rebalanceListener), Self);
                     break;
-                case TopicSubscriptionPattern tsp:
-                    // TODO: implement
-                    break;
                 case Assignment a:
                     consumer.Tell(new Internal.Assign(a.TopicPartitions), Self);
                     tps = tps.Union(a.TopicPartitions);

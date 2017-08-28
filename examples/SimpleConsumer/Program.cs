@@ -32,16 +32,30 @@ namespace SimpleConsumer
 
             var partition = 0;
 
-            var subscription = Subscriptions.Assignment(new TopicPartition("akka", partition));
+            //Consumer.PlainSource(consumerSettings, subscription)
+            //    .SelectAsync(1, Task.FromResult)
+            //    .Select(c =>
+            //    {
+            //        Console.WriteLine(c.Value);
+            //        return c;
+            //    })
+            //    .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
 
-            Consumer.PlainSource(consumerSettings, subscription)
-                .SelectAsync(1, Task.FromResult)
-                .Select(c =>
-                {
-                    Console.WriteLine(c.Value);
-                    return c;
-                })
-                .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
+
+            var consumer = consumerSettings.CreateKafkaConsumer();
+            consumer.Assign(new List<TopicPartitionOffset> { new TopicPartitionOffset("akka", 0, 0) });
+
+            consumer.OnMessage += (sender, message) =>
+            {
+
+            };
+
+            while (true)
+            {
+                consumer.Poll(consumerSettings.PollTimeout);
+            }
+
+            
 
             Console.ReadLine();
         }
