@@ -1,4 +1,7 @@
-﻿using System.Collections.Immutable;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -38,7 +41,13 @@ namespace Akka.Streams.Kafka.Stages
         private IActorRef consumer;
         private StageActorRef Self;
         private IImmutableSet<TopicPartition> tps = ImmutableHashSet<TopicPartition>.Empty;
+
         
+        private int requestId = 0;
+        private bool requested = false;
+
+        private Queue<Message<K, V>> buffer = new Queue<Message<K, V>>();
+
         public SingleSourceLogic(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
             _settings = settings;
@@ -64,6 +73,32 @@ namespace Akka.Streams.Kafka.Stages
             var name = $"kafka-consumer-{KafkaConsumerActor.NextNumber()}";
             consumer = extendedActorSystem.SystemActorOf(KafkaConsumerActor.Props(_settings), name);
 
+            Self = GetStageActorRef(args =>
+            {
+                switch (args.Item2)
+                {
+                    case Internal.Messages<K, V> msg:
+                        // might be more than one in flight when we assign/revoke tps
+                        if (msg.RequestId == requestId)
+                            requested = true;
+                        if (buffer.Peek() != null)
+                        {
+                            foreach (var message in msg.KafkaMessages)
+                            {
+                                buffer.Enqueue(message);
+                            }
+                        }
+                        else
+                        {
+                            buffer = new Queue<Message<K, V>>(msg.KafkaMessages);
+                        }
+                        Pump();
+                        break;
+                    case Terminated t when t.ActorRef.Equals(consumer):
+                        FailStage(new Exception("Consumer actor terminated"));
+                        break;
+                }
+            });
             Self.Watch(consumer);
 
             object rebalanceListener = null;
@@ -80,10 +115,6 @@ namespace Akka.Streams.Kafka.Stages
                     consumer.Tell(new Internal.Assign(a.TopicPartitions), Self);
                     tps = tps.Union(a.TopicPartitions);
                     break;
-                case AssignmentWithOffset awo:
-                    consumer.Tell(new Internal.AssignWithOffset(awo.TopicPartitions), Self);
-                    tps = tps.Union(awo.TopicPartitions.Keys);
-                    break;
             }
         }
 
@@ -96,8 +127,24 @@ namespace Akka.Streams.Kafka.Stages
         {
             if (IsAvailable(_out))
             {
-                
+                if (buffer.Count > 0)
+                {
+                    var msg = buffer.Dequeue();
+                    Push(_out, msg);
+                    Pump();
+                }
+                else if (!requested && tps.Count > 0)
+                {
+                    RequestMessages();
+                }
             }
+        }
+
+        public void RequestMessages()
+        {
+            requested = true;
+            requestId += 1;
+            consumer.Tell(new Internal.RequestMessages(requestId, tps), Self);
         }
 
         private void PerformShutdown()

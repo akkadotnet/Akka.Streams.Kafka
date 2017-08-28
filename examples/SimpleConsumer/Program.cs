@@ -30,63 +30,20 @@ namespace SimpleConsumer
                 .WithBootstrapServers("localhost:9092")
                 .WithGroupId("group1");
 
-            var db = new Db();
-            var offset = db.LoadOffset();
             var partition = 0;
 
-            var subscription = Subscriptions.AssignmentWithOffset((new TopicPartition("topic1", partition), offset));
+            var subscription = Subscriptions.Assignment(new TopicPartition("akka", partition));
 
             Consumer.PlainSource(consumerSettings, subscription)
-                .SelectAsync(1, db.Save)
+                .SelectAsync(1, Task.FromResult)
+                .Select(c =>
+                {
+                    Console.WriteLine(c.Value);
+                    return c;
+                })
                 .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
 
-
-
-            string brokerList = "localhost:9092";
-            var topics = new List<string> { "akka" };
-
-            var config = new Dictionary<string, object>
-            {
-                { "group.id", "simple-csharp-consumer" },
-                { "bootstrap.servers", brokerList }
-            };
-
-            using (var consumer = new Consumer<Null, string>(config, null, new StringDeserializer(Encoding.UTF8)))
-            {
-                Console.WriteLine($"{consumer.Name} consuming on {topics[0]}. q to exit.");
-                consumer.Assign(new List<TopicPartitionOffset> { new TopicPartitionOffset(topics.First(), 0, 0) });
-
-                while (true)
-                {
-                    if (consumer.Consume(out Message<Null, string> msg, TimeSpan.FromSeconds(1)))
-                    {
-                        Console.WriteLine($"Topic: {msg.Topic} Partition: {msg.Partition} Offset: {msg.Offset} {msg.Value}");
-                    }
-                }
-            }
-        }
-    }
-
-    public class Db
-    {
-        private long _offset = 0L;
-
-        public Task<Message<Null, string>> Save(Message<Null, string> record)
-        {
-            Console.WriteLine($"DB.save: {record.Value}");
-            Interlocked.Add(ref _offset, record.Offset.Value);
-            return Task.FromResult(record);
-        }
-
-        public long LoadOffset()
-        {
-            return _offset;
-        }
-
-        public Task Update(string data)
-        {
-            Console.WriteLine($"DB.update: {data}");
-            return Task.CompletedTask;
+            Console.ReadLine();
         }
     }
 }

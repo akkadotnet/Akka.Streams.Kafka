@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using Akka.Actor;
 using Akka.Event;
+using Akka.Pattern;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util.Internal;
 using Confluent.Kafka;
@@ -72,14 +73,14 @@ namespace Akka.Streams.Kafka.Stages
 
         internal struct RequestMessages
         {
-            public RequestMessages(int requestId, ImmutableHashSet<TopicPartition> topics)
+            public RequestMessages(int requestId, IImmutableSet<TopicPartition> topics)
             {
                 RequestId = requestId;
                 Topics = topics;
             }
 
             public int RequestId { get; }
-            public ImmutableHashSet<TopicPartition> Topics { get; }
+            public IImmutableSet<TopicPartition> Topics { get; }
         }
 
         internal struct Stop
@@ -246,7 +247,6 @@ namespace Akka.Streams.Kafka.Stages
                         }
                         reply.Tell(msg);
                     });
-                //right now we can not store commits in consumer - https://issues.apache.org/jira/browse/KAFKA-3412
                 Poll();
             });
 
@@ -310,8 +310,10 @@ namespace Akka.Streams.Kafka.Stages
             });
             Receive<Internal.Stop>(_ => { /* ignore */ });
             Receive<Terminated>(_ => { /* ignore */ });
+            
             Receive<Internal.Commit>(x => Sender.Tell(new Status.Failure(new StoppingException())));
             Receive<Internal.RequestMessages>(x => Sender.Tell(new Status.Failure(new StoppingException())));
+
             Receive<Internal.Assign>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
             Receive<Internal.AssignWithOffset>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
             Receive<Internal.Subscribe>(x => Log.Warning("Got unexpected message {0} when KafkaConsumerActor is in stopping stage", x));
@@ -345,43 +347,56 @@ namespace Akka.Streams.Kafka.Stages
 
         protected void Poll()
         {
-            //var wakeUpTask = Context.System.Scheduler.Advanced.ScheduleOnceCancelable(settings.WakeUpTimeout, () =>
-            //{
-            //    consumer.WakeUp();
-            //});
+            // TODO: wakeupTask
 
             // set partitions to fetch
             var partitionsToFetch = requests.SelectMany(entry => entry.Value.Topics).ToImmutableHashSet();
-            //foreach (var partition in consumer.Assignment)
-            //{
-            //    if (partitionsToFetch.Contains(partition))
-            //    {
-            //        consumer.Resume(partition);
-            //    }
-            //    else
-            //    {
-            //        consumer.Pause(partition);
-            //    }
-            //}
-
-            if (requests.Count == 0)
+            foreach (var partition in consumer.Assignment)
             {
-                // no outstanding requests so we don't expect any messages back, but we should anyway
-                // drive the KafkaConsumer by polling
-                CheckNoResult(TryPoll(TimeSpan.Zero));
+                // TODO: consumer.Resume/consumer.Pause
+            }
 
-                // For commits we try to avoid blocking poll because a commit normally succeeds after a few
-                // poll(0). Using poll(1) will always block for 1 ms, since there are no messages.
-                // Therefore we do 10 poll(0) with short 10 μs delay followed by 1 poll(1).
-                // If it's still not completed it will be tried again after the scheduled Poll.
-                for (int i = 10; i >= 0 && commitsInProgress > 0; i--)
+            IEnumerable<Message<TKey, TValue>> TryPoll(TimeSpan pollTimeout)
+            {
+                if (consumer.Consume(out var message, pollTimeout))
                 {
-                    //Thread.SpinWait(10000);
+                    return new List<Message<TKey, TValue>> { message };
+                }
+
+                return null;
+            }
+
+            try
+            {
+                if (requests.Count == 0)
+                {
+                    void CheckNoResult(IEnumerable<Message<TKey, TValue>> rawResult)
+                    {
+                        if (rawResult.Any())
+                            throw new IllegalStateException($"Got {rawResult.Count()} unexpected messages");
+                    }
+
+                    // no outstanding requests so we don't expect any messages back, but we should anyway
+                    // drive the KafkaConsumer by polling
+                    CheckNoResult(TryPoll(TimeSpan.Zero));
+
+                    // For commits we try to avoid blocking poll because a commit normally succeeds after a few
+                    // poll(0). Using poll(1) will always block for 1 ms, since there are no messages.
+                    // Therefore we do 10 poll(0) with short 10 μs delay followed by 1 poll(1).
+                    // If it's still not completed it will be tried again after the scheduled Poll.
+                    for (int i = 10; i >= 0 && commitsInProgress > 0; i--)
+                    {
+                        //Thread.SpinWait(10000);
+                    }
+                }
+                else
+                {
+                    ProcessResult(partitionsToFetch, TryPoll(PollTimeout));
                 }
             }
-            else
+            catch
             {
-                ProcessResult(partitionsToFetch, TryPoll(PollTimeout));
+
             }
 
             if (stopInProgress && commitsInProgress == 0)
@@ -390,16 +405,7 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
 
-        private void CheckNoResult(Message<TKey, TValue> result)
-        {
-        }
-
-        private Message<TKey, TValue> TryPoll(TimeSpan pollTimeout)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void ProcessResult(ImmutableHashSet<TopicPartition> partitionsToFetch, Message<TKey, TValue> result)
+        private void ProcessResult(ImmutableHashSet<TopicPartition> partitionsToFetch, IEnumerable<Message<TKey, TValue>> result)
         {
             throw new NotImplementedException();
         }
@@ -412,7 +418,7 @@ namespace Akka.Streams.Kafka.Stages
             {
                 var reference = entry.Key;
                 var request = entry.Value;
-                if (!Equals(reference, fromStage) && !request.Topics.Intersect(topics).IsEmpty)
+                if (!Equals(reference, fromStage) && request.Topics.Intersect(topics).Count > 0)
                 {
                     if (Log.IsWarningEnabled)
                         Log.Warning("{0} from topic/partition [{1}] already requested by other stage [{2}]", updateType, string.Join(", ", topics), string.Join(", ", request.Topics));
