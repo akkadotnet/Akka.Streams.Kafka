@@ -27,17 +27,17 @@ namespace SimpleProducer
                 .WithBootstrapServers("localhost:9092");
 
             // producer as a Sink
-            Source
-                .From(Enumerable.Range(1, 200))
-                .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>("akka2", null, elem))
-                .RunWith(Producer.PlainSink(producerSettings), materializer);
+            //Source
+            //    .From(Enumerable.Range(1, 200))
+            //    .Select(c => c.ToString())
+            //    .Select(elem => new ProduceRecord<Null, string>("akka5", null, elem))
+            //    .RunWith(Producer.PlainSink(producerSettings), materializer);
 
             // producer as a Flow
             Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>("akka", null, elem))
+                .Select(elem => new ProduceRecord<Null, string>("akka5", null, elem))
                 .Via(Producer.CreateFlow(producerSettings))
                 .Select(result =>
                 {

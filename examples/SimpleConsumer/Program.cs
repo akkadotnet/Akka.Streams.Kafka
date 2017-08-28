@@ -24,7 +24,7 @@ namespace SimpleConsumer
                 .WithBootstrapServers("localhost:9092")
                 .WithGroupId("group1");
 
-            var subscription = Subscriptions.Assignment(new TopicPartition("akka", 0));
+            var subscription = Subscriptions.Assignment(new TopicPartition("akka5", 0));
             //var subscription = Subscriptions.AssignmentWithOffset(new TopicPartitionOffset("akka", 0, new Offset(20)));
             //var subscription = Subscriptions.Topics("akka");
 

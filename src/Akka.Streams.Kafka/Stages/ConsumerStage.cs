@@ -28,13 +28,13 @@ namespace Akka.Streams.Kafka.Stages
         }
     }
 
-    internal class KafkaSourceStage<K, V> : GraphStageLogic
+    internal class KafkaSourceStage<K, V> : TimerGraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
         private readonly Outlet _out;
-        private Consumer<K, V> consumer;
-        private Action<Message<K, V>> callback;
+        private Consumer<K, V> _consumer;
+        private Action<Message<K, V>> _callback;
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
@@ -57,45 +57,35 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            callback = GetAsyncCallback<Message<K, V>>(data =>
+            _callback = GetAsyncCallback<Message<K, V>>(data =>
             {
                 Push(_out, data);
             });
 
-            consumer = _settings.CreateKafkaConsumer();
-            consumer.OnMessage += OnMessage;
-            consumer.OnConsumeError += OnConsumeError;
-            consumer.OnError += OnError;
+            _consumer = _settings.CreateKafkaConsumer();
+            _consumer.OnMessage += OnMessage;
+            _consumer.OnConsumeError += OnConsumeError;
+            _consumer.OnError += OnError;
 
             switch (_subscription)
             {
                 case TopicSubscription ts:
-                    consumer.Subscribe(ts.Topics);
+                    _consumer.Subscribe(ts.Topics);
                     break;
                 case Assignment a:
-                    consumer.Assign(a.TopicPartitions);
+                    _consumer.Assign(a.TopicPartitions);
                     break;
                 case AssignmentWithOffset awo:
-                    consumer.Assign(awo.TopicPartitions);
+                    _consumer.Assign(awo.TopicPartitions);
                     break;
             }
 
-            InfinitePoll(_settings.PollTimeout);
+            ScheduleRepeatedly("poll", _settings.PollInterval);
         }
         
-        // TODO: should be a timer/scheduler
-        public async Task InfinitePoll(TimeSpan timeout)
-        {
-            while (true)
-            {
-                consumer.Poll(timeout);
-                await Task.Delay(_settings.PollInterval);
-            }
-        }
-
         private void OnMessage(object sender, Message<K, V> message)
         {
-            callback.Invoke(message);
+            _callback.Invoke(message);
         }
 
         private void OnConsumeError(object sender, Message message)
@@ -105,14 +95,20 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnError(object sender, Error error)
         {
-
+            Log.Error(error.Reason);
         }
 
         public override void PostStop()
         {
             base.PostStop();
 
-            consumer.Dispose();
+            _consumer.Dispose();
+        }
+
+        protected override void OnTimer(object timerKey)
+        {
+            if (timerKey.Equals("poll"))
+                _consumer.Poll(_settings.PollTimeout);
         }
     }
 }
