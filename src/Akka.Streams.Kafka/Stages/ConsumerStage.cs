@@ -34,6 +34,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly ISubscription _subscription;
         private readonly Outlet _out;
         private Consumer<K, V> consumer;
+        private Action<Message<K, V>> callback;
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
@@ -56,13 +57,15 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            var callback = GetAsyncCallback<Message<K, V>>(data =>
+            callback = GetAsyncCallback<Message<K, V>>(data =>
             {
                 Push(_out, data);
             });
 
             consumer = _settings.CreateKafkaConsumer();
-            consumer.OnMessage += ConsumerOnMessage;
+            consumer.OnMessage += OnMessage;
+            consumer.OnConsumeError += OnConsumeError;
+            consumer.OnError += OnError;
 
             switch (_subscription)
             {
@@ -77,14 +80,10 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
-            void ConsumerOnMessage(object sender, Message<K, V> message)
-            {
-                callback.Invoke(message);
-            }
-
             InfinitePoll(_settings.PollTimeout);
         }
-
+        
+        // TODO: should be a timer/scheduler
         public async Task InfinitePoll(TimeSpan timeout)
         {
             while (true)
@@ -92,6 +91,21 @@ namespace Akka.Streams.Kafka.Stages
                 consumer.Poll(timeout);
                 await Task.Delay(_settings.PollInterval);
             }
+        }
+
+        private void OnMessage(object sender, Message<K, V> message)
+        {
+            callback.Invoke(message);
+        }
+
+        private void OnConsumeError(object sender, Message message)
+        {
+            // On consume error
+        }
+
+        private void OnError(object sender, Error error)
+        {
+
         }
 
         public override void PostStop()

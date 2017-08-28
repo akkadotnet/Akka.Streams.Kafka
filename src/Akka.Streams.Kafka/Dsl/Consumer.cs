@@ -9,18 +9,11 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Dsl
 {
-    public interface IControl
-    {
-        Task Stop();
-        Task Shutdown();
-        Task IsShutdown();
-    }
-
     public static class Consumer
     {
         public static Source<Message<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new KafkaSimpleSourceStage<K, V, Message<K, V>>(settings, subscription));
+            return Source.FromGraph(new KafkaSourceStage<K, V, Message<K, V>>(settings, subscription));
         }
     }
 }
