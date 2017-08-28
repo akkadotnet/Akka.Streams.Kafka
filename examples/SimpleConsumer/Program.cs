@@ -30,32 +30,17 @@ namespace SimpleConsumer
                 .WithBootstrapServers("localhost:9092")
                 .WithGroupId("group1");
 
-            var partition = 0;
+            //var subscription = Subscriptions.Assignment(new TopicPartition("akka", 0));
+            var subscription = Subscriptions.AssignmentWithOffset(new TopicPartitionOffset("akka", 0, new Offset(20)));
 
-            //Consumer.PlainSource(consumerSettings, subscription)
-            //    .SelectAsync(1, Task.FromResult)
-            //    .Select(c =>
-            //    {
-            //        Console.WriteLine(c.Value);
-            //        return c;
-            //    })
-            //    .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
-
-
-            var consumer = consumerSettings.CreateKafkaConsumer();
-            consumer.Assign(new List<TopicPartitionOffset> { new TopicPartitionOffset("akka", 0, 0) });
-
-            consumer.OnMessage += (sender, message) =>
-            {
-
-            };
-
-            while (true)
-            {
-                consumer.Poll(consumerSettings.PollTimeout);
-            }
-
-            
+            Consumer.PlainSource(consumerSettings, subscription)
+                .SelectAsync(1, Task.FromResult)
+                .Select(result =>
+                {
+                    Console.WriteLine($"{result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
+                    return result;
+                })
+                .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
 
             Console.ReadLine();
         }

@@ -27,6 +27,16 @@ namespace Akka.Streams.Kafka.Settings
         public IImmutableSet<TopicPartition> TopicPartitions { get; }
     }
 
+    internal sealed class AssignmentWithOffset : IManualSubscription
+    {
+        public AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> topicPartitions)
+        {
+            TopicPartitions = topicPartitions;
+        }
+
+        public IImmutableSet<TopicPartitionOffset> TopicPartitions { get; }
+    }
+
     public static class Subscriptions
     {
         public static IAutoSubscription Topics(params string[] topics) =>
@@ -34,5 +44,8 @@ namespace Akka.Streams.Kafka.Settings
 
         public static IManualSubscription Assignment(params TopicPartition[] topicPartitions) =>
             new Assignment(topicPartitions.ToImmutableHashSet());
+
+        public static IManualSubscription AssignmentWithOffset(params TopicPartitionOffset[] topicPartitions) =>
+            new AssignmentWithOffset(topicPartitions.ToImmutableHashSet());
     }
 }
