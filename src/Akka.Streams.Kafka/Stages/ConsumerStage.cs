@@ -91,11 +91,13 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnConsumeError(object sender, Message message)
         {
+            // TODO: how I should react?
             // On consume error
         }
 
         private void OnError(object sender, Error error)
         {
+            // TODO: what error to handle?
             Log.Error(error.Reason);
         }
 
