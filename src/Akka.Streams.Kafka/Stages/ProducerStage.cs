@@ -8,19 +8,19 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Result<K, V>>>>
+    internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>>
     {
         private readonly ProducerSettings<K, V> _settings;
         private Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("messages");
-        private Outlet<Task<Result<K, V>>> Out { get; } = new Outlet<Task<Result<K, V>>>("result");
+        private Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("result");
 
         public ProducerStage(ProducerSettings<K, V> settings)
         {
             _settings = settings;
-            Shape = new FlowShape<ProduceRecord<K, V>, Task<Result<K, V>>>(In, Out);
+            Shape = new FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>(In, Out);
         }
 
-        public override FlowShape<ProduceRecord<K, V>, Task<Result<K, V>>> Shape { get; }
+        public override FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>> Shape { get; }
 
         protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes) => new ProducerStageLogic<K, V>(_settings, Shape);
     }
@@ -30,6 +30,8 @@ namespace Akka.Streams.Kafka.Stages
         private volatile bool _isClosed;
         private readonly Producer<K, V> _producer;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
+
+        private Action<ProduceRecord<K, V>> SendToProducer;
 
         private Inlet In { get; }
         private Outlet Out { get; }
@@ -44,9 +46,7 @@ namespace Akka.Streams.Kafka.Stages
                 onPush: () =>
                 {
                     var msg = Grab<ProduceRecord<K, V>>(In);
-
-                    var result = SendToProducer(msg);
-                    Push(Out, result);
+                    SendToProducer.Invoke(msg);
                 },
                 onUpstreamFinish: () =>
                 {
@@ -84,10 +84,15 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
 
-        private async Task<Result<K, V>> SendToProducer(ProduceRecord<K, V> msg)
+        public override void PreStart()
         {
-            var task = await _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value);
-            return new Result<K, V>(task, msg);
+            base.PreStart();
+
+            SendToProducer = msg =>
+            {
+                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value);
+                Push(Out, task);
+            };
         }
 
         public override void PostStop()

@@ -41,11 +41,11 @@ namespace SimpleProducer
                 .Via(Producer.CreateFlow(producerSettings))
                 .Select(result =>
                 {
-                    var record = result.Result.Metadata;
+                    var record = result.Result;
                     Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {result.Result.Offset}: {record.Value}");
                     return result;
                 })
-                .RunWith(Sink.Ignore<Task<Result<Null, string>>>(), materializer);
+                .RunWith(Sink.Ignore<Task<Message<Null, string>>>(), materializer);
 
             // TODO: producer as a Commitable Sink
 

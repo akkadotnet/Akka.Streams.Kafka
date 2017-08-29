@@ -59,7 +59,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .From(range)
                 .Select(elem => new ProduceRecord<Null, string>(topic, null, elem.ToString()))
                 .Via(Dsl.Producer.CreateFlow(producerSettings))
-                .RunWith(Sink.Ignore<Task<Result<Null, string>>>(), _materializer);
+                .RunWith(Sink.Ignore<Task<Message<Null, string>>>(), _materializer);
         }
 
         private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, string topic)

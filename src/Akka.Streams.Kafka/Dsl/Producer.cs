@@ -3,6 +3,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Dsl
 {
@@ -13,11 +14,11 @@ namespace Akka.Streams.Kafka.Dsl
             return Flow
                 .Create<ProduceRecord<TKey, TValue>>()
                 .Via(CreateFlow(settings))
-                .ToMaterialized(Sink.Ignore<Task<Result<TKey, TValue>>>(), Keep.Right);
+                .ToMaterialized(Sink.Ignore<Task<Message<TKey, TValue>>>(), Keep.Right);
         }
 
         // TODO: work on naming
-        public static Flow<ProduceRecord<TKey, TValue>, Task<Result<TKey, TValue>>, NotUsed> CreateFlow<TKey, TValue>(ProducerSettings<TKey, TValue> settings)
+        public static Flow<ProduceRecord<TKey, TValue>, Task<Message<TKey, TValue>>, NotUsed> CreateFlow<TKey, TValue>(ProducerSettings<TKey, TValue> settings)
         {
             var flow = Flow.FromGraph(new ProducerStage<TKey, TValue>(settings))
                 .SelectAsync(settings.Parallelism, Task.FromResult);
