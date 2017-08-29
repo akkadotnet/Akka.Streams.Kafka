@@ -39,13 +39,12 @@ namespace SimpleProducer
                 .Select(c => c.ToString())
                 .Select(elem => new ProduceRecord<Null, string>("akka10", null, elem))
                 .Via(Producer.CreateFlow(producerSettings))
-                .Select(result =>
+                .Select(record =>
                 {
-                    var record = result.Result;
-                    Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {result.Result.Offset}: {record.Value}");
-                    return result;
+                    Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {record.Offset}: {record.Value}");
+                    return record;
                 })
-                .RunWith(Sink.Ignore<Task<Message<Null, string>>>(), materializer);
+                .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
 
             // TODO: producer as a Commitable Sink
 
