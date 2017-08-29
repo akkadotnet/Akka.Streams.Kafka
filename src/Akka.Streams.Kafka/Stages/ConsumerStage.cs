@@ -36,6 +36,8 @@ namespace Akka.Streams.Kafka.Stages
         private readonly Outlet _out;
         private Consumer<K, V> _consumer;
         private Action<Message<K, V>> _messagesReceived;
+        private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
+
         private const string TimerKey = "PollTimer";
 
         private readonly Queue<Message<K, V>> _buffer = new Queue<Message<K, V>>();
@@ -67,11 +69,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.OnMessage += (sender, message) => _messagesReceived.Invoke(message);
             _consumer.OnConsumeError += OnConsumeError;
             _consumer.OnError += OnError;
-            _consumer.OnPartitionsAssigned += (sender, list) =>
-            {
-                _consumer.Assign(list);
-                //PullQueue();
-            };
+            _consumer.OnPartitionsAssigned += (sender, list) => _partitionsAssigned.Invoke(list);
 
             switch (_subscription)
             {
@@ -87,10 +85,10 @@ namespace Akka.Streams.Kafka.Stages
             }
 
             _messagesReceived = GetAsyncCallback<Message<K, V>>(OnMessagesReceived);
-
-            ScheduleRepeatedly(TimerKey, _settings.PollInterval);
+            _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(OnPartitionsAssigned);
+            ScheduleOnce(TimerKey, _settings.PollInterval);
         }
-        
+
         private void OnConsumeError(object sender, Message message)
         {
             // On consume error
@@ -104,7 +102,17 @@ namespace Akka.Streams.Kafka.Stages
         private void OnMessagesReceived(Message<K, V> message)
         {
             _buffer.Enqueue(message);
-            Push(_out, _buffer.Dequeue());
+            if (IsAvailable(_out))
+            {
+                Push(_out, _buffer.Dequeue());
+            }
+        }
+
+        private void OnPartitionsAssigned(IEnumerable<TopicPartition> partitions)
+        {
+            Log.Info("Partitions were assigned");
+            _consumer.Assign(partitions);
+            // TODO: should I call `PullQueue` here?
         }
 
         public override void PostStop()
@@ -113,7 +121,12 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.Dispose();
         }
 
-        private void PullQueue() => _consumer.Poll(_settings.PollTimeout);
+        private void PullQueue()
+        {
+            // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
+            _consumer.Poll(_settings.PollTimeout);
+            ScheduleOnce(TimerKey, _settings.PollInterval);
+        }
 
         protected override void OnTimer(object timerKey) => PullQueue();
     }
