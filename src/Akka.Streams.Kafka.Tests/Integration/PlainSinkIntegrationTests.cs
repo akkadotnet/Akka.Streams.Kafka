@@ -16,7 +16,7 @@ using Producer = Akka.Streams.Kafka.Dsl.Producer;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    public class PlainStageIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class PlainSinkIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
         private const string KafkaUrl = "localhost:9092";
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
-        public PlainStageIntegrationTests(ITestOutputHelper output) 
+        public PlainSinkIntegrationTests(ITestOutputHelper output) 
             : base(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
         {
             _materializer = Sys.Materializer();

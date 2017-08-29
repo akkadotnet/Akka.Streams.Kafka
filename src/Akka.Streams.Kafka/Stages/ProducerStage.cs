@@ -52,6 +52,7 @@ namespace Akka.Streams.Kafka.Stages
                 {
                     _isClosed = true;
                     _completionState.SetResult(NotUsed.Instance);
+                    _producer.Flush(TimeSpan.FromSeconds(2));
                     CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
