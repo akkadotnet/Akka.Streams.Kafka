@@ -72,6 +72,9 @@ namespace Akka.Streams.Kafka.Stages
             {
                 FailStage(new Exception(error.Reason));
             }
+
+            // TODO: what else errors to handle?
+            Log.Error(error.Reason);
         }
 
         public void CheckForCompletion()
