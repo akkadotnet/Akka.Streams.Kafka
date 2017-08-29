@@ -42,7 +42,7 @@ namespace SimpleProducer
                 .Select(result =>
                 {
                     var record = result.Result.Metadata;
-                    Console.WriteLine($"{record.Topic}/{record.Partition} {result.Result.Offset}: {record.Value}");
+                    Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {result.Result.Offset}: {record.Value}");
                     return result;
                 })
                 .RunWith(Sink.Ignore<Task<Result<Null, string>>>(), materializer);

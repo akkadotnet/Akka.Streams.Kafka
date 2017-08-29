@@ -38,13 +38,25 @@ namespace Akka.Streams.Kafka.Stages
         private Action<Message<K, V>> _messagesReceived;
         private const string TimerKey = "PollTimer";
 
+        private readonly Queue<Message<K, V>> _buffer = new Queue<Message<K, V>>();
+
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
         {
             _settings = settings;
             _subscription = subscription;
             _out = shape.Outlets.FirstOrDefault();
 
-            SetHandler(_out, PullQueue);
+            SetHandler(_out, onPull:() =>
+            {
+                if (_buffer.Count > 0)
+                {
+                    Push(_out, _buffer.Dequeue());
+                }
+                else
+                {
+                    PullQueue();
+                }
+            });
         }
 
         public override void PreStart()
@@ -52,9 +64,14 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             _consumer = _settings.CreateKafkaConsumer();
-            _consumer.OnMessage += OnMessage;
+            _consumer.OnMessage += (sender, message) => _messagesReceived.Invoke(message);
             _consumer.OnConsumeError += OnConsumeError;
             _consumer.OnError += OnError;
+            _consumer.OnPartitionsAssigned += (sender, list) =>
+            {
+                _consumer.Assign(list);
+                //PullQueue();
+            };
 
             switch (_subscription)
             {
@@ -71,14 +88,9 @@ namespace Akka.Streams.Kafka.Stages
 
             _messagesReceived = GetAsyncCallback<Message<K, V>>(OnMessagesReceived);
 
-            ScheduleRepeatedly("poll", _settings.PollInterval);
+            ScheduleRepeatedly(TimerKey, _settings.PollInterval);
         }
         
-        private void OnMessage(object sender, Message<K, V> message)
-        {
-            _messagesReceived.Invoke(message);
-        }
-
         private void OnConsumeError(object sender, Message message)
         {
             // On consume error
@@ -91,23 +103,13 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnMessagesReceived(Message<K, V> message)
         {
-            if (message.Error.HasError)
-            {
-                if (message.Error.Code == ErrorCode.BrokerNotAvailable)
-                    FailStage(new Exception("Broker is not available"));
-                else
-                    ScheduleOnce(TimerKey, _settings.PollTimeout);
-                return;
-            }
-
-            Push(_out, message);
-            ScheduleOnce(TimerKey, _settings.PollTimeout);
+            _buffer.Enqueue(message);
+            Push(_out, _buffer.Dequeue());
         }
 
         public override void PostStop()
         {
             base.PostStop();
-
             _consumer.Dispose();
         }
 

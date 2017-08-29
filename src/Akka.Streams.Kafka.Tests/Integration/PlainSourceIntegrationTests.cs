@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
-using Akka.Streams.Implementation;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
@@ -14,9 +13,9 @@ using Confluent.Kafka.Serialization;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests
+namespace Akka.Streams.Kafka.Tests.Integration
 {
-    public class IntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class PlainSourceIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
         private const string KafkaUrl = "localhost:9092";
 
@@ -24,7 +23,7 @@ namespace Akka.Streams.Kafka.Tests
 
         private readonly ActorMaterializer _materializer;
 
-        public IntegrationTests(ITestOutputHelper output) 
+        public PlainSourceIntegrationTests(ITestOutputHelper output) 
             : base(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
         {
             _materializer = Sys.Materializer();
@@ -73,7 +72,7 @@ namespace Akka.Streams.Kafka.Tests
         }
 
         [Fact]
-        public async Task ProduceToPlainSinkAndConsumeFromPlainSource()
+        public async Task PlainSource_consumes_messages_from_KafkaProducer()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);

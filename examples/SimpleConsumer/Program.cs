@@ -26,15 +26,13 @@ namespace SimpleConsumer
 
             var subscription = Subscriptions.Assignment(new TopicPartition("akka10", 0));
             //var subscription = Subscriptions.AssignmentWithOffset(new TopicPartitionOffset("akka", 0, new Offset(20)));
-            //var subscription = Subscriptions.Topics("akka");
+            // var subscription = Subscriptions.Topics("akka10");
 
             Consumer.PlainSource(consumerSettings, subscription)
-                .Select(result =>
+                .RunForeach(result =>
                 {
-                    Console.WriteLine($"{result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
-                    return result;
-                })
-                .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
+                    Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
+                }, materializer);
 
             Console.ReadLine();
         }
