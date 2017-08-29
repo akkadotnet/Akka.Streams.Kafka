@@ -43,11 +43,39 @@ Source
     .Select(c => c.ToString())
     .Select(elem => new ProduceRecord<Null, string>("topic1", null, elem))
     .Via(Producer.CreateFlow(producerSettings))
-    .Select(result =>
+    .Select(record =>
     {
-        var record = result.Result.Metadata;
-        Console.WriteLine($"{record.Topic}/{record.Partition} {result.Result.Offset}: {record.Value}");
-        return result;
+        Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {record.Offset}: {record.Value}");
+        return record;
     })
-    .RunWith(Sink.Ignore<Task<Result<Null, string>>>(), materializer);
+    .RunWith(Sink.Ignore<Message<Null, string>>(), materializer);
+```
+
+## Consumer
+
+A consumer is used for subscribing to Kafka topics.
+
+### Settings 
+When creating a consumer stream you need to pass in `ConsumerSettings` that define things like:
+
+- bootstrap servers of the Kafka cluster
+- group id for the consumer, note that offsets are always committed for a given consumer group
+- serializers for the keys and values
+- tuning parameters
+
+```C#
+var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, new StringDeserializer(Encoding.UTF8))
+    .WithBootstrapServers("localhost:9092")
+    .WithGroupId("group1");
+```
+
+### Plain Consumer
+```C#
+var subscription = Subscriptions.Assignment(new TopicPartition("akka", 0));
+
+Consumer.PlainSource(consumerSettings, subscription)
+    .RunForeach(result =>
+    {
+        Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
+    }, materializer);
 ```

@@ -51,6 +51,23 @@ Target "Build" (fun _ ->
                 Configuration = configuration })
 )
 
+//--------------------------------------------------------------------------------
+// Tests targets 
+//--------------------------------------------------------------------------------
+
+Target "RunTests" (fun _ ->
+    let projects = !! "./**/*.Tests.csproj"
+
+    let runSingleProject project =
+        DotNetCli.RunCommand
+            (fun p -> 
+                { p with 
+                    WorkingDir = (Directory.GetParent project).FullName
+                    TimeOut = TimeSpan.FromMinutes 10. })
+                (sprintf "xunit -parallel none -teamcity -xml %s_xunit.xml" (outputTests @@ fileNameWithoutExt project)) 
+
+    projects |> Seq.iter (runSingleProject)
+)
 
 //--------------------------------------------------------------------------------
 // Nuget targets 
