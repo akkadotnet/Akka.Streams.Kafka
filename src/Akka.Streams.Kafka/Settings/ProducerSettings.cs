@@ -68,5 +68,8 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 properties: ImmutableDictionary<string, object>.Empty);
         }
+
+        public Confluent.Kafka.Producer<TKey, TValue> CreateKafkaProducer() =>
+            new Confluent.Kafka.Producer<TKey, TValue>(Properties, KeySerializer, ValueSerializer);
     }
 }

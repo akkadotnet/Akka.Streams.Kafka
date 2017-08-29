@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleProducer", "examples\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Akka.Streams.Kafka", "src\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj", "{21CFA085-3156-4766-9B2E-B5F1747DF87F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.Kafka.Tests", "src\Akka.Streams.Kafka.Tests\Akka.Streams.Kafka.Tests.csproj", "{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{21CFA085-3156-4766-9B2E-B5F1747DF87F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{21CFA085-3156-4766-9B2E-B5F1747DF87F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{21CFA085-3156-4766-9B2E-B5F1747DF87F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
