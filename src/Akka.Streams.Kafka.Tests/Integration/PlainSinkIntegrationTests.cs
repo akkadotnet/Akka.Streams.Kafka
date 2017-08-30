@@ -94,5 +94,25 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             messagesReceived.Should().Be(100);
         }
+
+        [Fact]
+        public async Task PlainSink_should_fail_stage_if_broker_unavailable()
+        {
+            var topic1 = CreateTopic(1);
+
+            await GivenInitializedTopic(topic1);
+
+            var config = ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+                .WithBootstrapServers("localhost:10092");
+
+            Action act = () => Source
+                .From(Enumerable.Range(1, 100))
+                .Select(c => c.ToString())
+                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem))
+                .RunWith(Producer.PlainSink(config), _materializer).Wait();
+
+            // TODO: find a better way to test FailStage
+            act.ShouldThrow<AggregateException>().WithInnerException<Exception>();
+        }
     }
 }

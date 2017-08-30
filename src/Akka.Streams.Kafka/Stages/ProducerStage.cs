@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
@@ -27,11 +28,9 @@ namespace Akka.Streams.Kafka.Stages
 
     internal sealed class ProducerStageLogic<K, V> : GraphStageLogic
     {
-        private volatile bool _isClosed;
         private readonly Producer<K, V> _producer;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
-
-        private Action<ProduceRecord<K, V>> SendToProducer;
+        private Action<ProduceRecord<K, V>> _sendToProducer;
 
         private Inlet In { get; }
         private Outlet Out { get; }
@@ -41,23 +40,22 @@ namespace Akka.Streams.Kafka.Stages
             In = shape.Inlets.FirstOrDefault();
             Out = shape.Outlets.FirstOrDefault();
             _producer = new Producer<K, V>(settings.Properties, settings.KeySerializer, settings.ValueSerializer);
+            _producer.OnError += OnProducerError;
 
             SetHandler(In, 
                 onPush: () =>
                 {
                     var msg = Grab<ProduceRecord<K, V>>(In);
-                    SendToProducer.Invoke(msg);
+                    _sendToProducer.Invoke(msg);
                 },
                 onUpstreamFinish: () =>
                 {
-                    _isClosed = true;
                     _completionState.SetResult(NotUsed.Instance);
                     _producer.Flush(TimeSpan.FromSeconds(2));
                     CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
                 {
-                    _isClosed = true;
                     _completionState.SetException(exception);
                     CheckForCompletion();
                 });
@@ -66,6 +64,17 @@ namespace Akka.Streams.Kafka.Stages
             {
                 TryPull(In);
             });
+        }
+
+        private void OnProducerError(object sender, Error error)
+        {
+            if (error.Code == ErrorCode.Local_Transport)
+            {
+                FailStage(new Exception(error.Reason));
+            }
+
+            // TODO: what else errors to handle?
+            Log.Error(error.Reason);
         }
 
         public void CheckForCompletion()
@@ -89,7 +98,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            SendToProducer = msg =>
+            _sendToProducer = msg =>
             {
                 var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value);
                 Push(Out, task);

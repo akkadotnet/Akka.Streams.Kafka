@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer = _settings.CreateKafkaConsumer();
             _consumer.OnMessage += (sender, message) => _messagesReceived.Invoke(message);
             _consumer.OnConsumeError += OnConsumeError;
-            _consumer.OnError += OnError;
+            _consumer.OnError += OnConsumerError;
             _consumer.OnPartitionsAssigned += (sender, list) => _partitionsAssigned.Invoke(list);
 
             switch (_subscription)
@@ -91,11 +91,18 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnConsumeError(object sender, Message message)
         {
+            // TODO: how I should react?
             // On consume error
         }
 
-        private void OnError(object sender, Error error)
+        private void OnConsumerError(object sender, Error error)
         {
+            if (error.Code == ErrorCode.Local_Transport)
+            {
+                FailStage(new Exception(error.Reason));
+            }
+
+            // TODO: what else errors to handle?
             Log.Error(error.Reason);
         }
 

@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
+using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -120,7 +121,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
+        [Fact(Skip = "Not implemented yet")]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_subscribe_to_topic()
         {
             int elementsCount = 100;
@@ -135,13 +136,27 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = CreateProbe(consumerSettings, topic1, Subscriptions.Topics(topic1));
 
-            probe.Request(1);
-
             probe
                 .Request(elementsCount)
                 .ExpectNextN(Enumerable.Range(1, elementsCount).Select(c => c.ToString()));
 
             probe.Cancel();
+        }
+
+        [Fact]
+        public async Task PlainSource_should_fail_stage_if_broker_unavailable()
+        {
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await GivenInitializedTopic(topic1);
+
+            var config = ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
+                .WithBootstrapServers("localhost:10092")
+                .WithGroupId(group1);
+
+            var probe = CreateProbe(config, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
+            probe.Request(1).ExpectError().Should().BeOfType<Exception>();
         }
     }
 }
