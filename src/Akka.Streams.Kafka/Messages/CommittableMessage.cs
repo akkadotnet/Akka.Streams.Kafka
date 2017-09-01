@@ -21,9 +21,9 @@ namespace Akka.Streams.Kafka.Messages
 
     public class CommitableOffset
     {
-        private readonly Task<CommittedOffsets> _task;
+        private readonly Func<Task<CommittedOffsets>> _task;
 
-        public CommitableOffset(Task<CommittedOffsets> task, PartitionOffset offset)
+        public CommitableOffset(Func<Task<CommittedOffsets>> task, PartitionOffset offset)
         {
             _task = task;
             Offset = offset;
@@ -33,7 +33,7 @@ namespace Akka.Streams.Kafka.Messages
 
         public Task<CommittedOffsets> Commit()
         {
-            return _task;
+            return _task();
         }
     }
 

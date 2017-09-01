@@ -67,19 +67,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Source
                 .From(Enumerable.Range(1, elementsCount))
                 .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
-                .Via(Dsl.Producer.CreateFlow(ProducerSettings))
-                .RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
+                .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
             var consumerSettings = CreateConsumerSettings(group1);
 
             var probe = Dsl.Consumer
                 .CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Where(c => !c.Record.Value.Equals(InitialMsg))
-                .Select(c =>
-                {
-                    Output.WriteLine($"Consumed: {c.Record.Value}");
-                    return c.Record.Value;
-                })
+                .Select(c => c.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
 
             probe
@@ -89,20 +84,19 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
-        public async Task CommitableSource_consumes_messages_from_Producer_with_commit_on_each_element()
+        [Fact(Skip = "Not implemented yet")]
+        public async Task CommitableSource_resume_from_commited_offset()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
+            var group2 = CreateGroup(2);
 
             await GivenInitializedTopic(topic1);
 
             await Source
                 .From(Enumerable.Range(1, 100))
                 .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
-                .Via(Dsl.Producer.CreateFlow(ProducerSettings))
-                .Select(record => record)
-                .RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
+                .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
             var consumerSettings = CreateConsumerSettings(group1);
             var committedElements = new ConcurrentQueue<string>();
@@ -129,6 +123,39 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .BeTrue();
 
             probe1.Cancel();
+
+            // Await.result(control.isShutdown, remainingOrDefault)
+
+            var probe2 = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .Select(_ => _.Record.Value)
+                .RunWith(this.SinkProbe<string>(), _materializer);
+
+            // Note that due to buffers and SelectAsync(10) the committed offset is more
+            // than 26, and that is not wrong
+
+            // some concurrent publish
+            await Source
+                .From(Enumerable.Range(101, 100))
+                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
+                .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
+
+            probe2
+                .Request(100)
+                .ExpectNextN(Enumerable.Range(committedElements.Count, 100).Select(c => c.ToString()));
+
+            probe2.Cancel();
+
+            // another consumer should see all
+            var probe3 = Dsl.Consumer.CommitableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WhereNot(c => c.Record.Value == InitialMsg)
+                .Select(_ => _.Record.Value)
+                .RunWith(this.SinkProbe<string>(), _materializer);
+
+            probe3
+                .Request(100)
+                .ExpectNextN(Enumerable.Range(1, 100).Select(c => c.ToString()));
+
+            probe3.Cancel();
         }
     }
 }
