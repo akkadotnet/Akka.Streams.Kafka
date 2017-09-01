@@ -103,10 +103,9 @@ namespace Akka.Streams.Kafka.Stages
         private void OnMessagesReceived(Message<K, V> message)
         {
             var consumer = _consumer;
-            var commitableOffset = new CommitableOffset(() =>
-            {
-                consumer.CommitAsync();
-            }, new PartitionOffset("groupId", message.Topic, message.Partition, message.Offset));
+            var commitableOffset = new CommitableOffset(
+                consumer.CommitAsync(message),
+                new PartitionOffset("groupId", message.Topic, message.Partition, message.Offset));
 
             _buffer.Enqueue(new CommittableMessage<K, V>(message, commitableOffset));
             if (IsAvailable(_out))

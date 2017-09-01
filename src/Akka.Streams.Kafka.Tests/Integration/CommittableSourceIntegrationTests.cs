@@ -56,7 +56,41 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartition_assignment()
+        public async Task CommitableSource_consumes_messages_from_Producer_without_commits()
+        {
+            int elementsCount = 100;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await GivenInitializedTopic(topic1);
+
+            await Source
+                .From(Enumerable.Range(1, elementsCount))
+                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
+                .Via(Dsl.Producer.CreateFlow(ProducerSettings))
+                .RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
+
+            var consumerSettings = CreateConsumerSettings(group1);
+
+            var probe = Dsl.Consumer
+                .CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .Where(c => !c.Record.Value.Equals(InitialMsg))
+                .Select(c =>
+                {
+                    Output.WriteLine($"Consumed: {c.Record.Value}");
+                    return c.Record.Value;
+                })
+                .RunWith(this.SinkProbe<string>(), _materializer);
+
+            probe
+                .Request(elementsCount)
+                .ExpectNextN(Enumerable.Range(1, elementsCount).Select(c => c.ToString()));
+
+            probe.Cancel();
+        }
+
+        [Fact]
+        public async Task CommitableSource_consumes_messages_from_Producer_with_commit_on_each_element()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
@@ -67,18 +101,19 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .From(Enumerable.Range(1, 100))
                 .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
                 .Via(Dsl.Producer.CreateFlow(ProducerSettings))
+                .Select(record => record)
                 .RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
 
             var consumerSettings = CreateConsumerSettings(group1);
-
             var committedElements = new ConcurrentQueue<string>();
 
             var (_, probe1) = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                //.WhereNot(c => c.Record.Value == InitialMsg)
+                .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, elem =>
                 {
                     return elem.CommitableOffset.Commit().ContinueWith(t =>
                     {
+                        Output.WriteLine($"Consumed: {elem.Record.Value}");
                         committedElements.Enqueue(elem.Record.Value);
                         return Done.Instance;
                     });

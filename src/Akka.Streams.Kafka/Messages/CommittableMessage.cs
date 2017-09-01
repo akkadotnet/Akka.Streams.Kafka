@@ -21,19 +21,19 @@ namespace Akka.Streams.Kafka.Messages
 
     public class CommitableOffset
     {
-        private readonly Action _action;
+        private readonly Task<CommittedOffsets> _task;
 
-        public CommitableOffset(Action action, PartitionOffset offset)
+        public CommitableOffset(Task<CommittedOffsets> task, PartitionOffset offset)
         {
-            _action = action;
+            _task = task;
             Offset = offset;
         }
 
         public PartitionOffset Offset { get; }
 
-        public Task Commit()
+        public Task<CommittedOffsets> Commit()
         {
-            return Task.CompletedTask;
+            return _task;
         }
     }
 
