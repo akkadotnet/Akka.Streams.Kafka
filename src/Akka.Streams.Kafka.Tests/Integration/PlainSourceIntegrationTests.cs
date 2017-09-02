@@ -121,7 +121,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_subscribe_to_topic()
         {
             int elementsCount = 100;
