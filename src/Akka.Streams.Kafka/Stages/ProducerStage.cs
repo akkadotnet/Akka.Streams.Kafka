@@ -99,7 +99,7 @@ namespace Akka.Streams.Kafka.Stages
 
             _sendToProducer = msg =>
             {
-                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value);
+                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value, msg.PartitionId);
                 Push(Out, task);
             };
         }
