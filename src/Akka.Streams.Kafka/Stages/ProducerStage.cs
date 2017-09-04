@@ -70,9 +70,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Error(error.Reason);
 
-            if (error.IsBrokerError
-                && !KafkaExtensions.IsBrokerErrorRetriable(error)
-                && !KafkaExtensions.IsLocalErrorRetriable(error))
+            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 FailStage(new Exception(error.Reason));
             }
