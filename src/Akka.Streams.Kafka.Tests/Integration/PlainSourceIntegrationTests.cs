@@ -90,10 +90,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings(group1);
 
             var probe = CreateProbe(consumerSettings, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
-
-            probe
-                .Request(elementsCount)
-                .ExpectNextN(Enumerable.Range(1, elementsCount).Select(c => c.ToString()));
+            
+            probe.Request(elementsCount);
+            foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe.Cancel();
         }
@@ -136,9 +136,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = CreateProbe(consumerSettings, topic1, Subscriptions.Topics(topic1));
 
-            probe
-                .Request(elementsCount)
-                .ExpectNextN(Enumerable.Range(1, elementsCount).Select(c => c.ToString()));
+            probe.Request(elementsCount);
+            foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe.Cancel();
         }

@@ -39,7 +39,6 @@ namespace Akka.Streams.Kafka.Stages
         private Action<Message<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
         private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
-        private Action _pullQueue;
 
         private const string TimerKey = "PollTimer";
 
@@ -91,9 +90,6 @@ namespace Akka.Streams.Kafka.Stages
             _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
-            _pullQueue = GetAsyncCallback(PullQueue);
-
-            ScheduleOnce(TimerKey, _settings.PollInterval);
         }
 
         public override void PostStop()
@@ -168,9 +164,11 @@ namespace Akka.Streams.Kafka.Stages
         {
             // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
             _consumer.Poll(_settings.PollTimeout);
-            ScheduleOnce(TimerKey, _settings.PollInterval);
+
+            if(_buffer.Count == 0)
+                ScheduleOnce(TimerKey, _settings.PollInterval);
         }
 
-        protected override void OnTimer(object timerKey) => _pullQueue.Invoke();
+        protected override void OnTimer(object timerKey) => PullQueue();
     }
 }
