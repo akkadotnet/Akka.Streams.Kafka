@@ -76,7 +76,7 @@ Target "RunTests" (fun _ ->
 Target "CreateNuget" (fun _ ->
     let envBuildNumber = environVarOrDefault "APPVEYOR_BUILD_NUMBER" "0"
     let branch =  environVarOrDefault "APPVEYOR_REPO_BRANCH" ""
-    let versionSuffix = if branch.Equals("dev") then (sprintf "beta-%s" envBuildNumber) else ""
+    let versionSuffix = if branch.Equals("dev") then (sprintf "beta%s" envBuildNumber) else ""
 
     let projects = !! "./**/Akka.Streams.Kafka.csproj"
 

@@ -6,7 +6,12 @@
     <TargetFramework>netstandard1.6</TargetFramework>
     <Copyright>Copyright © 2017 alexvaluyskiy</Copyright>
     <Authors>alexvaluyskiy</Authors>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
+    <PackageTags>akka;actors;streams;kafka;reactive</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
+    <PackageProjectUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka/blob/dev/LICENSE</PackageLicenseUrl>
     <NetStandardImplicitPackageVersion>1.6.1</NetStandardImplicitPackageVersion>
   </PropertyGroup>
 
@@ -17,7 +22,7 @@
   <ItemGroup>
     <PackageReference Include="Akka.Streams" Version="1.3.0" />
     <PackageReference Include="Confluent.Kafka" Version="0.11.0" />
-    <PackageReference Include="MessagePack" Version="1.6.0.3" />
+    <PackageReference Include="MessagePack" Version="1.6.1" />
     <PackageReference Include="System.ValueTuple" Version="4.3.0" />
   </ItemGroup>
 
