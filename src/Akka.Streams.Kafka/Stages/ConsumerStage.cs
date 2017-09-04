@@ -116,13 +116,12 @@ namespace Akka.Streams.Kafka.Stages
 
         private void HandleOnError(object sender, Error error)
         {
-            if (error.Code == ErrorCode.Local_Transport)
+            Log.Error(error.Reason);
+
+            if (error.IsBrokerError && !IsBrokerErrorRetriable(error) && !IsLocalErrorRetriable(error))
             {
                 FailStage(new Exception(error.Reason));
             }
-
-            // TODO: what else errors to handle?
-            Log.Error(error.Reason);
         }
 
         private void HandleOnPartitionsAssigned(object sender, List<TopicPartition> list)
@@ -170,5 +169,36 @@ namespace Akka.Streams.Kafka.Stages
         }
 
         protected override void OnTimer(object timerKey) => PullQueue();
+        
+        private bool IsBrokerErrorRetriable(Error error)
+        {
+            switch (error.Code)
+            {
+                case ErrorCode.InvalidMsg:
+                case ErrorCode.UnknownTopicOrPart:
+                case ErrorCode.LeaderNotAvailable:
+                case ErrorCode.NotLeaderForPartition:
+                case ErrorCode.RequestTimedOut:
+                case ErrorCode.GroupLoadInProress:
+                case ErrorCode.GroupCoordinatorNotAvailable:
+                case ErrorCode.NotCoordinatorForGroup:
+                case ErrorCode.NotEnoughReplicas:
+                case ErrorCode.NotEnoughReplicasAfterAppend:
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool IsLocalErrorRetriable(Error error)
+        {
+            switch (error.Code)
+            {
+                case ErrorCode.Local_AllBrokersDown:
+                    return false;
+            }
+
+            return true;
+        }
     }
 }
