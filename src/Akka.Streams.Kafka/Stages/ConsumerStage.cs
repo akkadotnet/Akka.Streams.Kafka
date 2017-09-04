@@ -165,7 +165,7 @@ namespace Akka.Streams.Kafka.Stages
             // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
             _consumer.Poll(_settings.PollTimeout);
 
-            if(_buffer.Count == 0)
+            if (_buffer.Count == 0)
                 ScheduleOnce(TimerKey, _settings.PollInterval);
         }
 

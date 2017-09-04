@@ -59,8 +59,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Source
                 .From(range)
                 .Select(elem => new ProduceRecord<Null, string>(topic, null, elem.ToString()))
-                .Via(Dsl.Producer.CreateFlow(producerSettings))
-                .RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
+                .RunWith(Dsl.Producer.PlainSink(producerSettings), _materializer);
         }
 
         private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, string topic, ISubscription sub)
@@ -68,11 +67,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             return Dsl.Consumer
                 .PlainSource(consumerSettings, sub)
                 .Where(c => !c.Value.Equals(InitialMsg))
-                .Select(c =>
-                {
-                    Output.WriteLine($"Consumed: {c.Value}");
-                    return c.Value;
-                })
+                .Select(c => c.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
         }
 
@@ -114,9 +109,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = CreateProbe(consumerSettings, topic1, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topic1, 0, new Offset(offset))));
 
-            probe
-                .Request(elementsCount)
-                .ExpectNextN(Enumerable.Range(offset, elementsCount - offset).Select(c => c.ToString()));
+            probe.Request(elementsCount);
+            foreach (var i in Enumerable.Range(offset, elementsCount - offset).Select(c => c.ToString()))
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe.Cancel();
         }
