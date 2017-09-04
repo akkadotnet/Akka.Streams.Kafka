@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithGroupId(string groupId) =>
             Copy(properties: Properties.SetItem("group.id", groupId));
 
-        public ConsumerSettings<TKey, TValue> WithProperty(string key, string value) =>
+        public ConsumerSettings<TKey, TValue> WithProperty(string key, object value) =>
             Copy(properties: Properties.SetItem(key, value));
 
         public ConsumerSettings<TKey, TValue> WithPollInterval(TimeSpan pollInterval) => Copy(pollInterval: pollInterval);
