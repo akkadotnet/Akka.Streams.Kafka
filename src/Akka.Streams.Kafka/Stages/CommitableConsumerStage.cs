@@ -38,6 +38,7 @@ namespace Akka.Streams.Kafka.Stages
         private Consumer<K, V> _consumer;
         private Action<Message<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
+        private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
 
         private const string TimerKey = "PollTimer";
 
@@ -49,7 +50,7 @@ namespace Akka.Streams.Kafka.Stages
             _subscription = subscription;
             _out = shape.Outlets.FirstOrDefault();
 
-            SetHandler(_out, onPull:() =>
+            SetHandler(_out, onPull: () =>
             {
                 if (_buffer.Count > 0)
                 {
@@ -67,10 +68,11 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             _consumer = _settings.CreateKafkaConsumer();
-            _consumer.OnMessage += (sender, message) => _messagesReceived.Invoke(message);
-            _consumer.OnConsumeError += OnConsumeError;
-            _consumer.OnError += OnError;
-            _consumer.OnPartitionsAssigned += (sender, list) => _partitionsAssigned.Invoke(list);
+            _consumer.OnMessage += HandleOnMessage;
+            _consumer.OnConsumeError += HandleConsumeError;
+            _consumer.OnError += HandleOnError;
+            _consumer.OnPartitionsAssigned += HandleOnPartitionsAssigned;
+            _consumer.OnPartitionsRevoked += HandleOnPartitionsRevoked;
 
             switch (_subscription)
             {
@@ -85,26 +87,63 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
-            _messagesReceived = GetAsyncCallback<Message<K, V>>(OnMessagesReceived);
-            _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(OnPartitionsAssigned);
-            ScheduleOnce(TimerKey, _settings.PollInterval);
+            _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
+            _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
+            _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
         }
 
-        private void OnConsumeError(object sender, Message message)
+        public override void PostStop()
         {
-            // On consume error
+            _consumer.OnMessage -= HandleOnMessage;
+            _consumer.OnConsumeError -= HandleConsumeError;
+            _consumer.OnError -= HandleOnError;
+            _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
+            _consumer.OnPartitionsRevoked -= HandleOnPartitionsRevoked;
+
+            _consumer.Dispose();
+
+            base.PostStop();
         }
 
-        private void OnError(object sender, Error error)
+        //
+        // Consumer's events
+        //
+
+        private void HandleOnMessage(object sender, Message<K, V> message) => _messagesReceived.Invoke(message);
+
+        // TODO: how I should react?
+        private void HandleConsumeError(object sender, Message message) { }
+
+        private void HandleOnError(object sender, Error error)
         {
+            if (error.Code == ErrorCode.Local_Transport)
+            {
+                FailStage(new Exception(error.Reason));
+            }
+
+            // TODO: what else errors to handle?
             Log.Error(error.Reason);
         }
 
-        private void OnMessagesReceived(Message<K, V> message)
+        private void HandleOnPartitionsAssigned(object sender, List<TopicPartition> list)
+        {
+            _partitionsAssigned.Invoke(list);
+        }
+
+        private void HandleOnPartitionsRevoked(object sender, List<TopicPartition> list)
+        {
+            _partitionsRevoked.Invoke(list);
+        }
+
+        //
+        // Async callbacks
+        //
+
+        private void MessagesReceived(Message<K, V> message)
         {
             var consumer = _consumer;
             var commitableOffset = new CommitableOffset(
-                () => consumer.CommitAsync(message),
+                () => consumer.CommitAsync(),
                 new PartitionOffset("groupId", message.Topic, message.Partition, message.Offset));
 
             _buffer.Enqueue(new CommittableMessage<K, V>(message, commitableOffset));
@@ -114,24 +153,25 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
 
-        private void OnPartitionsAssigned(IEnumerable<TopicPartition> partitions)
+        private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
         {
             Log.Info("Partitions were assigned");
             _consumer.Assign(partitions);
-            // TODO: should I call `PullQueue` here?
         }
 
-        public override void PostStop()
+        private void PartitionsRevoked(IEnumerable<TopicPartition> partitions)
         {
-            base.PostStop();
-            _consumer.Dispose();
+            Log.Info("Partitions were revoked");
+            _consumer.Unassign();
         }
 
         private void PullQueue()
         {
             // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
             _consumer.Poll(_settings.PollTimeout);
-            ScheduleOnce(TimerKey, _settings.PollInterval);
+
+            if (_buffer.Count == 0)
+                ScheduleOnce(TimerKey, _settings.PollInterval);
         }
 
         protected override void OnTimer(object timerKey) => PullQueue();
