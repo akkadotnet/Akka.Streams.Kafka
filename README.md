@@ -79,3 +79,24 @@ Consumer.PlainSource(consumerSettings, subscription)
         Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
     }, materializer);
 ```
+
+### Committable Consumer
+The `Consumer.CommittableSource` makes it possible to commit offset positions to Kafka.
+
+Compared to auto-commit this gives exact control of when a message is considered consumed.
+
+If you need to store offsets in anything other than Kafka, `PlainSource` should be used instead of this API.
+
+This is useful when “at-least once delivery” is desired, as each message will likely be delivered one time but in failure cases could be duplicated.
+
+```C#
+Consumer.CommitableSource(consumerSettings, Subscriptions.Topics("topic1"))
+    .SelectAsync(1, elem =>
+    {
+        return elem.CommitableOffset.Commit();
+    })
+    .RunWith(Sink.Ignore<CommittedOffsets>(), _materializer);
+```
+The above example uses separate mapAsync stages for processing and committing. This guarantees that for parallelism higher than 1 we will keep correct ordering of messages sent for commit.
+
+Committing the offset for each message as illustrated above is rather slow. It is recommended to batch the commits for better throughput, with the trade-off that more messages may be re-delivered in case of failures.

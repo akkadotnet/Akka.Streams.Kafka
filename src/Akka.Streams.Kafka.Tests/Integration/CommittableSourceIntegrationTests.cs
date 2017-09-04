@@ -84,7 +84,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public async Task CommitableSource_resume_from_commited_offset()
         {
             var topic1 = CreateTopic(1);
@@ -107,7 +107,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 {
                     return elem.CommitableOffset.Commit().ContinueWith(t =>
                     {
-                        Output.WriteLine($"Consumed: {elem.Record.Value}");
                         committedElements.Enqueue(elem.Record.Value);
                         return Done.Instance;
                     });
@@ -115,13 +114,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
                 .Run(_materializer);
 
-            probe1
-                .Request(25)
-                .ExpectNextN(25)
-                .All(c => c is Done)
-                .Should()
-                .BeTrue();
+            probe1.Request(25);
 
+            foreach (var _ in Enumerable.Range(1, 25))
+            {
+                probe1.ExpectNext(Done.Instance, TimeSpan.FromSeconds(10));
+            }
+                
             probe1.Cancel();
 
             // Await.result(control.isShutdown, remainingOrDefault)
@@ -139,9 +138,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
                 .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
-            probe2
-                .Request(100)
-                .ExpectNextN(Enumerable.Range(committedElements.Count, 100).Select(c => c.ToString()));
+            probe2.Request(100);
+            foreach (var i in Enumerable.Range(committedElements.Count + 1, 100).Select(c => c.ToString()))
+                probe2.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe2.Cancel();
 
@@ -151,9 +150,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(_ => _.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
 
-            probe3
-                .Request(100)
-                .ExpectNextN(Enumerable.Range(1, 100).Select(c => c.ToString()));
+            probe3.Request(100);
+            foreach (var i in Enumerable.Range(1, 100).Select(c => c.ToString()))
+                probe3.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe3.Cancel();
         }
