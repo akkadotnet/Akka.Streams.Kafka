@@ -13,7 +13,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
 
-        protected readonly Outlet<Msg> Out = new Outlet<Msg>("out");
+        protected readonly Outlet<Msg> Out = new Outlet<Msg>("kafka.consumer.out");
         public override SourceShape<Msg> Shape { get; }
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription)
@@ -118,7 +118,9 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Error(error.Reason);
 
-            if (error.IsBrokerError && !IsBrokerErrorRetriable(error) && !IsLocalErrorRetriable(error))
+            if (error.IsBrokerError 
+                && !KafkaExtensions.IsBrokerErrorRetriable(error) 
+                && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 FailStage(new Exception(error.Reason));
             }
@@ -169,36 +171,5 @@ namespace Akka.Streams.Kafka.Stages
         }
 
         protected override void OnTimer(object timerKey) => PullQueue();
-        
-        private bool IsBrokerErrorRetriable(Error error)
-        {
-            switch (error.Code)
-            {
-                case ErrorCode.InvalidMsg:
-                case ErrorCode.UnknownTopicOrPart:
-                case ErrorCode.LeaderNotAvailable:
-                case ErrorCode.NotLeaderForPartition:
-                case ErrorCode.RequestTimedOut:
-                case ErrorCode.GroupLoadInProress:
-                case ErrorCode.GroupCoordinatorNotAvailable:
-                case ErrorCode.NotCoordinatorForGroup:
-                case ErrorCode.NotEnoughReplicas:
-                case ErrorCode.NotEnoughReplicasAfterAppend:
-                    return true;
-            }
-
-            return false;
-        }
-
-        private bool IsLocalErrorRetriable(Error error)
-        {
-            switch (error.Code)
-            {
-                case ErrorCode.Local_AllBrokersDown:
-                    return false;
-            }
-
-            return true;
-        }
     }
 }
