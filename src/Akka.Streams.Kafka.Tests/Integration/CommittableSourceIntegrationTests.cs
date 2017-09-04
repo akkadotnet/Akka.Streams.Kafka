@@ -77,9 +77,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(c => c.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
 
-            probe
-                .Request(elementsCount)
-                .ExpectNextN(Enumerable.Range(1, elementsCount).Select(c => c.ToString()));
+            probe.Request(elementsCount);
+            foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe.Cancel();
         }
