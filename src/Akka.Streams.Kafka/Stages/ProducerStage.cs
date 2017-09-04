@@ -12,8 +12,8 @@ namespace Akka.Streams.Kafka.Stages
     internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>>
     {
         private readonly ProducerSettings<K, V> _settings;
-        private Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("messages");
-        private Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("result");
+        private Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("kafka.producer.in");
+        private Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("kafka.producer.out");
 
         public ProducerStage(ProducerSettings<K, V> settings)
         {
@@ -68,13 +68,12 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnProducerError(object sender, Error error)
         {
-            if (error.Code == ErrorCode.Local_Transport)
+            Log.Error(error.Reason);
+
+            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 FailStage(new Exception(error.Reason));
             }
-
-            // TODO: what else errors to handle?
-            Log.Error(error.Reason);
         }
 
         public void CheckForCompletion()

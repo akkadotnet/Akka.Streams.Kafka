@@ -13,6 +13,7 @@
     <PackageProjectUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka</PackageProjectUrl>
     <PackageLicenseUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka/blob/dev/LICENSE</PackageLicenseUrl>
     <NetStandardImplicitPackageVersion>1.6.1</NetStandardImplicitPackageVersion>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,7 +24,7 @@
     <PackageReference Include="Akka.Streams" Version="1.3.0" />
     <PackageReference Include="Confluent.Kafka" Version="0.11.0" />
     <PackageReference Include="MessagePack" Version="1.6.1" />
-    <PackageReference Include="System.ValueTuple" Version="4.3.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.4.0" />
   </ItemGroup>
 
 </Project>

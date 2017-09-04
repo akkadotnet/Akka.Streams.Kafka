@@ -13,7 +13,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
 
-        protected readonly Outlet<Msg> Out = new Outlet<Msg>("out");
+        protected readonly Outlet<Msg> Out = new Outlet<Msg>("kafka.consumer.out");
         public override SourceShape<Msg> Shape { get; }
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription)
@@ -116,13 +116,12 @@ namespace Akka.Streams.Kafka.Stages
 
         private void HandleOnError(object sender, Error error)
         {
-            if (error.Code == ErrorCode.Local_Transport)
+            Log.Error(error.Reason);
+
+            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 FailStage(new Exception(error.Reason));
             }
-
-            // TODO: what else errors to handle?
-            Log.Error(error.Reason);
         }
 
         private void HandleOnPartitionsAssigned(object sender, List<TopicPartition> list)
