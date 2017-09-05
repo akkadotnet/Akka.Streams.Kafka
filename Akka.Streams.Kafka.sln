@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26730.10
+VisualStudioVersion = 15.0.26730.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleConsumer", "examples\SimpleConsumer\SimpleConsumer.csproj", "{ECDA0400-203E-4647-81B4-224954F79520}"
 EndProject
@@ -9,7 +9,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleProducer", "examples\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Akka.Streams.Kafka", "src\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj", "{21CFA085-3156-4766-9B2E-B5F1747DF87F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.Kafka.Tests", "src\Akka.Streams.Kafka.Tests\Akka.Streams.Kafka.Tests.csproj", "{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Akka.Streams.Kafka.Tests", "src\Akka.Streams.Kafka.Tests\Akka.Streams.Kafka.Tests.csproj", "{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing", "Akka.Streams.EventSourcing\Akka.Streams.EventSourcing.csproj", "{007EC285-73BD-424A-AD30-FE3CB17118DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing.Example", "Akka.Streams.EventSourcing.Example\Akka.Streams.EventSourcing.Example.csproj", "{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +37,14 @@ Global
 		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{007EC285-73BD-424A-AD30-FE3CB17118DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{007EC285-73BD-424A-AD30-FE3CB17118DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{007EC285-73BD-424A-AD30-FE3CB17118DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{007EC285-73BD-424A-AD30-FE3CB17118DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
