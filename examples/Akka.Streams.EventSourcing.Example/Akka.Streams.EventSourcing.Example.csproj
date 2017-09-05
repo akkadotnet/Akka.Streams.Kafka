@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Akka.Streams.EventSourcing\Akka.Streams.EventSourcing.csproj" />
+    <ProjectReference Include="..\..\src\Akka.Streams.EventSourcing\Akka.Streams.EventSourcing.csproj" />
   </ItemGroup>
 
 </Project>

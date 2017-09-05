@@ -11,9 +11,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Akka.Streams.Kafka", "src\A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Akka.Streams.Kafka.Tests", "src\Akka.Streams.Kafka.Tests\Akka.Streams.Kafka.Tests.csproj", "{8A6E9E88-1BE5-48D0-B603-AEA151D68AB4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing", "Akka.Streams.EventSourcing\Akka.Streams.EventSourcing.csproj", "{007EC285-73BD-424A-AD30-FE3CB17118DF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing", "src\Akka.Streams.EventSourcing\Akka.Streams.EventSourcing.csproj", "{007EC285-73BD-424A-AD30-FE3CB17118DF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing.Example", "Akka.Streams.EventSourcing.Example\Akka.Streams.EventSourcing.Example.csproj", "{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.EventSourcing.Example", "examples\Akka.Streams.EventSourcing.Example\Akka.Streams.EventSourcing.Example.csproj", "{EB11DB90-95B8-4C49-8FC4-211E92C8AF51}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
