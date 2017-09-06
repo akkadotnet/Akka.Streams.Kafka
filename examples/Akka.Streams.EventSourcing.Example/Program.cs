@@ -1,9 +1,8 @@
-﻿
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using Akka.Actor;
 using Akka.Streams.Dsl;
 
 namespace Akka.Streams.EventSourcing.Example
@@ -98,10 +97,19 @@ namespace Akka.Streams.EventSourcing.Example
             EventSoursing.EventHandler<int, Incremented> eventHandler = (state, evt) 
                 => state + evt.Delta;
 
-            var processor = EventSoursing
+            var system = ActorSystem.Create("test");
+            var materializer = system.Materializer();
+
+            Flow<Request, Response, NotUsed> processor = EventSoursing
                 .Create("myEmitterId", 0, requestHandler, eventHandler)
                 .Join(TestEventLog<Incremented>());
 
+            // TODO don't work without cast to base type
+            var commands = ImmutableList.Create(1, -4, 7).Select(c => new Increment(c) as Request);
+            var expected = ImmutableList.Create(1, -3, 4).Select(c => new Response(c));
+
+            var val = Source.From(commands).Via(processor).RunWith(Sink.Seq<Response>(), materializer);
+            var b = val.Result;
             Console.WriteLine("Hello World!");
         }
     }
