@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
@@ -28,9 +27,10 @@ namespace Akka.Streams.Kafka.Stages
 
     internal sealed class ProducerStageLogic<K, V> : GraphStageLogic
     {
-        private readonly Producer<K, V> _producer;
+        private Producer<K, V> _producer;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
         private Action<ProduceRecord<K, V>> _sendToProducer;
+        private readonly ProducerSettings<K, V> _settings;
 
         private Inlet In { get; }
         private Outlet Out { get; }
@@ -39,8 +39,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             In = shape.Inlets.FirstOrDefault();
             Out = shape.Outlets.FirstOrDefault();
-            _producer = new Producer<K, V>(settings.Properties, settings.KeySerializer, settings.ValueSerializer);
-            _producer.OnError += OnProducerError;
+            _settings = settings;
 
             SetHandler(In, 
                 onPush: () =>
@@ -64,6 +63,32 @@ namespace Akka.Streams.Kafka.Stages
             {
                 TryPull(In);
             });
+        }
+
+        public override void PreStart()
+        {
+            base.PreStart();
+
+            _producer = _settings.CreateKafkaProducer();
+
+            Log.Debug($"Producer started: {_producer.Name}");
+
+            _producer.OnError += OnProducerError;
+
+            _sendToProducer = msg =>
+            {
+                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value, msg.PartitionId);
+                Push(Out, task);
+            };
+        }
+
+        public override void PostStop()
+        {
+            _producer.Flush(TimeSpan.FromSeconds(2));
+            _producer.Dispose();
+            Log.Debug($"Producer stopped: {_producer.Name}");
+
+            base.PostStop();
         }
 
         private void OnProducerError(object sender, Error error)
@@ -91,28 +116,6 @@ namespace Akka.Streams.Kafka.Stages
                     CompleteStage();
                 }
             }
-        }
-
-        public override void PreStart()
-        {
-            base.PreStart();
-
-            _sendToProducer = msg =>
-            {
-                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value, msg.PartitionId);
-                Push(Out, task);
-            };
-        }
-
-        public override void PostStop()
-        {
-            Log.Debug("Stage completed");
-
-            _producer.Flush(TimeSpan.FromSeconds(2));
-            _producer.Dispose();
-            Log.Debug("Producer closed");
-
-            base.PostStop();
         }
     }
 }

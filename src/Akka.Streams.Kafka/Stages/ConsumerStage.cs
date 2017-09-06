@@ -68,6 +68,8 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             _consumer = _settings.CreateKafkaConsumer();
+            Log.Debug($"Consumer started: {_consumer.Name}");
+
             _consumer.OnMessage += HandleOnMessage;
             _consumer.OnConsumeError += HandleConsumeError;
             _consumer.OnError += HandleOnError;
@@ -100,6 +102,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
             _consumer.OnPartitionsRevoked -= HandleOnPartitionsRevoked;
 
+            Log.Debug($"Consumer stopped {_consumer.Name}");
             _consumer.Dispose();
 
             base.PostStop();
@@ -149,13 +152,13 @@ namespace Akka.Streams.Kafka.Stages
 
         private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
         {
-            Log.Info("Partitions were assigned");
+            Log.Debug($"Partitions were assigned: {_consumer.Name}");
             _consumer.Assign(partitions);
         }
 
         private void PartitionsRevoked(IEnumerable<TopicPartition> partitions)
         {
-            Log.Info("Partitions were revoked");
+            Log.Debug($"Partitions were revoked: {_consumer.Name}");
             _consumer.Unassign();
         }
 
