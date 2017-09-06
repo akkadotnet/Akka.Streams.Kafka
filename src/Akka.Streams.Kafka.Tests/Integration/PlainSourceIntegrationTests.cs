@@ -151,7 +151,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithGroupId(group1);
 
             var probe = CreateProbe(config, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
-            probe.Request(1).ExpectError().Should().BeOfType<Exception>();
+            probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
         }
     }
 }
