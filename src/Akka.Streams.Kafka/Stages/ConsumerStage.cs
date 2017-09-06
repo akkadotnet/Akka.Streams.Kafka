@@ -114,8 +114,10 @@ namespace Akka.Streams.Kafka.Stages
 
         private void HandleOnMessage(object sender, Message<K, V> message) => _messagesReceived.Invoke(message);
 
-        // TODO: how I should react?
-        private void HandleConsumeError(object sender, Message message) { }
+        private void HandleConsumeError(object sender, Message message)
+        {
+            Log.Error(message.Error.Reason);
+        }
 
         private void HandleOnError(object sender, Error error)
         {
