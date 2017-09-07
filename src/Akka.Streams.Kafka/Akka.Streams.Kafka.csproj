@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="Akka.Streams" Version="1.3.0" />
-    <PackageReference Include="Confluent.Kafka" Version="0.11.0" />
+    <PackageReference Include="Confluent.Kafka" Version="0.11.0-ci-48" />
     <PackageReference Include="MessagePack" Version="1.6.1" />
     <PackageReference Include="System.ValueTuple" Version="4.4.0" />
   </ItemGroup>

@@ -23,6 +23,7 @@ namespace Akka.Streams.Kafka.Settings
                 valueDeserializer: valueDeserializer,
                 pollInterval: config.GetTimeSpan("poll-interval", TimeSpan.FromMilliseconds(50)),
                 pollTimeout: config.GetTimeSpan("poll-timeout", TimeSpan.FromMilliseconds(50)),
+                bufferSize: config.GetInt("buffer-size", 50),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 properties: ImmutableDictionary<string, object>.Empty);
         }
@@ -33,15 +34,17 @@ namespace Akka.Streams.Kafka.Settings
         public IDeserializer<TValue> ValueDeserializer { get; }
         public TimeSpan PollInterval { get; }
         public TimeSpan PollTimeout { get; }
+        public int BufferSize { get; }
         public string DispatcherId { get; }
         public IImmutableDictionary<string, object> Properties { get; }
 
-        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, TimeSpan pollTimeout, string dispatcherId, IImmutableDictionary<string, object> properties)
+        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, TimeSpan pollTimeout, int bufferSize, string dispatcherId, IImmutableDictionary<string, object> properties)
         {
             KeyDeserializer = keyDeserializer;
             ValueDeserializer = valueDeserializer;
             PollInterval = pollInterval;
             PollTimeout = pollTimeout;
+            BufferSize = bufferSize;
             DispatcherId = dispatcherId;
             Properties = properties;
         }
