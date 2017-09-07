@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Stages
             _completion = completion;
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
             SetHandler(_out, onPull:() =>
             {
