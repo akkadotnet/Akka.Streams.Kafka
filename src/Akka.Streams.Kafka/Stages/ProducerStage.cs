@@ -5,24 +5,28 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
+using Akka.Streams.Supervision;
 
 namespace Akka.Streams.Kafka.Stages
 {
     internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>>
     {
-        private readonly ProducerSettings<K, V> _settings;
-        private Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("kafka.producer.in");
-        private Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("kafka.producer.out");
+        public ProducerSettings<K, V> Settings { get; }
+        public Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("kafka.producer.in");
+        public Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("kafka.producer.out");
 
         public ProducerStage(ProducerSettings<K, V> settings)
         {
-            _settings = settings;
+            Settings = settings;
             Shape = new FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>(In, Out);
         }
 
         public override FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>> Shape { get; }
 
-        protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes) => new ProducerStageLogic<K, V>(_settings, Shape);
+        protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
+        {
+            return new ProducerStageLogic<K, V>(this, inheritedAttributes);
+        }
     }
 
     internal sealed class ProducerStageLogic<K, V> : GraphStageLogic
@@ -35,11 +39,11 @@ namespace Akka.Streams.Kafka.Stages
         private Inlet In { get; }
         private Outlet Out { get; }
 
-        public ProducerStageLogic(ProducerSettings<K, V> settings, Shape shape) : base(shape)
+        public ProducerStageLogic(ProducerStage<K, V> stage, Attributes attributes) : base(stage.Shape)
         {
-            In = shape.Inlets.FirstOrDefault();
-            Out = shape.Outlets.FirstOrDefault();
-            _settings = settings;
+            In = stage.In;
+            Out = stage.Out;
+            _settings = stage.Settings;
 
             SetHandler(In, 
                 onPush: () =>
@@ -97,7 +101,8 @@ namespace Akka.Streams.Kafka.Stages
 
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
-                FailStage(new Exception(error.Reason));
+                var exception = new KafkaException(error);
+                FailStage(exception);
             }
         }
 

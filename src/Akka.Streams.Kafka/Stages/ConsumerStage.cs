@@ -5,31 +5,35 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
+using Akka.Streams.Supervision;
+using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
     internal class KafkaSourceStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
     {
-        private readonly ConsumerSettings<K, V> _settings;
-        private readonly ISubscription _subscription;
-
-        protected readonly Outlet<Msg> Out = new Outlet<Msg>("kafka.consumer.out");
+        public Outlet<Msg> Out { get; } = new Outlet<Msg>("kafka.consumer.out");
         public override SourceShape<Msg> Shape { get; }
+        public ConsumerSettings<K, V> Settings { get; }
+        public ISubscription Subscription { get; }
 
         public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            _settings = settings;
-            _subscription = subscription;
+            Settings = settings;
+            Subscription = subscription;
             Shape = new SourceShape<Msg>(Out);
+            Settings = settings;
+            Subscription = subscription;
         }
 
         public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
-            return new LogicAndMaterializedValue<Task>(new KafkaSourceStage<K, V>(_settings, _subscription, Shape), Task.CompletedTask);
+            var completion = new TaskCompletionSource<NotUsed>();
+            return new LogicAndMaterializedValue<Task>(new KafkaSourceStageLogic<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
         }
     }
 
-    internal class KafkaSourceStage<K, V> : TimerGraphStageLogic
+    internal class KafkaSourceStageLogic<K, V, Msg> : TimerGraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
@@ -39,16 +43,22 @@ namespace Akka.Streams.Kafka.Stages
         private Action<Message<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
         private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
+        private readonly Decider _decider;
 
         private const string TimerKey = "PollTimer";
 
         private readonly Queue<Message<K, V>> _buffer = new Queue<Message<K, V>>();
+        private readonly TaskCompletionSource<NotUsed> _completion;
 
-        public KafkaSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
+        public KafkaSourceStageLogic(KafkaSourceStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
         {
-            _settings = settings;
-            _subscription = subscription;
-            _out = shape.Outlets.FirstOrDefault();
+            _settings = stage.Settings;
+            _subscription = stage.Subscription;
+            _out = stage.Out;
+            _completion = completion;
+
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
             SetHandler(_out, onPull:() =>
             {
@@ -102,7 +112,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
             _consumer.OnPartitionsRevoked -= HandleOnPartitionsRevoked;
 
-            Log.Debug($"Consumer stopped {_consumer.Name}");
+            Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
 
             base.PostStop();
@@ -117,6 +127,21 @@ namespace Akka.Streams.Kafka.Stages
         private void HandleConsumeError(object sender, Message message)
         {
             Log.Error(message.Error.Reason);
+            var exception = new SerializationException(message.Error.Reason);
+            switch (_decider(exception))
+            {
+                case Directive.Stop:
+                    // Throw
+                    _completion.TrySetException(exception);
+                    FailStage(exception);
+                    break;
+                case Directive.Resume:
+                    // keep going
+                    break;
+                case Directive.Restart:
+                    // keep going
+                    break;
+            }
         }
 
         private void HandleOnError(object sender, Error error)
@@ -125,7 +150,8 @@ namespace Akka.Streams.Kafka.Stages
 
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
-                FailStage(new Exception(error.Reason));
+                var exception = new KafkaException(error);
+                FailStage(exception);
             }
         }
 
