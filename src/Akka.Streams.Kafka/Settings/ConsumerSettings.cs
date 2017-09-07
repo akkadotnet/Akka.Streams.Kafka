@@ -72,6 +72,7 @@ namespace Akka.Streams.Kafka.Settings
             IDeserializer<TValue> valueDeserializer = null,
             TimeSpan? pollInterval = null,
             TimeSpan? pollTimeout = null,
+            int? bufferSize = null,
             string dispatcherId = null,
             IImmutableDictionary<string, object> properties = null) =>
             new ConsumerSettings<TKey, TValue>(
@@ -79,6 +80,7 @@ namespace Akka.Streams.Kafka.Settings
                 valueDeserializer: valueDeserializer ?? this.ValueDeserializer,
                 pollInterval: pollInterval ?? this.PollInterval,
                 pollTimeout: pollTimeout ?? this.PollTimeout,
+                bufferSize: bufferSize ?? this.BufferSize,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 properties: properties ?? this.Properties);
 
