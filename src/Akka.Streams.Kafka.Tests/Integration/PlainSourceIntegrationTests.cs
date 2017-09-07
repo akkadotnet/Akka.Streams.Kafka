@@ -1,16 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
 using FluentAssertions;
+using MessagePack.Resolvers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -24,8 +27,15 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
         private readonly ActorMaterializer _materializer;
 
+        public static Config Default()
+        {
+            return ConfigurationFactory.ParseString("akka.loglevel = DEBUG")
+                .WithFallback(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>(
+                        "Akka.Streams.Kafka.reference.conf"));
+        }
+
         public PlainSourceIntegrationTests(ITestOutputHelper output) 
-            : base(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
+            : base(Default(), nameof(PlainSourceIntegrationTests), output)
         {
             _materializer = Sys.Materializer();
         }
@@ -43,6 +53,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var producer = ProducerSettings.CreateKafkaProducer();
             await producer.ProduceAsync(topic, null, InitialMsg, 0);
+            producer.Flush(TimeSpan.FromSeconds(1));
             producer.Dispose();
         }
 
@@ -152,6 +163,61 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = CreateProbe(config, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
             probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
+        }
+
+        [Fact]
+        public async Task PlainSource_should_stop_on_deserialization_errors()
+        {
+            int elementsCount = 10;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
+
+            var settings = ConsumerSettings<Null, int>.Create(Sys, null, new IntDeserializer())
+                .WithBootstrapServers(KafkaUrl)
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithGroupId(group1);
+
+            var probe = Dsl.Consumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Deciders.StoppingDecider))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<int>(), _materializer);
+
+            var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
+            error.Should().BeOfType<TestSubscriber.OnError>();
+            ((TestSubscriber.OnError)error).Cause.Should().BeOfType<SerializationException>();
+            probe.Cancel();
+        }
+
+        [Fact]
+        public async Task PlainSource_should_resume_on_deserialization_errors()
+        {
+            Directive Decider(Exception cause) => cause is SerializationException
+                ? Directive.Resume
+                : Directive.Stop;
+
+            int elementsCount = 10;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
+
+            var settings = ConsumerSettings<Null, int>.Create(Sys, null, new IntDeserializer())
+                .WithBootstrapServers(KafkaUrl)
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithGroupId(group1);
+
+            var probe = Dsl.Consumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<int>(), _materializer);
+
+            probe.Request(elementsCount);
+            probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
+            probe.Cancel();
         }
     }
 }

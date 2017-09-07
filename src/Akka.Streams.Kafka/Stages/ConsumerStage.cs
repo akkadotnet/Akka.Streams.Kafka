@@ -136,10 +136,10 @@ namespace Akka.Streams.Kafka.Stages
                     FailStage(exception);
                     break;
                 case Directive.Resume:
-                    // TODO: resume the stream
+                    // keep going
                     break;
                 case Directive.Restart:
-                    // TODO: restart the stream
+                    // keep going
                     break;
             }
         }
@@ -151,20 +151,7 @@ namespace Akka.Streams.Kafka.Stages
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 var exception = new KafkaException(error);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        // Throw
-                        _completion.TrySetException(exception);
-                        FailStage(exception);
-                        break;
-                    case Directive.Resume:
-                        // TODO: resume the stream
-                        break;
-                    case Directive.Restart:
-                        // TODO: restart the stream
-                        break;
-                }
+                FailStage(exception);
             }
         }
 

@@ -35,7 +35,6 @@ namespace Akka.Streams.Kafka.Stages
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
         private Action<ProduceRecord<K, V>> _sendToProducer;
         private readonly ProducerSettings<K, V> _settings;
-        private readonly Decider _decider;
 
         private Inlet In { get; }
         private Outlet Out { get; }
@@ -45,9 +44,6 @@ namespace Akka.Streams.Kafka.Stages
             In = stage.In;
             Out = stage.Out;
             _settings = stage.Settings;
-
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
             SetHandler(In, 
                 onPush: () =>
@@ -106,20 +102,7 @@ namespace Akka.Streams.Kafka.Stages
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 var exception = new KafkaException(error);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        // Throw
-                        _completionState.TrySetException(exception);
-                        FailStage(exception);
-                        break;
-                    case Directive.Resume:
-                        // TODO: resume the stream
-                        break;
-                    case Directive.Restart:
-                        // TODO: restart the stream
-                        break;
-                }
+                FailStage(exception);
             }
         }
 
