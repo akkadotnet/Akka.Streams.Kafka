@@ -6,49 +6,61 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
+using Akka.Streams.Supervision;
+using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
     internal class CommitableConsumerStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
     {
-        private readonly ConsumerSettings<K, V> _settings;
-        private readonly ISubscription _subscription;
-
-        protected readonly Outlet<Msg> Out = new Outlet<Msg>("out");
+        public Outlet<Msg> Out { get; } = new Outlet<Msg>("kafka.commitable.consumer.out");
         public override SourceShape<Msg> Shape { get; }
+        public ConsumerSettings<K, V> Settings { get; }
+        public ISubscription Subscription { get; }
 
         public CommitableConsumerStage(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            _settings = settings;
-            _subscription = subscription;
+            Settings = settings;
+            Subscription = subscription;
             Shape = new SourceShape<Msg>(Out);
         }
 
         public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
-            return new LogicAndMaterializedValue<Task>(new KafkaCommitableSourceStage<K, V>(_settings, _subscription, Shape), Task.CompletedTask);
+            var completion = new TaskCompletionSource<NotUsed>();
+            return new LogicAndMaterializedValue<Task>(new KafkaCommitableSourceStage<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
         }
     }
 
-    internal class KafkaCommitableSourceStage<K, V> : TimerGraphStageLogic
+    internal class KafkaCommitableSourceStage<K, V, Msg> : TimerGraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
         private readonly Outlet _out;
         private Consumer<K, V> _consumer;
+
         private Action<Message<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
         private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
+        private readonly Decider _decider;
 
         private const string TimerKey = "PollTimer";
 
-        private readonly Queue<CommittableMessage<K, V>> _buffer = new Queue<CommittableMessage<K, V>>();
+        private readonly Queue<CommittableMessage<K, V>> _buffer;
+        private IEnumerable<TopicPartition> assignedPartitions = null;
+        private volatile bool isPaused = false;
+        private readonly TaskCompletionSource<NotUsed> _completion;
 
-        public KafkaCommitableSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, Shape shape) : base(shape)
+        public KafkaCommitableSourceStage(CommitableConsumerStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
         {
-            _settings = settings;
-            _subscription = subscription;
-            _out = shape.Outlets.FirstOrDefault();
+            _settings = stage.Settings;
+            _subscription = stage.Subscription;
+            _out = stage.Out;
+            _completion = completion;
+            _buffer = new Queue<CommittableMessage<K, V>>(stage.Settings.BufferSize);
+
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
             SetHandler(_out, onPull: () =>
             {
@@ -58,6 +70,12 @@ namespace Akka.Streams.Kafka.Stages
                 }
                 else
                 {
+                    if (isPaused)
+                    {
+                        _consumer.Resume(assignedPartitions);
+                        isPaused = false;
+                        Log.Debug($"Polling resumed, buffer is empty");
+                    }
                     PullQueue();
                 }
             });
@@ -68,6 +86,8 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             _consumer = _settings.CreateKafkaConsumer();
+            Log.Debug($"Consumer started: {_consumer.Name}");
+
             _consumer.OnMessage += HandleOnMessage;
             _consumer.OnConsumeError += HandleConsumeError;
             _consumer.OnError += HandleOnError;
@@ -90,6 +110,7 @@ namespace Akka.Streams.Kafka.Stages
             _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
+            ScheduleRepeatedly(TimerKey, _settings.PollInterval);
         }
 
         public override void PostStop()
@@ -100,6 +121,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
             _consumer.OnPartitionsRevoked -= HandleOnPartitionsRevoked;
 
+            Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
 
             base.PostStop();
@@ -111,8 +133,25 @@ namespace Akka.Streams.Kafka.Stages
 
         private void HandleOnMessage(object sender, Message<K, V> message) => _messagesReceived.Invoke(message);
 
-        // TODO: how I should react?
-        private void HandleConsumeError(object sender, Message message) { }
+        private void HandleConsumeError(object sender, Message message)
+        {
+            Log.Error(message.Error.Reason);
+            var exception = new SerializationException(message.Error.Reason);
+            switch (_decider(exception))
+            {
+                case Directive.Stop:
+                    // Throw
+                    _completion.TrySetException(exception);
+                    FailStage(exception);
+                    break;
+                case Directive.Resume:
+                    // keep going
+                    break;
+                case Directive.Restart:
+                    // keep going
+                    break;
+            }
+        }
 
         private void HandleOnError(object sender, Error error)
         {
@@ -120,7 +159,8 @@ namespace Akka.Streams.Kafka.Stages
 
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
-                FailStage(new Exception(error.Reason));
+                var exception = new KafkaException(error);
+                FailStage(exception);
             }
         }
 
@@ -154,23 +194,28 @@ namespace Akka.Streams.Kafka.Stages
 
         private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
         {
-            Log.Info("Partitions were assigned");
+            Log.Debug($"Partitions were assigned: {_consumer.Name}");
             _consumer.Assign(partitions);
+            assignedPartitions = partitions;
         }
 
         private void PartitionsRevoked(IEnumerable<TopicPartition> partitions)
         {
-            Log.Info("Partitions were revoked");
+            Log.Debug($"Partitions were revoked: {_consumer.Name}");
             _consumer.Unassign();
+            assignedPartitions = null;
         }
 
         private void PullQueue()
         {
-            // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
             _consumer.Poll(_settings.PollTimeout);
 
-            if (_buffer.Count == 0)
-                ScheduleOnce(TimerKey, _settings.PollInterval);
+            if (!isPaused && _buffer.Count > _settings.BufferSize)
+            {
+                Log.Debug($"Polling paused, buffer is full");
+                _consumer.Pause(assignedPartitions);
+                isPaused = true;
+            }
         }
 
         protected override void OnTimer(object timerKey) => PullQueue();
