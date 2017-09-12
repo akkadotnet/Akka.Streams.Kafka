@@ -47,7 +47,9 @@ namespace Akka.Streams.Kafka.Stages
 
         private const string TimerKey = "PollTimer";
 
-        private readonly Queue<Message<K, V>> _buffer = new Queue<Message<K, V>>();
+        private readonly Queue<Message<K, V>> _buffer;
+        private IEnumerable<TopicPartition> assignedPartitions = null;
+        private volatile bool isPaused = false;
         private readonly TaskCompletionSource<NotUsed> _completion;
 
         public KafkaSourceStageLogic(KafkaSourceStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
@@ -56,6 +58,7 @@ namespace Akka.Streams.Kafka.Stages
             _subscription = stage.Subscription;
             _out = stage.Out;
             _completion = completion;
+            _buffer = new Queue<Message<K, V>>(stage.Settings.BufferSize);
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -68,6 +71,12 @@ namespace Akka.Streams.Kafka.Stages
                 }
                 else
                 {
+                    if (isPaused)
+                    {
+                        _consumer.Resume(assignedPartitions);
+                        isPaused = false;
+                        Log.Debug($"Polling resumed, buffer is empty");
+                    }
                     PullQueue();
                 }
             });
@@ -102,6 +111,7 @@ namespace Akka.Streams.Kafka.Stages
             _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
+            ScheduleRepeatedly(TimerKey, _settings.PollInterval);
         }
 
         public override void PostStop()
@@ -182,21 +192,26 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Debug($"Partitions were assigned: {_consumer.Name}");
             _consumer.Assign(partitions);
+            assignedPartitions = partitions;
         }
 
         private void PartitionsRevoked(IEnumerable<TopicPartition> partitions)
         {
             Log.Debug($"Partitions were revoked: {_consumer.Name}");
             _consumer.Unassign();
+            assignedPartitions = null;
         }
 
         private void PullQueue()
         {
-            // TODO: should I call `Poll` if there are no assignments? Like in `Subscribe` flow
             _consumer.Poll(_settings.PollTimeout);
 
-            if (_buffer.Count == 0)
-                ScheduleOnce(TimerKey, _settings.PollInterval);
+            if (!isPaused && _buffer.Count > _settings.BufferSize)
+            {
+                Log.Debug($"Polling paused, buffer is full");
+                _consumer.Pause(assignedPartitions);
+                isPaused = true;
+            }
         }
 
         protected override void OnTimer(object timerKey) => PullQueue();

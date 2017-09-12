@@ -18,7 +18,10 @@ namespace SimpleProducer
     {
         public static void Main(string[] args)
         {
-            var fallbackConfig = ConfigurationFactory.FromResource<ProducerSettings<object, object>>("Akka.Streams.Kafka.reference.conf");
+            Config fallbackConfig = ConfigurationFactory.ParseString(@"
+                    akka.suppress-json-serializer-warning=true
+                    akka.loglevel = DEBUG
+                ").WithFallback(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"));
 
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
@@ -35,9 +38,9 @@ namespace SimpleProducer
 
             // producer as a Flow
             Source
-                .From(Enumerable.Range(1, 100))
+                .Cycle(() => Enumerable.Range(1, 100).GetEnumerator())
                 .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>("akka10", null, elem))
+                .Select(elem => new ProduceRecord<Null, string>("akka100", null, elem))
                 .Via(Producer.CreateFlow(producerSettings))
                 .Select(record =>
                 {
