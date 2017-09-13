@@ -40,6 +40,26 @@ namespace Akka.Streams.Kafka.Tests.Integration
             ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
                 .WithBootstrapServers(KafkaUrl);
 
+        private Task Produce(string topic, IEnumerable<string> range, ProducerSettings<Null, string> settings = null)
+        {
+            settings = settings ?? ProducerSettings;
+            var source = Source
+                .From(range)
+                .Select(elem => new ProduceRecord<Null, string>(topic, null, elem.ToString()))
+                .ViaMaterialized(Dsl.Producer.CreateFlow(settings), Keep.Both);
+
+            return source.RunWith(Sink.Ignore<Message<Null, string>>(), _materializer);
+        }
+
+        private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, string topic, ISubscription sub)
+        {
+            return Dsl.Consumer
+                .PlainSource(consumerSettings, sub)
+                .Where(c => !c.Value.Equals(InitialMsg))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<string>(), _materializer);
+        }
+
         private async Task GivenInitializedTopic(string topic)
         {
             var producer = ProducerSettings.CreateKafkaProducer();
@@ -56,7 +76,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task CommitableSource_consumes_messages_from_Producer_without_commits()
+        public async Task CommittableSource_must_consume_messages_from_Producer_without_commits()
         {
             int elementsCount = 100;
             var topic1 = CreateTopic(1);
@@ -85,7 +105,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task CommitableSource_resume_from_commited_offset()
+        public async Task CommittableSource_must_resume_from_commited_offset()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
@@ -156,5 +176,95 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe3.Cancel();
         }
+
+        [Fact]
+        public async Task CommittableSource_must_handle_commit_without_demand()
+        {
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await GivenInitializedTopic(topic1);
+
+            // important to use more messages than the internal buffer sizes
+            // to trigger the intended scenario
+            Produce(topic1, Enumerable.Range(1, 100).Select(c => c.ToString()))
+                .Wait(RemainingOrDefault);
+
+            var consumerSettings = CreateConsumerSettings(group1);
+
+            var (control, probe1) = Dsl.Consumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WhereNot(c => c.Record.Value == InitialMsg)
+                .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
+                .Run(_materializer);
+
+            // request one, only
+            probe1.Request(1);
+
+            var commitableOffset = probe1.ExpectNext().CommitableOffset;
+
+            // enqueue some more
+            Produce(topic1, Enumerable.Range(101, 10).Select(c => c.ToString()))
+                .Wait(RemainingOrDefault);
+
+            probe1.ExpectNoMsg(TimeSpan.FromMilliseconds(200));
+
+            // then commit, which triggers a new poll while we haven't drained
+            // previous buffer
+            var done1 = commitableOffset.Commit();
+            done1.Wait(RemainingOrDefault);
+
+            probe1.Request(1);
+            var done2 = probe1.ExpectNext().CommitableOffset.Commit();
+            done2.Wait(RemainingOrDefault);
+
+            probe1.Cancel();
+            // TODO: Await.result(control.isShutdown, remainingOrDefault)
+        }
+
+        [Fact]
+        public async Task CommittableSource_must_consume_and_commit_in_batches()
+        {
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            await GivenInitializedTopic(topic1);
+
+            // important to use more messages than the internal buffer sizes
+            // to trigger the intended scenario
+            Produce(topic1, Enumerable.Range(1, 100).Select(c => c.ToString()))
+                .Wait(RemainingOrDefault);
+
+            var consumerSettings = CreateConsumerSettings(group1);
+
+            Tuple<Task, TestSubscriber.Probe<CommittedOffsets>> ConsumeAndBatchCommit(string topic)
+            {
+                return Dsl.Consumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic, 0)))
+                    .Select(msg => msg.CommitableOffset)
+                    .Batch(
+                        max: 10,
+                        seed: CommittableOffsetBatch.Empty.Updated,
+                        aggregate: (batch, elem) => batch.Updated(elem))
+                    .SelectAsync(1, c => c.Commit())
+                    .ToMaterialized(this.SinkProbe<CommittedOffsets>(), Keep.Both)
+                    .Run(_materializer);
+            }
+
+            var (control, probe) = ConsumeAndBatchCommit(topic1);
+
+            // Request one batch
+            probe.Request(1).ExpectNextN(1);
+
+            probe.Cancel();
+            // TODO: Await.result(control.isShutdown, remainingOrDefault)
+
+            // Resume consumption
+            var consumerSettings2 = CreateConsumerSettings(group1);
+            var probe2 = CreateProbe(consumerSettings2, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
+
+            var element = probe2.Request(1).ExpectNext();
+            int.Parse(element).Should().BeGreaterThan(1, "Should start after first element");
+            probe2.Cancel();
+        }
     }
 }
+
