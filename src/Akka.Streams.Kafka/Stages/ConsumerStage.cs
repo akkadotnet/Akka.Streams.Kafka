@@ -1,16 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
 using Akka.Streams.Supervision;
 using System.Runtime.Serialization;
+using System.Threading;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal class KafkaSourceStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
+    internal class KafkaSourceStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, CancellationTokenSource>
     {
         public Outlet<Msg> Out { get; } = new Outlet<Msg>("kafka.consumer.out");
         public override SourceShape<Msg> Shape { get; }
@@ -26,10 +25,11 @@ namespace Akka.Streams.Kafka.Stages
             Subscription = subscription;
         }
 
-        public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
+        public override ILogicAndMaterializedValue<CancellationTokenSource> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
-            var completion = new TaskCompletionSource<NotUsed>();
-            return new LogicAndMaterializedValue<Task>(new KafkaSourceStageLogic<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
+            var cancellationTokenSource = new CancellationTokenSource();
+            var token = cancellationTokenSource.Token;
+            return new LogicAndMaterializedValue<CancellationTokenSource>(new KafkaSourceStageLogic<K, V, Msg>(this, inheritedAttributes, token), cancellationTokenSource);
         }
     }
 
@@ -50,14 +50,14 @@ namespace Akka.Streams.Kafka.Stages
         private readonly Queue<Message<K, V>> _buffer;
         private IEnumerable<TopicPartition> assignedPartitions = null;
         private volatile bool isPaused = false;
-        private readonly TaskCompletionSource<NotUsed> _completion;
+        private readonly CancellationToken _token;
 
-        public KafkaSourceStageLogic(KafkaSourceStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
+        public KafkaSourceStageLogic(KafkaSourceStage<K, V, Msg> stage, Attributes attributes, CancellationToken token) : base(stage.Shape)
         {
             _settings = stage.Settings;
             _subscription = stage.Subscription;
             _out = stage.Out;
-            _completion = completion;
+            _token = token;
             _buffer = new Queue<Message<K, V>>(stage.Settings.BufferSize);
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
@@ -142,7 +142,6 @@ namespace Akka.Streams.Kafka.Stages
             {
                 case Directive.Stop:
                     // Throw
-                    _completion.TrySetException(exception);
                     FailStage(exception);
                     break;
                 case Directive.Resume:
@@ -204,6 +203,11 @@ namespace Akka.Streams.Kafka.Stages
 
         private void PullQueue()
         {
+            if (_token.IsCancellationRequested)
+            {
+                CompleteStage();
+            }
+
             _consumer.Poll(_settings.PollTimeout);
 
             if (!isPaused && _buffer.Count > _settings.BufferSize)

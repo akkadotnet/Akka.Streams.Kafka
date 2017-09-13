@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings(group1);
             var committedElements = new ConcurrentQueue<string>();
 
-            var (_, probe1) = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var (control, probe1) = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, elem =>
                 {
@@ -123,7 +123,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 
             probe1.Cancel();
 
-            // Await.result(control.isShutdown, remainingOrDefault)
+            control.Cancel();
 
             var probe2 = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Select(_ => _.Record.Value)
