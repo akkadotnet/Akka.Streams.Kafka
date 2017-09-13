@@ -11,14 +11,14 @@ using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal class CommitableConsumerStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
+    internal class CommittableConsumerStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
     {
         public Outlet<Msg> Out { get; } = new Outlet<Msg>("kafka.commitable.consumer.out");
         public override SourceShape<Msg> Shape { get; }
         public ConsumerSettings<K, V> Settings { get; }
         public ISubscription Subscription { get; }
 
-        public CommitableConsumerStage(ConsumerSettings<K, V> settings, ISubscription subscription)
+        public CommittableConsumerStage(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             Settings = settings;
             Subscription = subscription;
@@ -28,11 +28,11 @@ namespace Akka.Streams.Kafka.Stages
         public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
             var completion = new TaskCompletionSource<NotUsed>();
-            return new LogicAndMaterializedValue<Task>(new KafkaCommitableSourceStage<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
+            return new LogicAndMaterializedValue<Task>(new KafkaCommittableSourceStage<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
         }
     }
 
-    internal class KafkaCommitableSourceStage<K, V, Msg> : TimerGraphStageLogic
+    internal class KafkaCommittableSourceStage<K, V, Msg> : TimerGraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
@@ -51,7 +51,7 @@ namespace Akka.Streams.Kafka.Stages
         private volatile bool isPaused = false;
         private readonly TaskCompletionSource<NotUsed> _completion;
 
-        public KafkaCommitableSourceStage(CommitableConsumerStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
+        public KafkaCommittableSourceStage(CommittableConsumerStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
         {
             _settings = stage.Settings;
             _subscription = stage.Subscription;

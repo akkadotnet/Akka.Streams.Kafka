@@ -72,7 +72,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings(group1);
 
             var probe = Dsl.Consumer
-                .CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Where(c => !c.Record.Value.Equals(InitialMsg))
                 .Select(c => c.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings(group1);
             var committedElements = new ConcurrentQueue<string>();
 
-            var (_, probe1) = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var (_, probe1) = Dsl.Consumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, elem =>
                 {
@@ -125,7 +125,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             // Await.result(control.isShutdown, remainingOrDefault)
 
-            var probe2 = Dsl.Consumer.CommitableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var probe2 = Dsl.Consumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Select(_ => _.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
 
@@ -145,7 +145,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe2.Cancel();
 
             // another consumer should see all
-            var probe3 = Dsl.Consumer.CommitableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var probe3 = Dsl.Consumer.CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .Select(_ => _.Record.Value)
                 .RunWith(this.SinkProbe<string>(), _materializer);
