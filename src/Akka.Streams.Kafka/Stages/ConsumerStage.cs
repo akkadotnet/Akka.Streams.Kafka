@@ -10,10 +10,10 @@ using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal class KafkaSourceStage<K, V, Msg> : GraphStageWithMaterializedValue<SourceShape<Msg>, Task>
+    internal class KafkaSourceStage<K, V> : GraphStageWithMaterializedValue<SourceShape<Message<K, V>>, Task>
     {
-        public Outlet<Msg> Out { get; } = new Outlet<Msg>("kafka.consumer.out");
-        public override SourceShape<Msg> Shape { get; }
+        public Outlet<Message<K, V>> Out { get; } = new Outlet<Message<K, V>>("kafka.consumer.out");
+        public override SourceShape<Message<K, V>> Shape { get; }
         public ConsumerSettings<K, V> Settings { get; }
         public ISubscription Subscription { get; }
 
@@ -21,7 +21,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             Settings = settings;
             Subscription = subscription;
-            Shape = new SourceShape<Msg>(Out);
+            Shape = new SourceShape<Message<K, V>>(Out);
             Settings = settings;
             Subscription = subscription;
         }
@@ -29,15 +29,15 @@ namespace Akka.Streams.Kafka.Stages
         public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
             var completion = new TaskCompletionSource<NotUsed>();
-            return new LogicAndMaterializedValue<Task>(new KafkaSourceStageLogic<K, V, Msg>(this, inheritedAttributes, completion), completion.Task);
+            return new LogicAndMaterializedValue<Task>(new KafkaSourceStageLogic<K, V>(this, inheritedAttributes, completion), completion.Task);
         }
     }
 
-    internal class KafkaSourceStageLogic<K, V, Msg> : TimerGraphStageLogic
+    internal class KafkaSourceStageLogic<K, V> : TimerGraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
-        private readonly Outlet _out;
+        private readonly Outlet<Message<K, V>> _out;
         private Consumer<K, V> _consumer;
 
         private Action<Message<K, V>> _messagesReceived;
@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Stages
         private volatile bool isPaused = false;
         private readonly TaskCompletionSource<NotUsed> _completion;
 
-        public KafkaSourceStageLogic(KafkaSourceStage<K, V, Msg> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
+        public KafkaSourceStageLogic(KafkaSourceStage<K, V> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
         {
             _settings = stage.Settings;
             _subscription = stage.Subscription;

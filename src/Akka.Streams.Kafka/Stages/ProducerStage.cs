@@ -36,8 +36,8 @@ namespace Akka.Streams.Kafka.Stages
         private Action<ProduceRecord<K, V>> _sendToProducer;
         private readonly ProducerSettings<K, V> _settings;
 
-        private Inlet In { get; }
-        private Outlet Out { get; }
+        private Inlet<ProduceRecord<K, V>> In { get; }
+        private Outlet<Task<Message<K, V>>> Out { get; }
 
         public ProducerStageLogic(ProducerStage<K, V> stage, Attributes attributes) : base(stage.Shape)
         {
