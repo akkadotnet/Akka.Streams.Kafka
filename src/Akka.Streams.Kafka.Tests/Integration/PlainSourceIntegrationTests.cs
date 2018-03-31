@@ -13,7 +13,6 @@ using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
 using FluentAssertions;
-using MessagePack.Resolvers;
 using Xunit;
 using Xunit.Abstractions;
 
