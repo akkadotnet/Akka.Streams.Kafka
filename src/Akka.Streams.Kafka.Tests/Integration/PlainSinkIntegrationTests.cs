@@ -112,7 +112,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(Producer.PlainSink(config), _materializer).Wait();
 
             // TODO: find a better way to test FailStage
-            act.ShouldThrow<AggregateException>().WithInnerException<KafkaException>();
+            act.Should().Throw<AggregateException>().WithInnerException<KafkaException>();
         }
     }
 }
