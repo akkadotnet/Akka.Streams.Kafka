@@ -84,7 +84,7 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 properties: properties ?? this.Properties);
 
-        public Confluent.Kafka.Consumer<TKey, TValue> CreateKafkaConsumer() =>
+        public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer() =>
             new Confluent.Kafka.Consumer<TKey, TValue>(this.Properties, this.KeyDeserializer, this.ValueDeserializer);
     }
 }

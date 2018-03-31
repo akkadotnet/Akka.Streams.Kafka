@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Stages
 
     internal sealed class ProducerStageLogic<K, V> : GraphStageLogic
     {
-        private Producer<K, V> _producer;
+        private IProducer<K, V> _producer;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
         private Action<MessageAndMeta<K, V>> _sendToProducer;
         private readonly ProducerSettings<K, V> _settings;

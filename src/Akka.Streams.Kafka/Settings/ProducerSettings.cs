@@ -69,7 +69,7 @@ namespace Akka.Streams.Kafka.Settings
                 properties: ImmutableDictionary<string, object>.Empty);
         }
 
-        public Confluent.Kafka.Producer<TKey, TValue> CreateKafkaProducer() =>
+        public Confluent.Kafka.IProducer<TKey, TValue> CreateKafkaProducer() =>
             new Confluent.Kafka.Producer<TKey, TValue>(Properties, KeySerializer, ValueSerializer);
     }
 }

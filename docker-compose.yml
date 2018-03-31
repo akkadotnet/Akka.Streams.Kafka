@@ -24,6 +24,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     extra_hosts:
       - "moby:127.0.0.1"
       - "localhost: 127.0.0.1"

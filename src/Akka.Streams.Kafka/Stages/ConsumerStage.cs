@@ -38,7 +38,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
         private readonly Outlet<ConsumerRecord<K, V>> _out;
-        private Consumer<K, V> _consumer;
+        private IConsumer<K, V> _consumer;
 
         private Action<ConsumerRecord<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
