@@ -4,14 +4,14 @@
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Kafka adapter for Akka.NET Streams</Description>
     <TargetFramework>netstandard1.6</TargetFramework>
-    <Copyright>Copyright © 2017 alexvaluyskiy</Copyright>
-    <Authors>alexvaluyskiy</Authors>
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <Copyright>Copyright © 2017-2018 AkkaNetContrib</Copyright>
+    <Authors>AkkaNetContrib</Authors>
+    <VersionPrefix>0.5.0</VersionPrefix>
     <PackageTags>akka;actors;streams;kafka;reactive</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
-    <PackageProjectUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/alexvaluyskiy/Akka.Streams.Kafka/blob/dev/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/AkkaNetContrib/Akka.Streams.Kafka</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/AkkaNetContrib/Akka.Streams.Kafka/blob/dev/LICENSE</PackageLicenseUrl>
     <NetStandardImplicitPackageVersion>1.6.1</NetStandardImplicitPackageVersion>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>

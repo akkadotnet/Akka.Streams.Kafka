@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Confluent.Kafka.Serialization;
+using MessagePack.Resolvers;
 
 namespace Confluent.Kafka.MessagePack
 {
@@ -7,17 +8,16 @@ namespace Confluent.Kafka.MessagePack
     {
         public byte[] Serialize(string topic, T data)
         {
-            throw new System.NotImplementedException();
+            return global::MessagePack.MessagePackSerializer.Serialize<T>(data, ContractlessStandardResolver.Instance);
         }
 
         public IEnumerable<KeyValuePair<string, object>> Configure(IEnumerable<KeyValuePair<string, object>> config, bool isKey)
         {
-            throw new System.NotImplementedException();
+            return config;
         }
 
         public void Dispose()
         {
-            throw new System.NotImplementedException();
         }
     }
 }
