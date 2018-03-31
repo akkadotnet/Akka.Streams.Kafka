@@ -25,7 +25,7 @@ namespace SimpleConsumer
             var materializer = system.Materializer();
 
             var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, new StringDeserializer(Encoding.UTF8))
-                .WithBootstrapServers("localhost:9092")
+                .WithBootstrapServers("localhost:29092")
                 .WithGroupId("group1");
 
             var subscription = Subscriptions.Topics("akka100");

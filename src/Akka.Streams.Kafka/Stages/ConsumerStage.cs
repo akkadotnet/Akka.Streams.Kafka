@@ -10,10 +10,10 @@ using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal class KafkaSourceStage<K, V> : GraphStageWithMaterializedValue<SourceShape<Message<K, V>>, Task>
+    internal class KafkaSourceStage<K, V> : GraphStageWithMaterializedValue<SourceShape<ConsumerRecord<K, V>>, Task>
     {
-        public Outlet<Message<K, V>> Out { get; } = new Outlet<Message<K, V>>("kafka.consumer.out");
-        public override SourceShape<Message<K, V>> Shape { get; }
+        public Outlet<ConsumerRecord<K, V>> Out { get; } = new Outlet<ConsumerRecord<K, V>>("kafka.consumer.out");
+        public override SourceShape<ConsumerRecord<K, V>> Shape { get; }
         public ConsumerSettings<K, V> Settings { get; }
         public ISubscription Subscription { get; }
 
@@ -21,7 +21,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             Settings = settings;
             Subscription = subscription;
-            Shape = new SourceShape<Message<K, V>>(Out);
+            Shape = new SourceShape<ConsumerRecord<K, V>>(Out);
             Settings = settings;
             Subscription = subscription;
         }
@@ -37,17 +37,17 @@ namespace Akka.Streams.Kafka.Stages
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
-        private readonly Outlet<Message<K, V>> _out;
+        private readonly Outlet<ConsumerRecord<K, V>> _out;
         private Consumer<K, V> _consumer;
 
-        private Action<Message<K, V>> _messagesReceived;
+        private Action<ConsumerRecord<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
         private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
         private readonly Decider _decider;
 
         private const string TimerKey = "PollTimer";
 
-        private readonly Queue<Message<K, V>> _buffer;
+        private readonly Queue<ConsumerRecord<K, V>> _buffer;
         private IEnumerable<TopicPartition> assignedPartitions = null;
         private volatile bool isPaused = false;
         private readonly TaskCompletionSource<NotUsed> _completion;
@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Stages
             _subscription = stage.Subscription;
             _out = stage.Out;
             _completion = completion;
-            _buffer = new Queue<Message<K, V>>(stage.Settings.BufferSize);
+            _buffer = new Queue<ConsumerRecord<K, V>>(stage.Settings.BufferSize);
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -89,7 +89,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer = _settings.CreateKafkaConsumer();
             Log.Debug($"Consumer started: {_consumer.Name}");
 
-            _consumer.OnMessage += HandleOnMessage;
+            _consumer.OnRecord += HandleOnMessage;
             _consumer.OnConsumeError += HandleConsumeError;
             _consumer.OnError += HandleOnError;
             _consumer.OnPartitionsAssigned += HandleOnPartitionsAssigned;
@@ -108,7 +108,7 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
-            _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
+            _messagesReceived = GetAsyncCallback<ConsumerRecord<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
             ScheduleRepeatedly(TimerKey, _settings.PollInterval);
@@ -116,7 +116,7 @@ namespace Akka.Streams.Kafka.Stages
 
         public override void PostStop()
         {
-            _consumer.OnMessage -= HandleOnMessage;
+            _consumer.OnRecord -= HandleOnMessage;
             _consumer.OnConsumeError -= HandleConsumeError;
             _consumer.OnError -= HandleOnError;
             _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
@@ -132,9 +132,9 @@ namespace Akka.Streams.Kafka.Stages
         // Consumer's events
         //
 
-        private void HandleOnMessage(object sender, Message<K, V> message) => _messagesReceived.Invoke(message);
+        private void HandleOnMessage(object sender, ConsumerRecord<K, V> message) => _messagesReceived.Invoke(message);
 
-        private void HandleConsumeError(object sender, Message message)
+        private void HandleConsumeError(object sender, ConsumerRecord message)
         {
             Log.Error(message.Error.Reason);
             var exception = new SerializationException(message.Error.Reason);
@@ -179,7 +179,7 @@ namespace Akka.Streams.Kafka.Stages
         // Async callbacks
         //
 
-        private void MessagesReceived(Message<K, V> message)
+        private void MessagesReceived(ConsumerRecord<K, V> message)
         {
             _buffer.Enqueue(message);
             if (IsAvailable(_out))

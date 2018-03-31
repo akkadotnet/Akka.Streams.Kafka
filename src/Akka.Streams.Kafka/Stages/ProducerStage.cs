@@ -1,27 +1,24 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
-using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
-using Akka.Streams.Supervision;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>>
+    internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>>>
     {
         public ProducerSettings<K, V> Settings { get; }
-        public Inlet<ProduceRecord<K, V>> In { get; } = new Inlet<ProduceRecord<K, V>>("kafka.producer.in");
-        public Outlet<Task<Message<K, V>>> Out { get; } = new Outlet<Task<Message<K, V>>>("kafka.producer.out");
+        public Inlet<MessageAndMeta<K, V>> In { get; } = new Inlet<MessageAndMeta<K, V>>("kafka.producer.in");
+        public Outlet<Task<DeliveryReport<K, V>>> Out { get; } = new Outlet<Task<DeliveryReport<K, V>>>("kafka.producer.out");
 
         public ProducerStage(ProducerSettings<K, V> settings)
         {
             Settings = settings;
-            Shape = new FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>>(In, Out);
+            Shape = new FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>>(In, Out);
         }
 
-        public override FlowShape<ProduceRecord<K, V>, Task<Message<K, V>>> Shape { get; }
+        public override FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>> Shape { get; }
 
         protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
         {
@@ -33,11 +30,11 @@ namespace Akka.Streams.Kafka.Stages
     {
         private Producer<K, V> _producer;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
-        private Action<ProduceRecord<K, V>> _sendToProducer;
+        private Action<MessageAndMeta<K, V>> _sendToProducer;
         private readonly ProducerSettings<K, V> _settings;
 
-        private Inlet<ProduceRecord<K, V>> In { get; }
-        private Outlet<Task<Message<K, V>>> Out { get; }
+        private Inlet<MessageAndMeta<K, V>> In { get; }
+        private Outlet<Task<DeliveryReport<K, V>>> Out { get; }
 
         public ProducerStageLogic(ProducerStage<K, V> stage, Attributes attributes) : base(stage.Shape)
         {
@@ -48,7 +45,7 @@ namespace Akka.Streams.Kafka.Stages
             SetHandler(In, 
                 onPush: () =>
                 {
-                    var msg = Grab<ProduceRecord<K, V>>(In);
+                    var msg = Grab<MessageAndMeta<K, V>>(In);
                     _sendToProducer.Invoke(msg);
                 },
                 onUpstreamFinish: () =>
@@ -81,7 +78,7 @@ namespace Akka.Streams.Kafka.Stages
 
             _sendToProducer = msg =>
             {
-                var task = _producer.ProduceAsync(msg.Topic, msg.Key, msg.Value, msg.PartitionId);
+                var task = _producer.ProduceAsync(msg.TopicPartition, msg.Message);
                 Push(Out, task);
             };
         }

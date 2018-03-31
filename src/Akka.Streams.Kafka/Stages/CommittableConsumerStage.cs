@@ -39,7 +39,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly Outlet<CommittableMessage<K, V>> _out;
         private Consumer<K, V> _consumer;
 
-        private Action<Message<K, V>> _messagesReceived;
+        private Action<ConsumerRecord<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
         private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
         private readonly Decider _decider;
@@ -88,7 +88,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer = _settings.CreateKafkaConsumer();
             Log.Debug($"Consumer started: {_consumer.Name}");
 
-            _consumer.OnMessage += HandleOnMessage;
+            _consumer.OnRecord += HandleOnMessage;
             _consumer.OnConsumeError += HandleConsumeError;
             _consumer.OnError += HandleOnError;
             _consumer.OnPartitionsAssigned += HandleOnPartitionsAssigned;
@@ -107,7 +107,7 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
-            _messagesReceived = GetAsyncCallback<Message<K, V>>(MessagesReceived);
+            _messagesReceived = GetAsyncCallback<ConsumerRecord<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
             ScheduleRepeatedly(TimerKey, _settings.PollInterval);
@@ -115,7 +115,7 @@ namespace Akka.Streams.Kafka.Stages
 
         public override void PostStop()
         {
-            _consumer.OnMessage -= HandleOnMessage;
+            _consumer.OnRecord -= HandleOnMessage;
             _consumer.OnConsumeError -= HandleConsumeError;
             _consumer.OnError -= HandleOnError;
             _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
@@ -131,9 +131,9 @@ namespace Akka.Streams.Kafka.Stages
         // Consumer's events
         //
 
-        private void HandleOnMessage(object sender, Message<K, V> message) => _messagesReceived.Invoke(message);
+        private void HandleOnMessage(object sender, ConsumerRecord<K, V> message) => _messagesReceived.Invoke(message);
 
-        private void HandleConsumeError(object sender, Message message)
+        private void HandleConsumeError(object sender, ConsumerRecord message)
         {
             Log.Error(message.Error.Reason);
             var exception = new SerializationException(message.Error.Reason);
@@ -178,11 +178,11 @@ namespace Akka.Streams.Kafka.Stages
         // Async callbacks
         //
 
-        private void MessagesReceived(Message<K, V> message)
+        private void MessagesReceived(ConsumerRecord<K, V> message)
         {
             var consumer = _consumer;
             var commitableOffset = new CommitableOffset(
-                () => consumer.CommitAsync(),
+                () => consumer.Commit(),
                 new PartitionOffset("groupId", message.Topic, message.Partition, message.Offset));
 
             _buffer.Enqueue(new CommittableMessage<K, V>(message, commitableOffset));

@@ -12,7 +12,7 @@ namespace Akka.Streams.Kafka.Dsl
 {
     public static class Consumer
     {
-        public static Source<Message<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        public static Source<ConsumerRecord<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return Source.FromGraph(new KafkaSourceStage<K, V>(settings, subscription));
         }

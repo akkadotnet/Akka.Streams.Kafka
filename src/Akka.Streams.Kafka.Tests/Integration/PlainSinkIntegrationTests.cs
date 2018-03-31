@@ -18,7 +18,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 {
     public class PlainSinkIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        private const string KafkaUrl = "localhost:9092";
+        private const string KafkaUrl = "localhost:29092";
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
         private readonly ActorMaterializer _materializer;
 
@@ -36,7 +36,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private async Task GivenInitializedTopic(string topic)
         {
             var producer = ProducerSettings.CreateKafkaProducer();
-            await producer.ProduceAsync(topic, null, InitialMsg, 0);
+            await producer.ProduceAsync(topic, new Message<Null, string> {Value = InitialMsg});
             producer.Dispose();
         }
 
@@ -67,7 +67,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var task = new TaskCompletionSource<NotUsed>();
             int messagesReceived = 0;
 
-            consumer.OnMessage += (sender, message) =>
+            consumer.OnRecord += (sender, message) =>
             {
                 messagesReceived++;
                 if (messagesReceived == 100)
@@ -77,7 +77,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
                 .RunWith(Producer.PlainSink(ProducerSettings), _materializer);
 
             var dateTimeStart = DateTime.UtcNow;
@@ -108,7 +108,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             Action act = () => Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
                 .RunWith(Producer.PlainSink(config), _materializer).Wait();
 
             // TODO: find a better way to test FailStage

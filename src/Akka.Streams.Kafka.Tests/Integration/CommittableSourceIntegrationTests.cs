@@ -43,7 +43,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private async Task GivenInitializedTopic(string topic)
         {
             var producer = ProducerSettings.CreateKafkaProducer();
-            await producer.ProduceAsync(topic, null, InitialMsg, 0);
+            await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
             producer.Dispose();
         }
 
@@ -66,7 +66,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Source
                 .From(Enumerable.Range(1, elementsCount))
-                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
             var consumerSettings = CreateConsumerSettings(group1);
@@ -95,7 +95,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Source
                 .From(Enumerable.Range(1, 100))
-                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
             var consumerSettings = CreateConsumerSettings(group1);
@@ -105,11 +105,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, elem =>
                 {
-                    return elem.CommitableOffset.Commit().ContinueWith(t =>
-                    {
-                        committedElements.Enqueue(elem.Record.Value);
-                        return Done.Instance;
-                    });
+                    elem.CommitableOffset.Commit();
+                    committedElements.Enqueue(elem.Record.Value);
+                    return Task.FromResult(Done.Instance);
                 })
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
                 .Run(_materializer);
@@ -135,7 +133,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             // some concurrent publish
             await Source
                 .From(Enumerable.Range(101, 100))
-                .Select(elem => new ProduceRecord<Null, string>(topic1, null, elem.ToString()))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(Dsl.Producer.PlainSink(ProducerSettings), _materializer);
 
             probe2.Request(100);

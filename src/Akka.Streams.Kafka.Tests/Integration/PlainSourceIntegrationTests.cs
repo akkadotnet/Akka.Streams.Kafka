@@ -51,7 +51,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private async Task GivenInitializedTopic(string topic)
         {
             var producer = ProducerSettings.CreateKafkaProducer();
-            await producer.ProduceAsync(topic, null, InitialMsg, 0);
+            await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
             producer.Flush(TimeSpan.FromSeconds(1));
             producer.Dispose();
         }
@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             await Source
                 .From(range)
-                .Select(elem => new ProduceRecord<Null, string>(topic, null, elem.ToString()))
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(Dsl.Producer.PlainSink(producerSettings), _materializer);
         }
 
