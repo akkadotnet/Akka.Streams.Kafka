@@ -3,7 +3,7 @@
 Akka Streams Kafka is an Akka Streams connector for Apache Kafka.
 
 ## Builds
-[![Build status](https://ci.appveyor.com/api/projects/status/uveg350ptdydkes9/branch/dev?svg=true)](https://ci.appveyor.com/project/ravengerUA/akka-streams-kafka/branch/dev)
+[![Build status](https://ci.appveyor.com/api/projects/status/0glh2fi8uic17vl4/branch/dev?svg=true)](https://ci.appveyor.com/project/akkadotnet-contrib/akka-streams-kafka/branch/dev)
 
 ## Producer
 
@@ -29,7 +29,7 @@ var producerSettings = new ProducerSettings<Null, string>(system, null, new Stri
 Source
     .From(Enumerable.Range(500, 601))
     .Select(c => c.ToString())
-    .Select(elem => new ProduceRecord<Null, string>("topic1", null, elem))
+    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new Message<Null, string> { Value = elem }})
     .RunWith(Producer.PlainSink(producerSettings), materializer);
 ```
 The materialized value of the sink is a `Task` which is completed with result when the stream completes or with exception if an error occurs.
@@ -41,7 +41,7 @@ Sometimes there is a need for publishing messages in the middle of the stream pr
 Source
     .From(Enumerable.Range(1, 100))
     .Select(c => c.ToString())
-    .Select(elem => new ProduceRecord<Null, string>("topic1", null, elem))
+    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new Message<Null, string> { Value = elem }})
     .Via(Producer.CreateFlow(producerSettings))
     .Select(record =>
     {
