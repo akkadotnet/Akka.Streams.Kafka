@@ -31,7 +31,6 @@ namespace SimpleConsumer
             var subscription = Subscriptions.Topics("akka100");
 
             Consumer.PlainSource(consumerSettings, subscription)
-                .Throttle(5, TimeSpan.FromSeconds(1), 5, ThrottleMode.Shaping)
                 .RunForeach(result =>
                 {
                     Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");

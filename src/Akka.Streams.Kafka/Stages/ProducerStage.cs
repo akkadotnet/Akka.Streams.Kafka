@@ -45,13 +45,13 @@ namespace Akka.Streams.Kafka.Stages
             SetHandler(In, 
                 onPush: () =>
                 {
-                    var msg = Grab<MessageAndMeta<K, V>>(In);
+                    var msg = Grab(In);
                     _sendToProducer.Invoke(msg);
                 },
                 onUpstreamFinish: () =>
                 {
                     _completionState.SetResult(NotUsed.Instance);
-                    _producer.Flush(TimeSpan.FromSeconds(2));
+                    _producer.Flush(_settings.FlushTimeout);
                     CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
@@ -85,7 +85,8 @@ namespace Akka.Streams.Kafka.Stages
 
         public override void PostStop()
         {
-            _producer.Flush(TimeSpan.FromSeconds(2));
+            _producer.OnError -= OnProducerError;
+            _producer.Flush(_settings.FlushTimeout);
             _producer.Dispose();
             Log.Debug($"Producer stopped: {_producer.Name}");
 

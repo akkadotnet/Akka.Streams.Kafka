@@ -9,12 +9,13 @@ namespace Akka.Streams.Kafka.Settings
 {
     public sealed class ProducerSettings<TKey, TValue>
     {
-        public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, string dispatcherId, IImmutableDictionary<string, object> properties)
+        public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, string dispatcherId, TimeSpan flushTimeout, IImmutableDictionary<string, object> properties)
         {
             KeySerializer = keySerializer;
             ValueSerializer = valueSerializer;
             Parallelism = parallelism;
             DispatcherId = dispatcherId;
+            FlushTimeout = flushTimeout;
             Properties = properties;
         }
 
@@ -22,6 +23,7 @@ namespace Akka.Streams.Kafka.Settings
         public ISerializer<TValue> ValueSerializer { get; }
         public int Parallelism { get; }
         public string DispatcherId { get; }
+        public TimeSpan FlushTimeout { get; }
         public IImmutableDictionary<string, object> Properties { get; }
 
         public ProducerSettings<TKey, TValue> WithBootstrapServers(string bootstrapServers) =>
@@ -41,12 +43,14 @@ namespace Akka.Streams.Kafka.Settings
             ISerializer<TValue> valueSerializer = null,
             int? parallelism = null,
             string dispatcherId = null,
+            TimeSpan? flushTimeout = null,
             IImmutableDictionary<string, object> properties = null) =>
             new ProducerSettings<TKey, TValue>(
                 keySerializer: keySerializer ?? this.KeySerializer,
                 valueSerializer: valueSerializer ?? this.ValueSerializer,
                 parallelism: parallelism ?? this.Parallelism,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
+                flushTimeout: flushTimeout ?? this.FlushTimeout,
                 properties: properties ?? this.Properties);
 
         public static ProducerSettings<TKey, TValue> Create(ActorSystem system, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
@@ -66,6 +70,7 @@ namespace Akka.Streams.Kafka.Settings
                 valueSerializer: valueSerializer,
                 parallelism: config.GetInt("parallelism", 100),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
+                flushTimeout: config.GetTimeSpan("flush-timeout", TimeSpan.FromSeconds(2)),
                 properties: ImmutableDictionary<string, object>.Empty);
         }
 
