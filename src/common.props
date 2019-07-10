@@ -9,9 +9,9 @@
       https://github.com/akkadotnet/Akka.Streams.Kafka
     </PackageProjectUrl>
     <PackageLicenseUrl>
-      https://github.com/petabridge/Petabridge.Tracing.Zipkin/blob/dev/LICENSE
+      https://github.com/akkadotnet/Akka.Streams.Kafka/blob/dev/LICENSE.md
     </PackageLicenseUrl>
-    <Tags>zipkin openzipkin tracing opentracing</Tags>
+    <Tags>akka streams kafka alpakka</Tags>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
