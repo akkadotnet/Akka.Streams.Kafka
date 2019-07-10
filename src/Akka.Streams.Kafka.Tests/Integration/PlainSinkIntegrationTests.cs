@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithGroupId(group);
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSink_should_publish_100_elements_to_Kafka_producer()
         {
             var topic1 = CreateTopic(1);
