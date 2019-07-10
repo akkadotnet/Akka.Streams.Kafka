@@ -29,12 +29,14 @@ Param(
     [string[]]$ScriptArgs
 )
 
-$FakeVersion = "4.63.0"
-$DotNetChannel = "preview";
-$DotNetVersion = "2.0.0";
+$FakeVersion = "4.61.2"
+$DotNetChannel = "LTS";
+$DotNetVersion = "2.1.500";
 $DotNetInstallerUri = "https://raw.githubusercontent.com/dotnet/cli/v$DotNetVersion/scripts/obtain/dotnet-install.ps1";
-$NugetVersion = "4.3.0";
+$NugetVersion = "4.1.0";
 $NugetUrl = "https://dist.nuget.org/win-x86-commandline/v$NugetVersion/nuget.exe"
+$ProtobufVersion = "3.4.0"
+$DocfxVersion = "2.40.5"
 
 # Make sure tools folder exists
 $PSScriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
@@ -69,6 +71,8 @@ Function Remove-PathVariable([string]$VariableToRemove)
 $FoundDotNetCliVersion = $null;
 if (Get-Command dotnet -ErrorAction SilentlyContinue) {
     $FoundDotNetCliVersion = dotnet --version;
+    $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT=1
 }
 
 if($FoundDotNetCliVersion -ne $DotNetVersion) {
@@ -77,7 +81,7 @@ if($FoundDotNetCliVersion -ne $DotNetVersion) {
         mkdir -Force $InstallPath | Out-Null;
     }
     (New-Object System.Net.WebClient).DownloadFile($DotNetInstallerUri, "$InstallPath\dotnet-install.ps1");
-    & $InstallPath\dotnet-install.ps1 -Channel $DotNetChannel -Version $DotNetVersion -InstallDir $InstallPath;
+    & $InstallPath\dotnet-install.ps1 -Channel $DotNetChannel -Version $DotNetVersion -InstallDir $InstallPath -Architecture x64;
 
     Remove-PathVariable "$InstallPath"
     $env:PATH = "$InstallPath;$env:PATH"
@@ -108,6 +112,34 @@ if (!(Test-Path $FakeExePath)) {
     if ($LASTEXITCODE -ne 0) {
         Throw "An error occured while restoring Fake from NuGet."
     }
+}
+
+###########################################################################
+# Docfx
+###########################################################################
+
+# Make sure Docfx has been installed.
+$DocfxExePath = Join-Path $ToolPath "docfx.console/tools/docfx.exe"
+if (!(Test-Path $DocfxExePath)) {
+    Write-Host "Installing Docfx..."
+    Invoke-Expression "&`"$NugetPath`" install docfx.console -ExcludeVersion -Version $DocfxVersion -OutputDirectory `"$ToolPath`"" | Out-Null;
+    if ($LASTEXITCODE -ne 0) {
+        Throw "An error occured while restoring docfx.console from NuGet."
+    }
+}
+
+###########################################################################
+# SignTool
+###########################################################################
+
+# Make sure the SignClient has been installed
+if (Get-Command signclient -ErrorAction SilentlyContinue) {
+    Write-Host "Found SignClient. Skipping install."
+}
+else{
+    $SignClientFolder = Join-Path $ToolPath "signclient"
+    Write-Host "SignClient not found. Installing to ... $SignClientFolder"
+    dotnet tool install SignClient --version 1.0.82 --tool-path "$SignClientFolder"
 }
 
 ###########################################################################

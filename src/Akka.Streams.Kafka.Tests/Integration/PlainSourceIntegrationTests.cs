@@ -82,7 +82,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(this.SinkProbe<string>(), _materializer);
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartition_assignment()
         {
             int elementsCount = 100;
@@ -104,7 +104,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartitionOffset_assignment()
         {
             int elementsCount = 100;
@@ -149,7 +149,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSource_should_fail_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
@@ -165,7 +165,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSource_should_stop_on_deserialization_errors()
         {
             int elementsCount = 10;
@@ -191,7 +191,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSource_should_resume_on_deserialization_errors()
         {
             Directive Decider(Exception cause) => cause is SerializationException

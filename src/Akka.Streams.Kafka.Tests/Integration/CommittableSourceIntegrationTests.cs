@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithGroupId(group);
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task CommitableSource_consumes_messages_from_Producer_without_commits()
         {
             int elementsCount = 100;
@@ -83,7 +83,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact]
+        [Fact(Skip = "Needs IMPL")]
         public async Task CommitableSource_resume_from_commited_offset()
         {
             var topic1 = CreateTopic(1);
