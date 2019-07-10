@@ -15,7 +15,7 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <AkkaVersion>1.3.11</AkkaVersion>
+    <AkkaVersion>1.3.13</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>15.9.0</TestSdkVersion>
