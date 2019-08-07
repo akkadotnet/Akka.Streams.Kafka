@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp1.1</TargetFramework>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" Version="0.11.0" />
+    <ProjectReference Include="..\..\src\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
   </ItemGroup>
 
 </Project>

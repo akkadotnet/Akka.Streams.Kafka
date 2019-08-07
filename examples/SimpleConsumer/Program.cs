@@ -1,7 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
+using Akka.Actor;
+using Akka.Configuration;
+using Akka.Streams;
+using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
 
@@ -11,28 +14,28 @@ namespace SimpleConsumer
     {
         public static void Main(string[] args)
         {
-            string brokerList = "localhost:9092";
-            var topics = new List<string> { "akka" };
+            Config fallbackConfig = ConfigurationFactory.ParseString(@"
+                    akka.suppress-json-serializer-warning=true
+                    akka.loglevel = DEBUG
+                ").WithFallback(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"));
 
-            var config = new Dictionary<string, object>
-            {
-                { "group.id", "simple-csharp-consumer" },
-                { "bootstrap.servers", brokerList }
-            };
+            var system = ActorSystem.Create("TestKafka", fallbackConfig);
+            var materializer = system.Materializer();
 
-            using (var consumer = new Consumer<Null, string>(config, null, new StringDeserializer(Encoding.UTF8)))
-            {
-                Console.WriteLine($"{consumer.Name} consuming on {topics[0]}. q to exit.");
-                consumer.Assign(new List<TopicPartitionOffset> { new TopicPartitionOffset(topics.First(), 0, 0) });
+            var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, new StringDeserializer(Encoding.UTF8))
+                .WithBootstrapServers("localhost:29092")
+                .WithGroupId("group1");
 
-                while (true)
+            var subscription = Subscriptions.Topics("akka100");
+
+            KafkaConsumer.PlainSource(consumerSettings, subscription)
+                .RunForeach(result =>
                 {
-                    if (consumer.Consume(out Message<Null, string> msg, TimeSpan.FromSeconds(1)))
-                    {
-                        Console.WriteLine($"Topic: {msg.Topic} Partition: {msg.Partition} Offset: {msg.Offset} {msg.Value}");
-                    }
-                }
-            }
+                    Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
+                }, materializer);
+
+
+            Console.ReadLine();
         }
     }
 }
