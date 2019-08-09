@@ -14,9 +14,9 @@ let product = "Petabridge.Library"
 let configuration = "Release"
 
 // Metadata used when signing packages and DLLs
-let signingName = "Petabridge.Tracing.Zipkin"
-let signingDescription = "Zipkin dristributed tracing engine driver, developed by Petabridge®"
-let signingUrl = "https://github.com/petabridge/Petabridge.Tracing.Zipkin"
+let signingName = "Akka.Streams.Kafka"
+let signingDescription = "Apache Kafka adapter for Akka.NET Streams"
+let signingUrl = "https://github.com/akkadotnet/Akka.Streams.Kafka"
 
 // Read release notes and version
 let solutionFile = FindFirstMatchingFile "*.sln" __SOURCE_DIRECTORY__  // dynamically look up the solution
@@ -107,8 +107,8 @@ Target "RunTests" (fun _ ->
     let runSingleProject project =
         let arguments =
             match (hasTeamCity) with
-            | true -> (sprintf "test -c Release --no-build --logger:\"console;verbosity=normal\" --results-directory %s -- -parallel none -teamcity" (outputTests))
-            | false -> (sprintf "test -c Release --no-build --logger:\"console;verbosity=normal\" --results-directory %s -- -parallel none" (outputTests))
+            | true -> (sprintf "test -c Release --no-build --logger:trx --logger:\"console;verbosity=normal\" --results-directory %s -- -parallel none -teamcity" (outputTests))
+            | false -> (sprintf "test -c Release --no-build --logger:trx --logger:\"console;verbosity=normal\" --results-directory %s -- -parallel none" (outputTests))
 
         let result = ExecProcess(fun info ->
             info.FileName <- "dotnet"
