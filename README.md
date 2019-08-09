@@ -41,7 +41,7 @@ akka.kafka.producer {
 ```
 
 ### Producer as a Sink
-`KafkaProducer.PlainSink` is the easiest way to publish messages. The sink consumes `Message` elements which contains a topic name to which the record is being sent, an optional partition number, and an optional key and value.
+`KafkaProducer.PlainSink` is the easiest way to publish messages. The sink consumes `MessageAndMeta` elements which contains a topic name to which the record is being sent, an optional partition number, and an optional key and value.
 
 ```C#
 Source
