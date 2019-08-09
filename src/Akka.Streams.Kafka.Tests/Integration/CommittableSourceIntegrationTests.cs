@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -35,7 +35,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
         private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+            ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl);
 
         private async Task GivenInitializedTopic(string topic)
@@ -48,13 +48,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
         private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
         {
-            return ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
+            return ConsumerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact/*(Skip = "Needs IMPL")*/]
         public async Task CommitableSource_consumes_messages_from_Producer_without_commits()
         {
             int elementsCount = 100;
@@ -83,7 +83,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact/*(Skip = "Needs IMPL")*/]
         public async Task CommitableSource_resume_from_commited_offset()
         {
             var topic1 = CreateTopic(1);

@@ -6,9 +6,10 @@ using Akka.Configuration;
 using Akka.Streams;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
+using Config = Akka.Configuration.Config;
 
 namespace SimpleProducer
 {
@@ -24,9 +25,9 @@ namespace SimpleProducer
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
 
-            var producerSettings = ProducerSettings<Null, string>.Create(system, null, new StringSerializer(Encoding.UTF8))
+            var producerSettings = ProducerSettings<Null, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092");
-
+            
             Source
                 .Cycle(() => Enumerable.Range(1, 100).GetEnumerator())
                 .Select(c => c.ToString())

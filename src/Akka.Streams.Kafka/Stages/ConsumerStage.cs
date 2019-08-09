@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,10 +10,10 @@ using System.Runtime.Serialization;
 
 namespace Akka.Streams.Kafka.Stages
 {
-    internal class KafkaSourceStage<K, V> : GraphStageWithMaterializedValue<SourceShape<ConsumerRecord<K, V>>, Task>
+    internal class KafkaSourceStage<K, V> : GraphStageWithMaterializedValue<SourceShape<ConsumeResult<K, V>>, Task>
     {
-        public Outlet<ConsumerRecord<K, V>> Out { get; } = new Outlet<ConsumerRecord<K, V>>("kafka.consumer.out");
-        public override SourceShape<ConsumerRecord<K, V>> Shape { get; }
+        public Outlet<ConsumeResult<K, V>> Out { get; } = new Outlet<ConsumeResult<K, V>>("kafka.consumer.out");
+        public override SourceShape<ConsumeResult<K, V>> Shape { get; }
         public ConsumerSettings<K, V> Settings { get; }
         public ISubscription Subscription { get; }
 
@@ -21,7 +21,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             Settings = settings;
             Subscription = subscription;
-            Shape = new SourceShape<ConsumerRecord<K, V>>(Out);
+            Shape = new SourceShape<ConsumeResult<K, V>>(Out);
             Settings = settings;
             Subscription = subscription;
         }
@@ -37,17 +37,17 @@ namespace Akka.Streams.Kafka.Stages
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
-        private readonly Outlet<ConsumerRecord<K, V>> _out;
+        private readonly Outlet<ConsumeResult<K, V>> _out;
         private IConsumer<K, V> _consumer;
 
-        private Action<ConsumerRecord<K, V>> _messagesReceived;
+        private Action<ConsumeResult<K, V>> _messagesReceived;
         private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
-        private Action<IEnumerable<TopicPartition>> _partitionsRevoked;
+        private Action<IEnumerable<TopicPartitionOffset>> _partitionsRevoked;
         private readonly Decider _decider;
 
         private const string TimerKey = "PollTimer";
 
-        private readonly Queue<ConsumerRecord<K, V>> _buffer;
+        private readonly Queue<ConsumeResult<K, V>> _buffer;
         private IEnumerable<TopicPartition> _assignedPartitions;
         private volatile bool _isPaused;
         private readonly TaskCompletionSource<NotUsed> _completion;
@@ -58,12 +58,12 @@ namespace Akka.Streams.Kafka.Stages
             _subscription = stage.Subscription;
             _out = stage.Out;
             _completion = completion;
-            _buffer = new Queue<ConsumerRecord<K, V>>(stage.Settings.BufferSize);
+            _buffer = new Queue<ConsumeResult<K, V>>(stage.Settings.BufferSize);
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
-            SetHandler(_out, onPull:() =>
+            SetHandler(_out, onPull: () =>
             {
                 if (_buffer.Count > 0)
                 {
@@ -86,14 +86,8 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            _consumer = _settings.CreateKafkaConsumer();
+            _consumer = _settings.CreateKafkaConsumer(HandleConsumeError, HandlePartitionsAssigned, HandlePartitionsRevoked);
             Log.Debug($"Consumer started: {_consumer.Name}");
-
-            _consumer.OnRecord += HandleOnMessage;
-            _consumer.OnConsumeError += HandleConsumeError;
-            _consumer.OnError += HandleOnError;
-            _consumer.OnPartitionsAssigned += HandleOnPartitionsAssigned;
-            _consumer.OnPartitionsRevoked += HandleOnPartitionsRevoked;
 
             switch (_subscription)
             {
@@ -108,36 +102,54 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
 
-            _messagesReceived = GetAsyncCallback<ConsumerRecord<K, V>>(MessagesReceived);
+            _messagesReceived = GetAsyncCallback<ConsumeResult<K, V>>(MessagesReceived);
             _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
-            _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsRevoked);
+            _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
             ScheduleRepeatedly(TimerKey, _settings.PollInterval);
         }
 
         public override void PostStop()
         {
-            _consumer.OnRecord -= HandleOnMessage;
-            _consumer.OnConsumeError -= HandleConsumeError;
-            _consumer.OnError -= HandleOnError;
-            _consumer.OnPartitionsAssigned -= HandleOnPartitionsAssigned;
-            _consumer.OnPartitionsRevoked -= HandleOnPartitionsRevoked;
-
             Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
 
             base.PostStop();
         }
+        
+        protected override void OnTimer(object timerKey) => PullQueue();
 
         //
         // Consumer's events
         //
 
-        private void HandleOnMessage(object sender, ConsumerRecord<K, V> message) => _messagesReceived(message);
-
-        private void HandleConsumeError(object sender, ConsumerRecord message)
+        private void HandleMessage(ConsumeResult<K, V> message) => _messagesReceived(message);
+        
+        private void MessagesReceived(ConsumeResult<K, V> message)
         {
-            Log.Error(message.Error.Reason);
-            var exception = new SerializationException(message.Error.Reason);
+            _buffer.Enqueue(message);
+            if (IsAvailable(_out))
+            {
+                Push(_out, _buffer.Dequeue());
+            }
+        }
+
+        private void HandlePartitionsAssigned(IConsumer<K, V> consumer, List<TopicPartition> list)
+        {
+            _partitionsAssigned(list);
+        }
+        
+        private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
+        {
+            Log.Debug($"Partitions were assigned: {_consumer.Name}");
+            _consumer.Assign(partitions);
+            _assignedPartitions = partitions;
+        }
+        
+        private void HandleConsumeError(IConsumer<K, V> consumer, Error error)
+        {
+            Log.Error(error.Reason);
+            // var exception = new SerializationException(error.Reason);
+            var exception = new KafkaException(error);
             switch (_decider(exception))
             {
                 case Directive.Stop:
@@ -154,7 +166,42 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
 
-        private void HandleOnError(object sender, Error error)
+        private void HandlePartitionsRevoked(IConsumer<K, V> consumer, List<TopicPartitionOffset> currentOffsets)
+        {
+            _partitionsRevoked(currentOffsets);
+        }
+
+        private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
+        {
+            Log.Debug($"Partitions were revoked: {_consumer.Name}");
+            _consumer.Unassign();
+            _assignedPartitions = null;
+        }
+
+        private void PullQueue()
+        {
+            try
+            {
+                var message = _consumer.Consume(_settings.PollTimeout);
+                if (message == null) // Sone error occured, nothing to do here
+                    return;
+                
+                HandleMessage(message);
+            }
+            catch (ConsumeException ex)
+            {
+                HandleError(ex.Error);
+            }
+
+            if (!_isPaused && _buffer.Count > _settings.BufferSize)
+            {
+                Log.Debug($"Polling paused, buffer is full");
+                _consumer.Pause(_assignedPartitions);
+                _isPaused = true;
+            }
+        }
+        
+        private void HandleError(Error error)
         {
             Log.Error(error.Reason);
 
@@ -164,56 +211,5 @@ namespace Akka.Streams.Kafka.Stages
                 FailStage(exception);
             }
         }
-
-        private void HandleOnPartitionsAssigned(object sender, List<TopicPartition> list)
-        {
-            _partitionsAssigned(list);
-        }
-
-        private void HandleOnPartitionsRevoked(object sender, List<TopicPartition> list)
-        {
-            _partitionsRevoked(list);
-        }
-
-        //
-        // Async callbacks
-        //
-
-        private void MessagesReceived(ConsumerRecord<K, V> message)
-        {
-            _buffer.Enqueue(message);
-            if (IsAvailable(_out))
-            {
-                Push(_out, _buffer.Dequeue());
-            }
-        }
-
-        private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
-        {
-            Log.Debug($"Partitions were assigned: {_consumer.Name}");
-            _consumer.Assign(partitions);
-            _assignedPartitions = partitions;
-        }
-
-        private void PartitionsRevoked(IEnumerable<TopicPartition> partitions)
-        {
-            Log.Debug($"Partitions were revoked: {_consumer.Name}");
-            _consumer.Unassign();
-            _assignedPartitions = null;
-        }
-
-        private void PullQueue()
-        {
-            _consumer.Poll(_settings.PollTimeout);
-
-            if (!_isPaused && _buffer.Count > _settings.BufferSize)
-            {
-                Log.Debug($"Polling paused, buffer is full");
-                _consumer.Pause(_assignedPartitions);
-                _isPaused = true;
-            }
-        }
-
-        protected override void OnTimer(object timerKey) => PullQueue();
     }
 }

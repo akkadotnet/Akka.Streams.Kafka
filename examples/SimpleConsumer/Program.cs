@@ -6,7 +6,7 @@ using Akka.Streams;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
+using Config = Akka.Configuration.Config;
 
 namespace SimpleConsumer
 {
@@ -22,7 +22,7 @@ namespace SimpleConsumer
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
 
-            var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, new StringDeserializer(Encoding.UTF8))
+            var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092")
                 .WithGroupId("group1");
 

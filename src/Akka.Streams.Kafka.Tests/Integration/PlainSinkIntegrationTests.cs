@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -43,18 +43,18 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+            ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl);
 
         private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
         {
-            return ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
+            return ConsumerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact/*(Skip = "Needs IMPL")*/]
         public async Task PlainSink_should_publish_100_elements_to_Kafka_producer()
         {
             var topic1 = CreateTopic(1);
@@ -68,13 +68,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var task = new TaskCompletionSource<NotUsed>();
             int messagesReceived = 0;
-
-            consumer.OnRecord += (sender, message) =>
-            {
-                messagesReceived++;
-                if (messagesReceived == 100)
-                    task.SetResult(NotUsed.Instance);
-            };
 
             await Source
                 .From(Enumerable.Range(1, 100))
@@ -91,20 +84,27 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             while (!task.Task.IsCompleted && CheckTimeout(TimeSpan.FromMinutes(1)))
             {
-                consumer.Poll(TimeSpan.FromSeconds(1));
+                try
+                {
+                    consumer.Consume(TimeSpan.FromSeconds(1));
+                    messagesReceived++;
+                    if (messagesReceived == 100)
+                        task.SetResult(NotUsed.Instance);
+                }
+                catch (ConsumeException) { /* Just try again */ }
             }
 
             messagesReceived.Should().Be(100);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact(Skip = "Needs IMPL")]
         public async Task PlainSink_should_fail_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
 
             await GivenInitializedTopic(topic1);
 
-            var config = ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+            var config = ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers("localhost:10092");
 
             var probe = Source

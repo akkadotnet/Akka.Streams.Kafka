@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using Akka.Actor;
-using Akka.Configuration;
-using Confluent.Kafka.Serialization;
+using Confluent.Kafka;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Settings
 {
@@ -25,7 +26,7 @@ namespace Akka.Streams.Kafka.Settings
                 pollTimeout: config.GetTimeSpan("poll-timeout", TimeSpan.FromMilliseconds(50)),
                 bufferSize: config.GetInt("buffer-size", 50),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
-                properties: ImmutableDictionary<string, object>.Empty);
+                properties: ImmutableDictionary<string, string>.Empty);
         }
 
         public object this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
@@ -36,9 +37,9 @@ namespace Akka.Streams.Kafka.Settings
         public TimeSpan PollTimeout { get; }
         public int BufferSize { get; }
         public string DispatcherId { get; }
-        public IImmutableDictionary<string, object> Properties { get; }
+        public IImmutableDictionary<string, string> Properties { get; }
 
-        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, TimeSpan pollTimeout, int bufferSize, string dispatcherId, IImmutableDictionary<string, object> properties)
+        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, TimeSpan pollTimeout, int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
         {
             KeyDeserializer = keyDeserializer;
             ValueDeserializer = valueDeserializer;
@@ -58,7 +59,7 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithGroupId(string groupId) =>
             Copy(properties: Properties.SetItem("group.id", groupId));
 
-        public ConsumerSettings<TKey, TValue> WithProperty(string key, object value) =>
+        public ConsumerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
 
         public ConsumerSettings<TKey, TValue> WithPollInterval(TimeSpan pollInterval) => Copy(pollInterval: pollInterval);
@@ -74,7 +75,7 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? pollTimeout = null,
             int? bufferSize = null,
             string dispatcherId = null,
-            IImmutableDictionary<string, object> properties = null) =>
+            IImmutableDictionary<string, string> properties = null) =>
             new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer ?? this.KeyDeserializer,
                 valueDeserializer: valueDeserializer ?? this.ValueDeserializer,
@@ -84,7 +85,17 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 properties: properties ?? this.Properties);
 
-        public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer() =>
-            new Confluent.Kafka.Consumer<TKey, TValue>(this.Properties, this.KeyDeserializer, this.ValueDeserializer);
+        public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null)
+        { 
+            return new Confluent.Kafka.ConsumerBuilder<TKey, TValue>(this.Properties)
+                .SetKeyDeserializer(this.KeyDeserializer)
+                .SetValueDeserializer(this.ValueDeserializer)
+                .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
+                .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
+                .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
+                .Build();
+        }
     }
 }
