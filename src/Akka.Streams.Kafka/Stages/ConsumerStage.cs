@@ -210,6 +210,24 @@ namespace Akka.Streams.Kafka.Stages
                 var exception = new KafkaException(error);
                 FailStage(exception);
             }
+            else if (KafkaExtensions.IsLocalValueSerializationError(error))
+            {
+                var exception = new SerializationException(error.Reason);
+                switch (_decider(exception))
+                {
+                    case Directive.Stop:
+                        // Throw
+                        _completion.TrySetException(exception);
+                        FailStage(exception);
+                        break;
+                    case Directive.Resume:
+                        // keep going
+                        break;
+                    case Directive.Restart:
+                        // keep going
+                        break;
+                }
+            }
         }
     }
 }
