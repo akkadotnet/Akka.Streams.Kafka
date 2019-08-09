@@ -47,7 +47,7 @@ akka.kafka.producer {
 Source
     .From(Enumerable.Range(1, 100))
     .Select(c => c.ToString())
-    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new MessageAndMeta<Null, string> { Value = elem } })
+    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new Message<Null, string> { Value = elem } })
     .RunWith(KafkaProducer.PlainSink(producerSettings), materializer);
 ```
 The materialized value of the sink is a `Task` which is completed with result when the stream completes or with exception if an error occurs.
@@ -59,7 +59,7 @@ Sometimes there is a need for publishing messages in the middle of the stream pr
 Source
     .From(Enumerable.Range(1, 100))
     .Select(c => c.ToString())
-    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new MessageAndMeta<Null, string> { Value = elem } })
+    .Select(elem => new MessageAndMeta<Null, string> { Topic = "topic1", Message = new Message<Null, string> { Value = elem } })
     .Via(KafkaProducer.PlainFlow(producerSettings))
     .Select(record =>
     {
