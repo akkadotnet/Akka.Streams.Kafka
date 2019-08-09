@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithGroupId(group);
         }
 
-        [Fact/*(Skip = "Needs IMPL")*/]
+        [Fact]
         public async Task PlainSink_should_publish_100_elements_to_Kafka_producer()
         {
             var topic1 = CreateTopic(1);
@@ -97,7 +97,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             messagesReceived.Should().Be(100);
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSink_should_fail_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
