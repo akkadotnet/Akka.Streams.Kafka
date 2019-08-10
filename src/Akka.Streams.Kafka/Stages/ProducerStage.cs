@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
@@ -10,21 +11,26 @@ namespace Akka.Streams.Kafka.Stages
 {
     internal sealed class ProducerStage<K, V> : GraphStage<FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>>>
     {
+        private readonly Func<IProducer<K, V>> _customProducerProvider;
         public ProducerSettings<K, V> Settings { get; }
         public bool CloseProducerOnStop { get; }
-        public Func<IProducer<K, V>> ProducerProvider { get; }
         public Inlet<MessageAndMeta<K, V>> In { get; } = new Inlet<MessageAndMeta<K, V>>("kafka.producer.in");
         public Outlet<Task<DeliveryReport<K, V>>> Out { get; } = new Outlet<Task<DeliveryReport<K, V>>>("kafka.producer.out");
 
         public ProducerStage(
             ProducerSettings<K, V> settings,
             bool closeProducerOnStop,
-            Func<IProducer<K, V>> producerProvider)
+            Func<IProducer<K, V>> customProducerProvider = null)
         {
+            _customProducerProvider = customProducerProvider;
             Settings = settings;
             CloseProducerOnStop = closeProducerOnStop;
-            ProducerProvider = producerProvider;
             Shape = new FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>>(In, Out);
+        }
+        
+        public IProducer<K, V> GetProducerProvider(Action<IProducer<K, V>, Error> errorHandler)
+        {
+            return _customProducerProvider?.Invoke() ?? Settings.CreateKafkaProducer(errorHandler);
         }
 
         public override FlowShape<MessageAndMeta<K, V>, Task<DeliveryReport<K, V>>> Shape { get; }
@@ -56,9 +62,17 @@ namespace Akka.Streams.Kafka.Stages
                     var msg = Grab(_stage.In);
                     var result = new TaskCompletionSource<DeliveryReport<K, V>>();
 
-                    _producer.Produce(msg.TopicPartition, msg.Message, report =>
+                    void PublishAction(Action<DeliveryReport<K, V>> report)
                     {
-                        if (!report.Error.HasError)
+                        if (msg.TopicPartition != null)
+                            _producer.Produce(msg.TopicPartition, msg.Message, report);
+                        else
+                            _producer.Produce(msg.Topic, msg.Message, report);
+                    }
+
+                    PublishAction(report =>
+                    {
+                        if (!report.Error.IsError)
                         {
                             result.SetResult(report);
                         }
@@ -112,16 +126,13 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            _producer = _stage.ProducerProvider();
+            _producer = _stage.GetProducerProvider(HandleProduceError);
             Log.Debug($"Producer started: {_producer.Name}");
-
-            _producer.OnError += OnProducerError;
         }
 
         public override void PostStop()
         {
             Log.Debug("Stage completed");
-            _producer.OnError -= OnProducerError;
 
             if (_stage.CloseProducerOnStop)
             {
@@ -131,17 +142,6 @@ namespace Akka.Streams.Kafka.Stages
             }
 
             base.PostStop();
-        }
-
-        private void OnProducerError(object sender, Error error)
-        {
-            Log.Error(error.Reason);
-
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
-            {
-                var exception = new KafkaException(error);
-                FailStage(exception);
-            }
         }
 
         public void CheckForCompletion()
@@ -158,6 +158,17 @@ namespace Akka.Streams.Kafka.Stages
                 {
                     CompleteStage();
                 }
+            }
+        }
+        
+        private void HandleProduceError(IProducer<K, V> producer, Error error)
+        {
+            Log.Error(error.Reason);
+
+            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
+            {
+                var exception = new KafkaException(error);
+                FailStage(exception);
             }
         }
     }

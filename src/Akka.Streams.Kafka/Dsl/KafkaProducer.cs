@@ -42,8 +42,7 @@ namespace Akka.Streams.Kafka.Dsl
         {
             var flow = Flow.FromGraph(new ProducerStage<TKey, TValue>(
                     settings,
-                    closeProducerOnStop: true,
-                    producerProvider : settings.CreateKafkaProducer))
+                    closeProducerOnStop: true))
                 .SelectAsync(settings.Parallelism, x => x);
 
             return string.IsNullOrEmpty(settings.DispatcherId) 
@@ -60,7 +59,7 @@ namespace Akka.Streams.Kafka.Dsl
             var flow = Flow.FromGraph(new ProducerStage<TKey, TValue>(
                     settings,
                     closeProducerOnStop: false,
-                    producerProvider: () => producer))
+                    customProducerProvider: () => producer))
                 .SelectAsync(settings.Parallelism, x => x);
 
             return string.IsNullOrEmpty(settings.DispatcherId)

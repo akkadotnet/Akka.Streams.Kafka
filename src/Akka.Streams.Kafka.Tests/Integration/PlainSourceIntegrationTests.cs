@@ -7,14 +7,15 @@ using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
@@ -45,7 +46,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
         private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+            ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl);
 
         private async Task GivenInitializedTopic(string topic)
@@ -59,7 +60,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
         private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
         {
-            return ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
+            return ConsumerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers(KafkaUrl)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -82,7 +83,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(this.SinkProbe<string>(), _materializer);
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartition_assignment()
         {
             int elementsCount = 100;
@@ -104,7 +105,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartitionOffset_assignment()
         {
             int elementsCount = 100;
@@ -127,7 +128,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Flaky")]
+        [Fact]
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_subscribe_to_topic()
         {
             int elementsCount = 100;
@@ -149,7 +150,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSource_should_fail_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
@@ -157,7 +158,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await GivenInitializedTopic(topic1);
 
-            var config = ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
+            var config = ConsumerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers("localhost:10092")
                 .WithGroupId(group1);
 
@@ -165,7 +166,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSource_should_stop_on_deserialization_errors()
         {
             int elementsCount = 10;
@@ -174,7 +175,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
 
-            var settings = ConsumerSettings<Null, int>.Create(Sys, null, new IntDeserializer())
+            var settings = ConsumerSettings<Null, int>.Create(Sys, null, Deserializers.Int32)
                 .WithBootstrapServers(KafkaUrl)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group1);
@@ -191,7 +192,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Cancel();
         }
 
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSource_should_resume_on_deserialization_errors()
         {
             Directive Decider(Exception cause) => cause is SerializationException
@@ -204,7 +205,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
 
-            var settings = ConsumerSettings<Null, int>.Create(Sys, null, new IntDeserializer())
+            var settings = ConsumerSettings<Null, int>.Create(Sys, null, Deserializers.Int32)
                 .WithBootstrapServers(KafkaUrl)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group1);
