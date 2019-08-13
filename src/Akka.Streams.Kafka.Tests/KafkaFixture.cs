@@ -48,9 +48,11 @@ namespace Akka.Streams.Kafka.Tests
 
         public async Task InitializeAsync()
         {
+            // Load images, if they not exist yet
             await EnsureImageExists(ZookeeperImageName, ZookeeperImageTag);
             await EnsureImageExists(KafkaImageName, KafkaImageTag);
 
+            // Generate random ports for zookeeper and kafka
             var zookeeperPort = ThreadLocalRandom.Current.Next(32000, 33000);
             KafkaPort = ThreadLocalRandom.Current.Next(28000, 29000);
 
@@ -63,13 +65,14 @@ namespace Akka.Streams.Kafka.Tests
             await CreateContainer(KafkaImageName, KafkaImageTag, _kafkaContainerName, KafkaPort, new Dictionary<string, string>()
             {
                 ["KAFKA_BROKER_ID"] = "1",
-                ["KAFKA_ZOOKEEPER_CONNECT"] = $"{_zookeeperContainerName}:{zookeeperPort}",
+                ["KAFKA_ZOOKEEPER_CONNECT"] = $"{_zookeeperContainerName}:{zookeeperPort}", // referencing zookeeper container directly in common docker network
                 ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://localhost:{KafkaPort}",
                 ["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] = "true",
                 ["KAFKA_DELETE_TOPIC_ENABLE"] = "true",
                 ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1"
             });
 
+            // Setting up network for containers to communicate
             var network = await _client.Networks.CreateNetworkAsync(new NetworksCreateParameters(new NetworkCreate())
             {
                 Name = _networkName
@@ -103,6 +106,7 @@ namespace Akka.Streams.Kafka.Tests
                 await _client.Containers.StopContainerAsync(_zookeeperContainerName, new ContainerStopParameters());
                 await _client.Containers.RemoveContainerAsync(_zookeeperContainerName, new ContainerRemoveParameters { Force = true });
 
+                // Delete network between containers
                 await _client.Networks.DeleteNetworkAsync(_networkName);
                 
                 _client.Dispose();
