@@ -20,9 +20,9 @@ namespace Akka.Streams.Kafka.Tests
     public class KafkaFixture : IAsyncLifetime
     {
         private const string KafkaImageName = "confluentinc/cp-kafka";
-        private const string KafkaImageTag = "4.0.0";
+        private const string KafkaImageTag = "latest";
         private const string ZookeeperImageName = "confluentinc/cp-zookeeper";
-        private const string ZookeeperImageTag = "4.0.0";
+        private const string ZookeeperImageTag = "latest";
         
         private readonly string _kafkaContainerName = $"kafka-{Guid.NewGuid():N}";
         private readonly string _zookeeperContainerName = $"zookeeper-{Guid.NewGuid():N}";
@@ -144,11 +144,11 @@ namespace Akka.Streams.Kafka.Tests
 
         private async Task EnsureImageExists(string imageName, string imageTag)
         {
-            var existingImages = await _client.Images.ListImagesAsync(new ImagesListParameters { MatchName = imageName });
+            var existingImages = await _client.Images.ListImagesAsync(new ImagesListParameters { MatchName = $"{imageName}:{imageTag}" });
             if (existingImages.Count == 0)
             {
                 await _client.Images.CreateImageAsync(
-                    new ImagesCreateParameters {FromImage = imageName, Tag = imageTag }, null,
+                    new ImagesCreateParameters { FromImage = imageName, Tag = imageTag }, null,
                     new Progress<JSONMessage>(message =>
                     {
                         Console.WriteLine(!string.IsNullOrEmpty(message.ErrorMessage)
