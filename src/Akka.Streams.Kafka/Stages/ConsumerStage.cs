@@ -63,7 +63,7 @@ namespace Akka.Streams.Kafka.Stages
                 try
                 {
                     var message = _consumer.Consume(_cancellationTokenSource.Token);
-                    if (message == null) // Sone error occured, nothing to do here
+                    if (message == null) // No message received, or consume error occured
                         return;
 
                     if (IsAvailable(stage.Out))
