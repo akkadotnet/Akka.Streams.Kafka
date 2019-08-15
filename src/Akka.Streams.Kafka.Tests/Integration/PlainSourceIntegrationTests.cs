@@ -19,25 +19,26 @@ using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
+    [Collection(KafkaSpecsFixture.Name)]
     public class PlainSourceIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        private const string KafkaUrl = "localhost:29092";
-
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
-
+        
+        private readonly KafkaFixture _fixture;
         private readonly ActorMaterializer _materializer;
 
-        public static Config Default()
-        {
-            return ConfigurationFactory.ParseString("akka.loglevel = DEBUG")
-                .WithFallback(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>(
-                        "Akka.Streams.Kafka.reference.conf"));
-        }
-
-        public PlainSourceIntegrationTests(ITestOutputHelper output) 
+        public PlainSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), nameof(PlainSourceIntegrationTests), output)
         {
+            _fixture = fixture;
             _materializer = Sys.Materializer();
+        }
+
+        private static Config Default()
+        {
+            var defaultSettings = ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf");
+            
+            return ConfigurationFactory.ParseString("akka.loglevel = DEBUG").WithFallback(defaultSettings);
         }
 
         private string Uuid { get; } = Guid.NewGuid().ToString();
@@ -45,10 +46,19 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
-        private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl);
+        private ProducerSettings<Null, string> ProducerSettings
+        {
+            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+        }
 
+        private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
+        {
+            return ConsumerSettings<Null, string>.Create(Sys, null, null)
+                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithGroupId(group);
+        }
+        
         private async Task GivenInitializedTopic(string topic)
         {
             using (var producer = ProducerSettings.CreateKafkaProducer())
@@ -56,14 +66,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
                 producer.Flush(TimeSpan.FromSeconds(1));
             }
-        }
-
-        private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
-        {
-            return ConsumerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl)
-                .WithProperty("auto.offset.reset", "earliest")
-                .WithGroupId(group);
         }
 
         private async Task Produce(string topic, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
@@ -74,7 +76,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(KafkaProducer.PlainSink(producerSettings), _materializer);
         }
 
-        private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, string topic, ISubscription sub)
+        private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, ISubscription sub)
         {
             return KafkaConsumer
                 .PlainSource(consumerSettings, sub)
@@ -96,7 +98,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings(group1);
 
-            var probe = CreateProbe(consumerSettings, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
+            var probe = CreateProbe(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
             
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
@@ -119,7 +121,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings(group1);
 
-            var probe = CreateProbe(consumerSettings, topic1, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topic1, 0, new Offset(offset))));
+            var probe = CreateProbe(consumerSettings, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topic1, 0, new Offset(offset))));
 
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(offset, elementsCount - offset).Select(c => c.ToString()))
@@ -141,7 +143,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings(group1);
 
-            var probe = CreateProbe(consumerSettings, topic1, Subscriptions.Topics(topic1));
+            var probe = CreateProbe(consumerSettings, Subscriptions.Topics(topic1));
 
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
@@ -162,7 +164,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithBootstrapServers("localhost:10092")
                 .WithGroupId(group1);
 
-            var probe = CreateProbe(config, topic1, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
+            var probe = CreateProbe(config, Subscriptions.Assignment(new TopicPartition(topic1, 0)));
             probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
         }
 
@@ -176,7 +178,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
 
             var settings = ConsumerSettings<Null, int>.Create(Sys, null, Deserializers.Int32)
-                .WithBootstrapServers(KafkaUrl)
+                .WithBootstrapServers(_fixture.KafkaServer)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group1);
 
@@ -206,7 +208,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Produce(topic1, Enumerable.Range(1, elementsCount), ProducerSettings);
 
             var settings = ConsumerSettings<Null, int>.Create(Sys, null, Deserializers.Int32)
-                .WithBootstrapServers(KafkaUrl)
+                .WithBootstrapServers(_fixture.KafkaServer)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group1);
 

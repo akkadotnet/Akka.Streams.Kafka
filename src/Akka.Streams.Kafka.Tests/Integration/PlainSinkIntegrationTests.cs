@@ -16,9 +16,10 @@ using Xunit.Abstractions;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
+    [Collection(KafkaSpecsFixture.Name)]
     public class PlainSinkIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        private const string KafkaUrl = "localhost:29092";
+        private readonly KafkaFixture _fixture;
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
         private readonly ActorMaterializer _materializer;
 
@@ -27,10 +28,11 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
-        public PlainSinkIntegrationTests(ITestOutputHelper output) 
+        public PlainSinkIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
             : base(ConfigurationFactory
                 .FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
         {
+            _fixture = fixture;
             _materializer = Sys.Materializer();
         }
 
@@ -42,14 +44,15 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
         }
 
-        private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl);
+        private ProducerSettings<Null, string> ProducerSettings
+        {
+            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+        }
 
         private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
         {
             return ConsumerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl)
+                .WithBootstrapServers(_fixture.KafkaServer)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
