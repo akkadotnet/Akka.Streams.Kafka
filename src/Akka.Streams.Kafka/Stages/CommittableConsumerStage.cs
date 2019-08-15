@@ -115,6 +115,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
+            _completion.SetResult(NotUsed.Instance);
 
             base.PostStop();
         }
@@ -186,7 +187,6 @@ namespace Akka.Streams.Kafka.Stages
                     case Directive.Stop:
                         // Throw
                         _completion.TrySetException(exception);
-                        _cancellationTokenSource.Cancel();
                         FailStage(exception);
                         break;
                     case Directive.Resume:
