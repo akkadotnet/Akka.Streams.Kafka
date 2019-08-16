@@ -79,6 +79,9 @@ namespace Akka.Streams.Kafka.Stages
                 {
                     HandleError(ex.Error);
                 }
+            }, onDownstreamFinish: () =>
+            {
+                _completion.SetResult(NotUsed.Instance);
             });
         }
 
@@ -110,7 +113,6 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
-            _completion.SetResult(NotUsed.Instance);
 
             base.PostStop();
         }
