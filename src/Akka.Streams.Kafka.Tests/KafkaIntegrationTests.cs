@@ -1,3 +1,4 @@
+using System;
 using Akka.Configuration;
 using Akka.Streams.Kafka.Settings;
 using Xunit;
@@ -11,7 +12,7 @@ namespace Akka.Streams.Kafka.Tests
         /// <summary>
         /// Allows to write logs to file (useful for debugging when tests are running forever and no output in console is available)
         /// </summary>
-        private const bool UseFileLogging = true;
+        private static readonly bool UseFileLogging = Environment.GetEnvironmentVariable("AKKA_STREAMS_KAFKA_FILE_LOGGING") != null;
         
         public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output) 
             : base(Default(), actorSystemName, output)
