@@ -9,6 +9,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Tests.Logging;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
@@ -19,8 +20,7 @@ using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    [Collection(KafkaSpecsFixture.Name)]
-    public class PlainSourceIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class PlainSourceIntegrationTests : KafkaIntegrationTests
     {
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
         
@@ -28,17 +28,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private readonly ActorMaterializer _materializer;
 
         public PlainSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(Default(), nameof(PlainSourceIntegrationTests), output)
+            : base(nameof(PlainSourceIntegrationTests), output)
         {
             _fixture = fixture;
             _materializer = Sys.Materializer();
-        }
-
-        private static Config Default()
-        {
-            var defaultSettings = ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf");
-            
-            return ConfigurationFactory.ParseString("akka.loglevel = DEBUG").WithFallback(defaultSettings);
         }
 
         private string Uuid { get; } = Guid.NewGuid().ToString();

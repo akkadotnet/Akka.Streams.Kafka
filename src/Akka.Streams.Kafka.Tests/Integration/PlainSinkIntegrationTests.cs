@@ -16,8 +16,7 @@ using Xunit.Abstractions;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    [Collection(KafkaSpecsFixture.Name)]
-    public class PlainSinkIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class PlainSinkIntegrationTests : KafkaIntegrationTests
     {
         private readonly KafkaFixture _fixture;
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
@@ -29,8 +28,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
         public PlainSinkIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(ConfigurationFactory
-                .FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
+            : base(null, output)
         {
             _fixture = fixture;
             _materializer = Sys.Materializer();

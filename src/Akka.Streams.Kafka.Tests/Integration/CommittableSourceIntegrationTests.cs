@@ -12,18 +12,18 @@ using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Xunit;
 using Xunit.Abstractions;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    [Collection(KafkaSpecsFixture.Name)]
-    public class CommittableSourceIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class CommittableSourceIntegrationTests : KafkaIntegrationTests
     {
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
         private readonly KafkaFixture _fixture;
         private readonly ActorMaterializer _materializer;
 
         public CommittableSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
+            : base(nameof(CommittableSourceIntegrationTests), output)
         {
             _fixture = fixture;
             _materializer = Sys.Materializer();
