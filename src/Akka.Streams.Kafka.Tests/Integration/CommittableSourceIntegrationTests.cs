@@ -12,20 +12,20 @@ using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Xunit;
 using Xunit.Abstractions;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    public class CommittableSourceIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class CommittableSourceIntegrationTests : KafkaIntegrationTests
     {
-        private const string KafkaUrl = "localhost:29092";
-
         private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
-
+        private readonly KafkaFixture _fixture;
         private readonly ActorMaterializer _materializer;
 
-        public CommittableSourceIntegrationTests(ITestOutputHelper output) 
-            : base(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
+        public CommittableSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
+            : base(nameof(CommittableSourceIntegrationTests), output)
         {
+            _fixture = fixture;
             _materializer = Sys.Materializer();
         }
 
@@ -34,9 +34,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         private string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
-        private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl);
+        private ProducerSettings<Null, string> ProducerSettings
+        {
+            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+        }
 
         private async Task GivenInitializedTopic(string topic)
         {
@@ -49,7 +50,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
         {
             return ConsumerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(KafkaUrl)
+                .WithBootstrapServers(_fixture.KafkaServer)
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
@@ -100,7 +101,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings(group1);
             var committedElements = new ConcurrentQueue<string>();
 
-            var (_, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, elem =>
                 {
@@ -120,7 +121,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 
             probe1.Cancel();
 
-            // Await.result(control.isShutdown, remainingOrDefault)
+            AwaitCondition(() => task.IsCompleted);
 
             var probe2 = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Select(_ => _.Record.Value)
