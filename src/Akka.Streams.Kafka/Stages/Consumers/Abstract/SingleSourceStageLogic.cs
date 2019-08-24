@@ -11,25 +11,7 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
 {
-    internal class PlainSourceStage<K, V> : KafkaSourceStage<K, V, ConsumeResult<K, V>>
-    {
-        public ConsumerSettings<K, V> Settings { get; }
-        public ISubscription Subscription { get; }
-
-        public PlainSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription) 
-            : base("PlainSource")
-        {
-            Settings = settings;
-            Subscription = subscription;
-        }
-
-        protected override GraphStageLogic Logic(SourceShape<ConsumeResult<K, V>> shape, TaskCompletionSource<NotUsed> completion)
-        {
-            return new PlainSourceStageLogic<K, V>(this, InitialAttributes, completion);
-        }
-    }
-
-    internal class PlainSourceStageLogic<K, V> : GraphStageLogic
+    internal class SingleSourceStageLogic<K, V, TMessage> : GraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
@@ -43,17 +25,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         private readonly TaskCompletionSource<NotUsed> _completion;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
-        public PlainSourceStageLogic(PlainSourceStage<K, V> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
+        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
+            ISubscription subscription, Attributes attributes, 
+            TaskCompletionSource<NotUsed> completion, IMessageBuilder<K, V, TMessage> messageBuilder) 
+            : base(shape)
         {
-            _settings = stage.Settings;
-            _subscription = stage.Subscription;
+            _settings = settings;
+            _subscription = subscription;
             _completion = completion;
             _cancellationTokenSource = new CancellationTokenSource();
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
-            SetHandler(stage.Out, onPull: () =>
+            SetHandler(shape.Outlet, onPull: () =>
             {
                 try
                 {
@@ -61,9 +46,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                     if (message == null) // No message received, or consume error occured
                         return;
 
-                    if (IsAvailable(stage.Out))
+                    if (IsAvailable(shape.Outlet))
                     {
-                        Push(stage.Out, message);
+                        Push(shape.Outlet, messageBuilder.CreateMessage(message, _consumer));
                     }
                 }
                 catch (OperationCanceledException)

@@ -67,6 +67,8 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithPollTimeout(TimeSpan pollTimeout) => Copy(pollTimeout: pollTimeout);
 
         public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => Copy(dispatcherId: dispatcherId);
+        
+        public string GroupId => Properties.ContainsKey("group.id") ? Properties["group.id"] : null;
 
         private ConsumerSettings<TKey, TValue> Copy(
             IDeserializer<TKey> keyDeserializer = null,

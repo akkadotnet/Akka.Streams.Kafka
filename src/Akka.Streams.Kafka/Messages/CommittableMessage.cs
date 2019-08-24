@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Stages.Consumers;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Messages
@@ -18,8 +20,17 @@ namespace Akka.Streams.Kafka.Messages
         }
 
         public ConsumeResult<K, V> Record { get; }
-
         public CommitableOffset CommitableOffset { get; }
+    }
+
+    /// <summary>
+    /// Commit an offset that is included in a <see cref="CommittableMessage{K,V}"/>
+    /// If you need to store offsets in anything other than Kafka, this API
+    /// should not be used.
+    /// </summary>
+    public interface ICommittable
+    {
+        Task Commit();
     }
 
     /// <summary>
@@ -30,21 +41,33 @@ namespace Akka.Streams.Kafka.Messages
     /// should be the next message your application will consume,
     /// i.e. lastProcessedMessageOffset + 1.
     /// </summary>
-    public class CommitableOffset
+    public interface ICommittableOffset : ICommittable
     {
-        private readonly Func<List<TopicPartitionOffset>> _task;
+        PartitionOffset Offset { get; }
+    }
 
-        public CommitableOffset(Func<List<TopicPartitionOffset>> task, PartitionOffset offset)
+    public interface ICommittableOffsetMetadata : ICommittableOffset
+    {
+        string Metadata { get; }
+    }
+
+    
+    public class CommitableOffset : ICommittableOffsetMetadata
+    {
+        private readonly IInternalCommitter _committer;
+        public PartitionOffset Offset { get; }
+        public string Metadata { get; }
+
+        public CommitableOffset(IInternalCommitter committer, PartitionOffset offset, string metadata)
         {
-            _task = task;
+            _committer = committer;
             Offset = offset;
+            Metadata = metadata;
         }
 
-        public PartitionOffset Offset { get; }
-
-        public List<TopicPartitionOffset> Commit()
+        public Task Commit()
         {
-            return _task();
+            return Task.FromResult(_committer.Commit());
         }
     }
 

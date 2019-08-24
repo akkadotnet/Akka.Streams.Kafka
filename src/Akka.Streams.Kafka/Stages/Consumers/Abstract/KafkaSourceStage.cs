@@ -6,22 +6,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     public abstract class KafkaSourceStage<K, V, TMessage> : GraphStageWithMaterializedValue<SourceShape<TMessage>, Task>
     {
         public string StageName { get; }
-        public Outlet<TMessage> Out => new Outlet<TMessage>("out");
-        public override SourceShape<TMessage> Shape => new SourceShape<TMessage>(Out);
+        public Outlet<TMessage> Out { get; } = new Outlet<TMessage>("out");
+        public override SourceShape<TMessage> Shape { get; }
 
         protected KafkaSourceStage(string stageName)
         {
             StageName = stageName;
+            Shape = new SourceShape<TMessage>(Out);
         }
 
         protected override Attributes InitialAttributes => Attributes.CreateName(StageName);
 
-        protected abstract GraphStageLogic Logic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion);
+        protected abstract GraphStageLogic Logic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes);
 
         public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
             var completion = new TaskCompletionSource<NotUsed>();
-            var result = Logic(Shape, completion);
+            var result = Logic(Shape, completion, inheritedAttributes);
             return new LogicAndMaterializedValue<Task>(result, completion.Task);
         }
     }

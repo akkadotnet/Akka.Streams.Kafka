@@ -38,7 +38,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<CommittableMessage<K, V>, Task> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new CommittableConsumerStage<K, V>(settings, subscription));
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
     }
 }
