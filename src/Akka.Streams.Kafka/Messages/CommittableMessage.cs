@@ -13,14 +13,20 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     public sealed class CommittableMessage<K, V>
     {
-        public CommittableMessage(ConsumeResult<K, V> record, CommitableOffset commitableOffset)
+        public CommittableMessage(ConsumeResult<K, V> record, ICommittableOffset commitableOffset)
         {
             Record = record;
             CommitableOffset = commitableOffset;
         }
 
+        /// <summary>
+        /// The consumed record data
+        /// </summary>
         public ConsumeResult<K, V> Record { get; }
-        public CommitableOffset CommitableOffset { get; }
+        /// <summary>
+        /// Consumer offset that can be commited
+        /// </summary>
+        public ICommittableOffset CommitableOffset { get; }
     }
 
     /// <summary>
@@ -30,6 +36,9 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     public interface ICommittable
     {
+        /// <summary>
+        /// Commits an offset that is included in a <see cref="CommittableMessage{K,V}"/> 
+        /// </summary>
         Task Commit();
     }
 
@@ -43,28 +52,50 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     public interface ICommittableOffset : ICommittable
     {
+        /// <summary>
+        /// Offset value
+        /// </summary>
         PartitionOffset Offset { get; }
     }
 
+    /// <summary>
+    /// Extends <see cref="ICommittableOffset"/> with some metadata
+    /// </summary>
     public interface ICommittableOffsetMetadata : ICommittableOffset
     {
+        /// <summary>
+        /// Cosumed record metadata
+        /// </summary>
         string Metadata { get; }
     }
 
-    
-    public class CommitableOffset : ICommittableOffsetMetadata
+    /// <summary>
+    /// Implementation of the offset, contained in <see cref="CommittableMessage{K,V}"/>.
+    /// Can be commited via <see cref="Commit"/> method.
+    /// </summary>
+    internal class CommittableOffset : ICommittableOffsetMetadata
     {
         private readonly IInternalCommitter _committer;
+        
+        /// <summary>
+        /// Offset value
+        /// </summary>
         public PartitionOffset Offset { get; }
+        /// <summary>
+        /// Cosumed record metadata
+        /// </summary>
         public string Metadata { get; }
 
-        public CommitableOffset(IInternalCommitter committer, PartitionOffset offset, string metadata)
+        public CommittableOffset(IInternalCommitter committer, PartitionOffset offset, string metadata)
         {
             _committer = committer;
             Offset = offset;
             Metadata = metadata;
         }
 
+        /// <summary>
+        /// Commits offset to Kafka
+        /// </summary>
         public Task Commit()
         {
             return Task.FromResult(_committer.Commit());
@@ -84,12 +115,21 @@ namespace Akka.Streams.Kafka.Messages
             Offset = offset;
         }
 
+        /// <summary>
+        /// Consumer's group Id
+        /// </summary>
         public string GroupId { get; }
-
+        /// <summary>
+        /// Topic
+        /// </summary>
         public string Topic { get; }
-
+        /// <summary>
+        /// Partition
+        /// </summary>
         public int Partition { get; }
-
+        /// <summary>
+        /// Kafka partition offset value
+        /// </summary>
         public Offset Offset { get; }
     }
 }

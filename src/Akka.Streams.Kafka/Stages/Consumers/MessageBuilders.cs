@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumer<K, V> consumer)
         {
             var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
-            return new CommittableMessage<K, V>(record, new CommitableOffset(new KafkaCommitter<K, V>(consumer), offset, MetadataFromRecord(record)));
+            return new CommittableMessage<K, V>(record, new CommittableOffset(new KafkaCommitter<K, V>(consumer), offset, MetadataFromRecord(record)));
         }
     }
 
