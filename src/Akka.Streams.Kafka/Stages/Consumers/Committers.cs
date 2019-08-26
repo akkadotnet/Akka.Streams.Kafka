@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
@@ -11,7 +12,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Commit all offsets (of different topics) belonging to the same stage
         /// </summary>
-        List<TopicPartitionOffset> Commit();
+        Task Commit();
     }
 
     /// <summary>
@@ -29,6 +30,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Commit all offsets (of different topics) belonging to the same stage
         /// </summary>
-        public List<TopicPartitionOffset> Commit() => _consumer.Commit();
+        public Task Commit() => Task.FromResult(_consumer.Commit());
     }
 }

@@ -98,7 +98,7 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public Task Commit()
         {
-            return Task.FromResult(_committer.Commit());
+            return _committer.Commit();
         }
     }
 
