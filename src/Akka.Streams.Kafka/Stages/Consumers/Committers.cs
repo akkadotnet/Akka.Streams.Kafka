@@ -3,7 +3,10 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
 {
-    public interface IInternalCommitter 
+    /// <summary>
+    /// Interface for implementing committing consumed messages
+    /// </summary>
+    internal interface IInternalCommitter 
     {
         /// <summary>
         /// Commit all offsets (of different topics) belonging to the same stage
@@ -12,9 +15,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     }
 
     /// <summary>
-    /// This is a simple committer using kafka consumer directly (not consumer actor, etc)
+    /// This is a simple committer using kafka consumer directly (not using consumer actor, etc)
     /// </summary>
-    public class KafkaCommitter<K, V> : IInternalCommitter
+    internal class KafkaCommitter<K, V> : IInternalCommitter
     {
         private readonly IConsumer<K, V> _consumer;
 
@@ -23,6 +26,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _consumer = consumer;
         }
 
+        /// <summary>
+        /// Commit all offsets (of different topics) belonging to the same stage
+        /// </summary>
         public List<TopicPartitionOffset> Commit() => _consumer.Commit();
     }
 }
