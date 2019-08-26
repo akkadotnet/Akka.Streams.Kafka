@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages
                     var consumer = _consumer;
                     var commitableOffset = new CommitableOffset(
                         () => consumer.Commit(),
-                        new PartitionOffset("groupId", message.Topic, message.Partition, message.Offset));
+                        new PartitionOffset(_settings.GroupId, message.Topic, message.Partition, message.Offset));
 
                     if (IsAvailable(stage.Out))
                     {
