@@ -149,7 +149,7 @@ namespace Akka.Streams.Kafka.Tests
                             }
                         }
                     },
-                    ExtraHosts = new [] { "moby:127.0.0.1", "localhost:127.0.0.1" },
+                    ExtraHosts = new [] { "localhost:127.0.0.1" },
                 },
                 Env = env.Select(pair => $"{pair.Key}={pair.Value}").ToArray(),
             });
