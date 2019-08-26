@@ -5,6 +5,7 @@ using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
+using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 
 namespace Akka.Streams.Kafka.Dsl
 {

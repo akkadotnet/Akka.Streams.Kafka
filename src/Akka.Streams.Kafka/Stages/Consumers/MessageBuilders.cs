@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
