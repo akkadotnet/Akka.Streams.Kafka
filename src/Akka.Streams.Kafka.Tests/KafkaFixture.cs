@@ -20,9 +20,9 @@ namespace Akka.Streams.Kafka.Tests
     public class KafkaFixture : IAsyncLifetime
     {
         private const string KafkaImageName = "confluentinc/cp-kafka";
-        private const string KafkaImageTag = "latest";
+        private const string KafkaImageTag = "5.3.0";
         private const string ZookeeperImageName = "confluentinc/cp-zookeeper";
-        private const string ZookeeperImageTag = "latest";
+        private const string ZookeeperImageTag = "5.3.0";
         
         private readonly string _kafkaContainerName = $"kafka-{Guid.NewGuid():N}";
         private readonly string _zookeeperContainerName = $"zookeeper-{Guid.NewGuid():N}";
