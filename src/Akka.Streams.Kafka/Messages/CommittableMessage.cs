@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Stages.Consumers;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Messages
@@ -11,15 +13,33 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     public sealed class CommittableMessage<K, V>
     {
-        public CommittableMessage(ConsumeResult<K, V> record, CommitableOffset commitableOffset)
+        public CommittableMessage(ConsumeResult<K, V> record, ICommittableOffset commitableOffset)
         {
             Record = record;
             CommitableOffset = commitableOffset;
         }
 
+        /// <summary>
+        /// The consumed record data
+        /// </summary>
         public ConsumeResult<K, V> Record { get; }
+        /// <summary>
+        /// Consumer offset that can be commited
+        /// </summary>
+        public ICommittableOffset CommitableOffset { get; }
+    }
 
-        public CommitableOffset CommitableOffset { get; }
+    /// <summary>
+    /// Commit an offset that is included in a <see cref="CommittableMessage{K,V}"/>
+    /// If you need to store offsets in anything other than Kafka, this API
+    /// should not be used.
+    /// </summary>
+    public interface ICommittable
+    {
+        /// <summary>
+        /// Commits an offset that is included in a <see cref="CommittableMessage{K,V}"/> 
+        /// </summary>
+        Task Commit();
     }
 
     /// <summary>
@@ -30,21 +50,55 @@ namespace Akka.Streams.Kafka.Messages
     /// should be the next message your application will consume,
     /// i.e. lastProcessedMessageOffset + 1.
     /// </summary>
-    public class CommitableOffset
+    public interface ICommittableOffset : ICommittable
     {
-        private readonly Func<List<TopicPartitionOffset>> _task;
+        /// <summary>
+        /// Offset value
+        /// </summary>
+        PartitionOffset Offset { get; }
+    }
 
-        public CommitableOffset(Func<List<TopicPartitionOffset>> task, PartitionOffset offset)
+    /// <summary>
+    /// Extends <see cref="ICommittableOffset"/> with some metadata
+    /// </summary>
+    public interface ICommittableOffsetMetadata : ICommittableOffset
+    {
+        /// <summary>
+        /// Cosumed record metadata
+        /// </summary>
+        string Metadata { get; }
+    }
+
+    /// <summary>
+    /// Implementation of the offset, contained in <see cref="CommittableMessage{K,V}"/>.
+    /// Can be commited via <see cref="Commit"/> method.
+    /// </summary>
+    internal class CommittableOffset : ICommittableOffsetMetadata
+    {
+        private readonly IInternalCommitter _committer;
+        
+        /// <summary>
+        /// Offset value
+        /// </summary>
+        public PartitionOffset Offset { get; }
+        /// <summary>
+        /// Cosumed record metadata
+        /// </summary>
+        public string Metadata { get; }
+
+        public CommittableOffset(IInternalCommitter committer, PartitionOffset offset, string metadata)
         {
-            _task = task;
+            _committer = committer;
             Offset = offset;
+            Metadata = metadata;
         }
 
-        public PartitionOffset Offset { get; }
-
-        public List<TopicPartitionOffset> Commit()
+        /// <summary>
+        /// Commits offset to Kafka
+        /// </summary>
+        public Task Commit()
         {
-            return _task();
+            return _committer.Commit();
         }
     }
 
@@ -61,12 +115,21 @@ namespace Akka.Streams.Kafka.Messages
             Offset = offset;
         }
 
+        /// <summary>
+        /// Consumer's group Id
+        /// </summary>
         public string GroupId { get; }
-
+        /// <summary>
+        /// Topic
+        /// </summary>
         public string Topic { get; }
-
+        /// <summary>
+        /// Partition
+        /// </summary>
         public int Partition { get; }
-
+        /// <summary>
+        /// Kafka partition offset value
+        /// </summary>
         public Offset Offset { get; }
     }
 }

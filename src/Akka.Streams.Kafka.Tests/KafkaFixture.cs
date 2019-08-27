@@ -72,6 +72,15 @@ namespace Akka.Streams.Kafka.Tests
                 ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1"
             });
 
+            /*
+            // Remove old networks, if there are any
+            var networks = await _client.Networks.ListNetworksAsync(new NetworksListParameters());
+            foreach (var existingNetwork in networks.Where(n => n.Name.StartsWith("network-")))
+            {
+                await _client.Networks.DeleteNetworkAsync(existingNetwork.ID);
+            }
+            */
+
             // Setting up network for containers to communicate
             var network = await _client.Networks.CreateNetworkAsync(new NetworksCreateParameters(new NetworkCreate())
             {

@@ -1,39 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Akka.Streams.Kafka.Messages;
-using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Stage;
-using Confluent.Kafka;
-using Akka.Streams.Supervision;
 using System.Runtime.Serialization;
 using System.Threading;
+using System.Threading.Tasks;
+using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Stage;
+using Akka.Streams.Supervision;
+using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Stages
+namespace Akka.Streams.Kafka.Stages.Consumers
 {
-    internal class CommittableConsumerStage<K, V> : GraphStageWithMaterializedValue<SourceShape<CommittableMessage<K, V>>, Task>
-	{
-        public Outlet<CommittableMessage<K, V>> Out { get; } = new Outlet<CommittableMessage<K, V>>("kafka.commitable.consumer.out");
-        public override SourceShape<CommittableMessage<K, V>> Shape { get; }
-        public ConsumerSettings<K, V> Settings { get; }
-        public ISubscription Subscription { get; }
-
-        public CommittableConsumerStage(ConsumerSettings<K, V> settings, ISubscription subscription)
-        {
-            Settings = settings;
-            Subscription = subscription;
-            Shape = new SourceShape<CommittableMessage<K, V>>(Out);
-        }
-
-        public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
-        {
-            var completion = new TaskCompletionSource<NotUsed>();
-            return new LogicAndMaterializedValue<Task>(new KafkaCommittableSourceStage<K, V>(this, inheritedAttributes, completion), completion.Task);
-        }
-    }
-
-    internal class KafkaCommittableSourceStage<K, V> : GraphStageLogic
+    internal class SingleSourceStageLogic<K, V, TMessage> : GraphStageLogic
     {
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
@@ -47,17 +25,20 @@ namespace Akka.Streams.Kafka.Stages
         private readonly TaskCompletionSource<NotUsed> _completion;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
-        public KafkaCommittableSourceStage(CommittableConsumerStage<K, V> stage, Attributes attributes, TaskCompletionSource<NotUsed> completion) : base(stage.Shape)
+        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
+            ISubscription subscription, Attributes attributes, 
+            TaskCompletionSource<NotUsed> completion, IMessageBuilder<K, V, TMessage> messageBuilder) 
+            : base(shape)
         {
-            _settings = stage.Settings;
-            _subscription = stage.Subscription;
+            _settings = settings;
+            _subscription = subscription;
             _completion = completion;
             _cancellationTokenSource = new CancellationTokenSource();
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
 
-            SetHandler(stage.Out, onPull: () =>
+            SetHandler(shape.Outlet, onPull: () =>
             {
                 try
                 {
@@ -65,15 +46,9 @@ namespace Akka.Streams.Kafka.Stages
                     if (message == null) // No message received, or consume error occured
                         return;
 
-                    var consumer = _consumer;
-                    var commitableOffset = new CommitableOffset(
-                        () => consumer.Commit(),
-                        new PartitionOffset(_settings.GroupId, message.Topic, message.Partition, message.Offset));
-
-                    if (IsAvailable(stage.Out))
+                    if (IsAvailable(shape.Outlet))
                     {
-                        var commitableMessage = new CommittableMessage<K, V>(message, commitableOffset);
-                        Push(stage.Out, commitableMessage);
+                        Push(shape.Outlet, messageBuilder.CreateMessage(message, _consumer));
                     }
                 }
                 catch (OperationCanceledException)
@@ -84,6 +59,9 @@ namespace Akka.Streams.Kafka.Stages
                 {
                     HandleError(ex.Error);
                 }
+            }, onDownstreamFinish: () =>
+            {
+                _completion.SetResult(NotUsed.Instance);
             });
         }
 
@@ -91,7 +69,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            _consumer = _settings.CreateKafkaConsumer(HandleConsumeError, HandleOnPartitionsAssigned, HandleOnPartitionsRevoked);
+            _consumer = _settings.CreateKafkaConsumer(HandleConsumeError, HandlePartitionsAssigned, HandlePartitionsRevoked);
             Log.Debug($"Consumer started: {_consumer.Name}");
 
             switch (_subscription)
@@ -115,23 +93,22 @@ namespace Akka.Streams.Kafka.Stages
         {
             Log.Debug($"Consumer stopped: {_consumer.Name}");
             _consumer.Dispose();
-            _completion.SetResult(NotUsed.Instance);
 
             base.PostStop();
         }
-        
+
         //
         // Consumer's events
         //
 
-        private void HandleOnPartitionsAssigned(IConsumer<K, V> consumer, List<TopicPartition> list)
+        private void HandlePartitionsAssigned(IConsumer<K, V> consumer, List<TopicPartition> list)
         {
             _partitionsAssigned(list);
         }
-
-        private void HandleOnPartitionsRevoked(IConsumer<K, V> consumer, List<TopicPartitionOffset> list)
+        
+        private void HandlePartitionsRevoked(IConsumer<K, V> consumer, List<TopicPartitionOffset> currentOffsets)
         {
-            _partitionsRevoked(list);
+            _partitionsRevoked(currentOffsets);
         }
         
         private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
@@ -141,7 +118,7 @@ namespace Akka.Streams.Kafka.Stages
             _consumer.Assign(partitionsList);
             _assignedPartitions = partitionsList;
         }
-
+        
         private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
         {
             Log.Debug($"Partitions were revoked: {_consumer.Name}");
@@ -149,9 +126,10 @@ namespace Akka.Streams.Kafka.Stages
             _assignedPartitions = null;
         }
         
-        private void HandleConsumeError(object sender, Error error)
+        private void HandleConsumeError(IConsumer<K, V> consumer, Error error)
         {
             Log.Error(error.Reason);
+            // var exception = new SerializationException(error.Reason);
             var exception = new KafkaException(error);
             switch (_decider(exception))
             {
@@ -169,7 +147,7 @@ namespace Akka.Streams.Kafka.Stages
                     break;
             }
         }
-
+        
         private void HandleError(Error error)
         {
             Log.Error(error.Reason);

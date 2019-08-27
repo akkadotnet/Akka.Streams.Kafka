@@ -4,6 +4,8 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
 using Akka.Streams.Kafka.Messages;
+using Akka.Streams.Kafka.Stages.Consumers;
+using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 
 namespace Akka.Streams.Kafka.Dsl
 {
@@ -24,7 +26,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<ConsumeResult<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new KafkaSourceStage<K, V>(settings, subscription));
+            return Source.FromGraph(new PlainSourceStage<K, V>(settings, subscription));
         }
 
         /// <summary>
@@ -37,7 +39,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<CommittableMessage<K, V>, Task> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new CommittableConsumerStage<K, V>(settings, subscription));
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
     }
 }
