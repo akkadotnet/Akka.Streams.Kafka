@@ -45,8 +45,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// <returns>Stage logic</returns>
         protected override GraphStageLogic Logic(SourceShape<CommittableMessage<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
         { 
-            return new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, 
-                                                                              completion, new CommittableSourceMessageBuilder<K, V>(Settings, _metadataFromMessage));
+            return new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, completion, GetMessageBuilder);
+        }
+
+        private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
+        {
+            var committer = new KafkaAsyncConsumerCommitter(logic.ConsumerActor, Settings.CommitTimeout, logic.ExecutionContext);
+            return new CommittableSourceMessageBuilder<K, V>(committer, Settings, _metadataFromMessage);
         }
     }
 }

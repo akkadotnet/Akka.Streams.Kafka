@@ -40,7 +40,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         protected override GraphStageLogic Logic(SourceShape<ConsumeResult<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
         {
             return new SingleSourceStageLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, inheritedAttributes, 
-                                                                         completion, new PlainMessageBuilder<K, V>());
+                                                                         completion, _ => new PlainMessageBuilder<K, V>());
         }
     }
 }

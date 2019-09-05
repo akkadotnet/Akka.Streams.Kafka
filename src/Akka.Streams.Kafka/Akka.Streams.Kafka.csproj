@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
-    <TargetFramework>netstandard1.6</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <VersionPrefix>0.5.0</VersionPrefix>
     <VersionSuffix>beta</VersionSuffix>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka.Streams" Version="$(AkkaVersion)" />
+    <PackageReference Include="Akka.Streams" Version="1.4.0-beta637012445454141588" />
     <PackageReference Include="Confluent.Kafka" Version="1.1.0" />
     <PackageReference Include="System.ValueTuple" Version="4.4.0" />
   </ItemGroup>
