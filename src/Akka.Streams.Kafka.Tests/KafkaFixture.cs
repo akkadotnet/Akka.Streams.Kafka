@@ -23,10 +23,13 @@ namespace Akka.Streams.Kafka.Tests
         private const string KafkaImageTag = "5.3.0";
         private const string ZookeeperImageName = "confluentinc/cp-zookeeper";
         private const string ZookeeperImageTag = "5.3.0";
-        
-        private readonly string _kafkaContainerName = $"kafka-{Guid.NewGuid():N}";
-        private readonly string _zookeeperContainerName = $"zookeeper-{Guid.NewGuid():N}";
-        private readonly string _networkName = $"network-{Guid.NewGuid():N}";
+
+        private const string KafkaContainerNameBase = "akka.net-kafka-test";
+        private const string ZookeeperContainerNameBase = "akka.net-zookeeper-test";
+        private const string NetworkNameBase = "akka.net-network-test";
+        private readonly string _kafkaContainerName = $"{KafkaContainerNameBase}-{Guid.NewGuid():N}";
+        private readonly string _zookeeperContainerName = $"{ZookeeperContainerNameBase}-{Guid.NewGuid():N}";
+        private readonly string _networkName = $"{NetworkNameBase}-{Guid.NewGuid():N}";
         
         private readonly DockerClient _client;
         
@@ -55,6 +58,9 @@ namespace Akka.Streams.Kafka.Tests
             // Generate random ports for zookeeper and kafka
             var zookeeperPort = ThreadLocalRandom.Current.Next(32000, 33000);
             KafkaPort = ThreadLocalRandom.Current.Next(28000, 29000);
+            
+            // Make resources cleanup before allocating new containers/networks
+            await ResourceCleanup();
 
             // create the containers
             await CreateContainer(ZookeeperImageName, ZookeeperImageTag, _zookeeperContainerName, zookeeperPort, new Dictionary<string, string>()
@@ -71,15 +77,6 @@ namespace Akka.Streams.Kafka.Tests
                 ["KAFKA_DELETE_TOPIC_ENABLE"] = "true",
                 ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1"
             });
-
-            /*
-            // Remove old networks, if there are any
-            var networks = await _client.Networks.ListNetworksAsync(new NetworksListParameters());
-            foreach (var existingNetwork in networks.Where(n => n.Name.StartsWith("network-")))
-            {
-                await _client.Networks.DeleteNetworkAsync(existingNetwork.ID);
-            }
-            */
 
             // Setting up network for containers to communicate
             var network = await _client.Networks.CreateNetworkAsync(new NetworksCreateParameters(new NetworkCreate())
@@ -107,19 +104,59 @@ namespace Akka.Streams.Kafka.Tests
         {
             if (_client != null)
             {
-                // Stop Kafka
-                await _client.Containers.StopContainerAsync(_kafkaContainerName, new ContainerStopParameters());
-                await _client.Containers.RemoveContainerAsync(_kafkaContainerName, new ContainerRemoveParameters { Force = true });
-                
-                // Stop Zookeeper
-                await _client.Containers.StopContainerAsync(_zookeeperContainerName, new ContainerStopParameters());
-                await _client.Containers.RemoveContainerAsync(_zookeeperContainerName, new ContainerRemoveParameters { Force = true });
-
-                // Delete network between containers
-                await _client.Networks.DeleteNetworkAsync(_networkName);
+                await ResourceCleanup();
                 
                 _client.Dispose();
             }
+        }
+
+        /// <summary>
+        /// This performs cleanup of allocated containers/networks during tests
+        /// </summary>
+        /// <returns></returns>
+        private async Task ResourceCleanup()
+        {
+            if (_client == null)
+                return;
+            
+            // This task loads list of containers and stops/removes those which were started during tests
+            var containerCleanupTask = _client.Containers.ListContainersAsync(new ContainersListParameters()).ContinueWith(
+                async t =>
+                {
+                    if (t.IsFaulted)
+                        return;
+
+                    var containersToStop = t.Result.Where(c => c.Names.Any(name => name.Contains(KafkaContainerNameBase)) ||
+                                                               c.Names.Any(name => name.Contains(ZookeeperContainerNameBase)));
+
+                    var stopTasks = containersToStop.Select(async container =>
+                    {
+                        await _client.Containers.StopContainerAsync(container.ID, new ContainerStopParameters());
+                        await _client.Containers.RemoveContainerAsync(container.ID, new ContainerRemoveParameters { Force = true });
+                    });
+                    await Task.WhenAll(stopTasks);
+                }).Unwrap();
+            
+            // This tasks loads docker networks and removes those which were started during tests
+            var networkCleanupTask = _client.Networks.ListNetworksAsync(new NetworksListParameters()).ContinueWith(
+                async t =>
+                {
+                    if (t.IsFaulted)
+                        return;
+
+                    var networksToDelete = t.Result.Where(network => network.Name.Contains(NetworkNameBase));
+
+                    var deleteTasks = networksToDelete.Select(network => _client.Networks.DeleteNetworkAsync(network.ID));
+
+                    await Task.WhenAll(deleteTasks);
+                });
+
+            try
+            {
+                // Wait until cleanup is finished
+                await Task.WhenAll(containerCleanupTask, networkCleanupTask);
+            }
+            catch { /* If the cleanup failes, this is not the reason to fail tests */ }
         }
         
         private async Task CreateContainer(string imageName, string imageTag, string containerName, int portToExpose, Dictionary<string, string> env)
