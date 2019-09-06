@@ -57,7 +57,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
 
             /// <summary>
-            /// Used to send commit requests to <see cref="KafkaConsumerActor"/>
+            /// Used to send commit requests to <see cref="KafkaConsumerActor{K,V}"/>
             /// </summary>
             public class Commit
             {
@@ -65,7 +65,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// Commit
                 /// </summary>
                 /// <param name="offsets">List of offsets to commit</param>
-                public Commit(ImmutableList<TopicPartitionOffset> offsets)
+                public Commit(IImmutableSet<TopicPartitionOffset> offsets)
                 {
                     Offsets = offsets;
                 }
@@ -73,7 +73,27 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// <summary>
                 /// List of offsets to commit
                 /// </summary>
-                public ImmutableList<TopicPartitionOffset> Offsets { get; }
+                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
+            }
+
+            /// <summary>
+            /// Committed
+            /// </summary>
+            public class Committed
+            {
+                /// <summary>
+                /// Commited message
+                /// </summary>
+                /// <param name="offsets">Collection of committed offsets</param>
+                public Committed(IImmutableSet<TopicPartitionOffset> offsets)
+                {
+                    Offsets = offsets;
+                }
+
+                /// <summary>
+                /// Committed offsets
+                /// </summary>
+                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
             }
 
             /// <summary>

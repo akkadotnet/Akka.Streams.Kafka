@@ -39,7 +39,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
 
         public Task Commit(ImmutableList<PartitionOffset> offsets)
         {
-            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset)).ToImmutableList();
+            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset)).ToImmutableHashSet();
 
             return _consumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Commit(topicPartitionOffsets), _commitTimeout)
                 .ContinueWith(t =>
