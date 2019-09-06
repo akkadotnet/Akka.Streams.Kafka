@@ -64,6 +64,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 case KafkaConsumerActorMetadata.Internal.Assign assign:
                 {
+                    _log.Debug($"Got assign request from {Sender}");
                     ScheduleFirstPoolTask();
                     CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
                     var previousAssigned = _consumer.Assignment;
@@ -74,6 +75,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
                 {
+                    _log.Debug($"Got assignWithOffset request from {Sender}");
                     ScheduleFirstPoolTask();
                     IImmutableSet<TopicPartition> topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
                     CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
@@ -98,6 +100,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     Commit(commit.Offsets, msg => replyTo.Tell(msg));
                     break;
                 
+                case Internal.Poll<K, V> poll:
+                    ReceivePoll(poll);
+                    break;
+                
                 case KafkaConsumerActorMetadata.Internal.Subscribe subscribe:
                     HandleSubscription(subscribe);
                     return true;
@@ -106,7 +112,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
                     _requests = _requests.SetItem(Sender, requestMessages);
-                    _requestors.Add(Sender);
+                    _requestors = _requestors.Add(Sender);
                     
                     // When many requestors, e.g. many partitions with committablePartitionedSource the
                     // performance is much by collecting more requests/commits before performing the poll.
@@ -132,8 +138,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case Terminated terminated:
-                    _requests.Remove(terminated.ActorRef);
-                    _requestors.Remove(terminated.ActorRef);
+                    _requests = _requests.Remove(terminated.ActorRef);
+                    _requestors = _requestors.Remove(terminated.ActorRef);
                     return true;
                 
                 default:
@@ -249,7 +255,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _log.Warning($"{updateType} from topic/partition {string.Join(", ", topics)} " +
                                  $"already requested by other stage {string.Join(", ", request.Topics)}");
                     actorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, ImmutableList<ConsumeResult<K, V>>.Empty));
-                    _requests.Remove(actorRef);
+                    _requests = _requests.Remove(actorRef);
                 }
             }
         }
@@ -293,12 +299,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 else
                 {
                     // resume partitions to fetch
-                    IImmutableSet<TopicPartition> partitionsToFetch =
-                        _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                    IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
-                    _consumer.Pause(pauseThese);
-                    _consumer.Resume(resumeThese);
+                    // _consumer.Pause(pauseThese);
+                    // _consumer.Resume(resumeThese);
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
             }
@@ -352,7 +357,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             foreach (var actor in involvedStageActors)
             {
                 actor.Tell(new Status.Failure(error));
-                _requests.Remove(actor);
+                _requests = _requests.Remove(actor);
             }
         }
 

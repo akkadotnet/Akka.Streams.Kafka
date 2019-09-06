@@ -50,7 +50,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
 
         private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
         {
-            var committer = new KafkaAsyncConsumerCommitter(logic.ConsumerActor, Settings.CommitTimeout, logic.ExecutionContext);
+            var committer = new KafkaAsyncConsumerCommitter(logic.ConsumerActor, Settings.CommitTimeout);
             return new CommittableSourceMessageBuilder<K, V>(committer, Settings, _metadataFromMessage);
         }
     }

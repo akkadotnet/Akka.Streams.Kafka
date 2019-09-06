@@ -141,7 +141,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
                     Pump();
                 }
-                else if (!_requested && TopicPartitions.Count == 0)
+                else if (!_requested && TopicPartitions.Any())
                 {
                     RequestMessages();
                 }

@@ -27,13 +27,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     {
         private readonly IActorRef _consumerActor;
         private readonly TimeSpan _commitTimeout;
-        private readonly MessageDispatcher _executionContext;
 
-        public KafkaAsyncConsumerCommitter(IActorRef consumerActor, TimeSpan commitTimeout, MessageDispatcher executionContext)
+        public KafkaAsyncConsumerCommitter(IActorRef consumerActor, TimeSpan commitTimeout)
         {
             _consumerActor = consumerActor;
             _commitTimeout = commitTimeout;
-            _executionContext = executionContext;
         }
 
 
