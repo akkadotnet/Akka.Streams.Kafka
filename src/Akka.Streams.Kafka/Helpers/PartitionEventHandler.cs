@@ -9,13 +9,8 @@ namespace Akka.Streams.Kafka.Helpers
     /// This interface is used to pass callbacks when Kafka rebalances partitions between consumers,
     /// or an kafka consumer is stopped
     /// </summary>
-    public interface IConsumerEventHandler
+    internal interface IPartitionEventHandler
     {
-        /// <summary>
-        /// Called when consumer error occures
-        /// </summary>
-        void OnError(Error error);
-        
         /// <summary>
         /// Called when partitions are revoked
         /// </summary>
@@ -24,20 +19,19 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Called when partitions are assigned
         /// </summary>
-        /// <param name="assignedTopicPartitions"></param>
         void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions);
+
+        /// <summary>
+        /// Called when consuming is stopped
+        /// </summary>
+        void OnStop(IImmutableSet<TopicPartition> topicPartitions);
     }
 
     /// <summary>
-    /// Dummy handler which does nothing. Also <see cref="IConsumerEventHandler"/>
+    /// Dummy handler which does nothing. Also <see cref="IPartitionEventHandler"/>
     /// </summary>
-    internal class EmptyConsumerEventHandler : IConsumerEventHandler
+    internal class EmptyPartitionEventHandler : IPartitionEventHandler
     {
-        /// <inheritdoc />
-        public void OnError(Error error)
-        {
-        }
-
         /// <inheritdoc />
         public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions)
         {
@@ -47,30 +41,26 @@ namespace Akka.Streams.Kafka.Helpers
         public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions)
         {
         }
+
+        /// <inheritdoc />
+        public void OnStop(IImmutableSet<TopicPartition> topicPartitions)
+        {
+        }
     }
 
     /// <summary>
-    /// Handler allowing to pass custom stage callbacks. Also <see cref="IConsumerEventHandler"/>
+    /// Handler allowing to pass custom stage callbacks. Also <see cref="IPartitionEventHandler"/>
     /// </summary>
-    internal class AsyncCallbacksConsumerEventHandler : IConsumerEventHandler
+    internal class AsyncCallbacksPartitionEventHandler : IPartitionEventHandler
     {
-        private readonly Action<Error> _errorCallback;
         private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
         private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
 
-        public AsyncCallbacksConsumerEventHandler(Action<Error> errorCallback,
-                                                  Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
+        public AsyncCallbacksPartitionEventHandler(Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
                                                   Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback)
         {
-            _errorCallback = errorCallback;
             _partitionAssignedCallback = partitionAssignedCallback;
             _partitionRevokedCallback = partitionRevokedCallback;
-        }
-
-        /// <inheritdoc />
-        public void OnError(Error error)
-        {
-            _errorCallback(error);
         }
 
         /// <inheritdoc />
@@ -83,6 +73,11 @@ namespace Akka.Streams.Kafka.Helpers
         public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions)
         {
             _partitionAssignedCallback(assignedTopicPartitions);
+        }
+
+        /// <inheritdoc />
+        public void OnStop(IImmutableSet<TopicPartition> topicPartitions)
+        {
         }
     }
 }

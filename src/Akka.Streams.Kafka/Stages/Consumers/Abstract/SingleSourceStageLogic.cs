@@ -26,26 +26,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
 
-        private readonly Decider _decider;
         private readonly int _actorNumber = KafkaConsumerActorMetadata.NextNumber();
-
-        private readonly TaskCompletionSource<NotUsed> _completion;
-        private readonly CancellationTokenSource _cancellationTokenSource;
 
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
                                       TaskCompletionSource<NotUsed> completion, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, completion, messageBuilderFactory)
+            : base(shape, completion, attributes, messageBuilderFactory)
         {
             _shape = shape;
             _settings = settings;
             _subscription = subscription;
-            _completion = completion;
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
         }
 
         /// <inheritdoc />
@@ -75,9 +66,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         {
             var partitionsAssignedHandler = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
-            var errorOccuredHandler = GetAsyncCallback<Error>(HandleConsumeError);
 
-            var eventHandler = new AsyncCallbacksConsumerEventHandler(errorOccuredHandler, partitionsAssignedHandler, partitionsRevokedHandler);
+            var eventHandler = new AsyncCallbacksPartitionEventHandler(partitionsAssignedHandler, partitionsRevokedHandler);
             
             if (!(Materializer is ActorMaterializer actorMaterializer))
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
@@ -138,57 +128,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         {
             TopicPartitions = TopicPartitions.Clear();
             Log.Debug("Partitions were revoked");
-        }
-        
-        private void HandleConsumeError(Error error)
-        {
-            Log.Error(error.Reason);
-            // var exception = new SerializationException(error.Reason);
-            var exception = new KafkaException(error);
-            switch (_decider(exception))
-            {
-                case Directive.Stop:
-                    // Throw
-                    _completion.TrySetException(exception);
-                    _cancellationTokenSource.Cancel();
-                    FailStage(exception);
-                    break;
-                case Directive.Resume:
-                    // keep going
-                    break;
-                case Directive.Restart:
-                    // keep going
-                    break;
-            }
-        }
-        
-        private void HandleError(Error error)
-        {
-            Log.Error(error.Reason);
-
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
-            {
-                var exception = new KafkaException(error);
-                FailStage(exception);
-            }
-            else if (KafkaExtensions.IsLocalValueSerializationError(error))
-            {
-                var exception = new SerializationException(error.Reason);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        // Throw
-                        _completion.TrySetException(exception);
-                        FailStage(exception);
-                        break;
-                    case Directive.Resume:
-                        // keep going
-                        break;
-                    case Directive.Restart:
-                        // keep going
-                        break;
-                }
-            }
         }
     }
 }

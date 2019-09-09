@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Dispatch;
@@ -9,9 +10,12 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
+using Akka.Streams.Supervision;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
+using Decider = Akka.Streams.Supervision.Decider;
+using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
@@ -28,6 +32,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
+        private readonly Decider _decider;
+
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
         
@@ -35,13 +41,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         internal IActorRef ConsumerActor { get; private set; }
         internal MessageDispatcher ExecutionContext => Materializer.ExecutionContext;
         
-        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion,
+        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion, Attributes attributes,
                                         Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
             : base(shape)
         {
             _shape = shape;
             _completion = completion;
             _messageBuilder = messageBuilderFactory(this);
+            
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -123,7 +132,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     break;
                 
                 case Status.Failure failure:
-                    FailStage(failure.Cause);
+                    var exception = failure.Cause;
+                    switch (_decider(failure.Cause))
+                    {
+                        case Directive.Stop:
+                            // Throw
+                            _completion.TrySetException(exception);
+                            FailStage(exception);
+                            break;
+                        case Directive.Resume:
+                            // keep going
+                            break;
+                        case Directive.Restart:
+                            // keep going
+                            break;
+                    }
                     break;
                 
                 case Terminated terminated:

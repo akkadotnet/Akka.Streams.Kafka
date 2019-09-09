@@ -19,13 +19,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IConsumerEventHandler handler) => 
+        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IConsumerEventHandler handler) => 
+        public static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler)).WithDispatcher(settings.DispatcherId);
         
         internal class Internal
