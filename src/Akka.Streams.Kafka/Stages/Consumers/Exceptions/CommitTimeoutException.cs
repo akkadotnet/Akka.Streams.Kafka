@@ -6,7 +6,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Exceptions
     /// Calls to <see cref="IInternalCommitter.Commit"/> will be failed with this exception if
     /// Kafka doesn't respond within commit timeout
     /// </summary>
-    public class CommitTimeoutException : TimeoutException
+    public sealed class CommitTimeoutException : TimeoutException
     {
         public CommitTimeoutException(string message) : base(message) { }
     }

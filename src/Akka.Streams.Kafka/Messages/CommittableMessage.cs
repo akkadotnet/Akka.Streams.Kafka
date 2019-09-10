@@ -99,7 +99,7 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public Task Commit()
         {
-            return _committer.Commit(new List<PartitionOffset>() { Offset }.ToImmutableList());
+            return _committer.Commit(ImmutableList.Create(Offset));
         }
     }
 

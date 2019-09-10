@@ -5,7 +5,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Exceptions
     /// <summary>
     /// Kafka consumer stages fail with this exception.
     /// </summary>
-    public class ConsumerFailed : Exception
+    public sealed class ConsumerFailed : Exception
     {
         /// <summary>
         /// ConsumerFailed
