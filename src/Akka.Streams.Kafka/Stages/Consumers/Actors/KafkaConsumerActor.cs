@@ -68,7 +68,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 case KafkaConsumerActorMetadata.Internal.Assign assign:
                 {
-                    _log.Debug($"Got assign request from {Sender}");
                     ScheduleFirstPoolTask();
                     CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
                     var previousAssigned = _consumer.Assignment;
@@ -79,19 +78,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
                 {
-                    _log.Debug($"Got assignWithOffset request from {Sender}");
                     ScheduleFirstPoolTask();
-                    IImmutableSet<TopicPartition> topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
+                    var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableSet();
                     CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
-                    var previousAssigned = _consumer.Assignment;
-                    _consumer.Assign(topicPartitions.Union(previousAssigned));
-                    assignWithOffset.TopicPartitionOffsets.ForEach(offset =>
-                    {
-                        _consumer.Seek(offset);
-                    });
-
-                    var partitions = assignWithOffset.TopicPartitionOffsets.Select(tp => tp.TopicPartition).ToImmutableHashSet();
-                    _commitRefreshing.AssignedPositions(partitions, assignWithOffset.TopicPartitionOffsets);
+                    var previousAssigned = _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
+                    _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
+                    _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                     return true;
                 }
                     
@@ -104,13 +96,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _commitRefreshing.Add(commit.Offsets);
                     var replyTo = Sender;
                     Commit(commit.Offsets, msg => replyTo.Tell(msg));
-                    break;
+                    return true;
                 
                 case Internal.Poll<K, V> poll:
                     ReceivePoll(poll);
-                    break;
+                    return true;
                 
-                case KafkaConsumerActorMetadata.Internal.Subscribe subscribe:
+                case KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscribe:
                     HandleSubscription(subscribe);
                     return true;
                 
@@ -151,45 +143,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 default:
                     return false;
             }
-
-            return false;
-        }
-
-        // This is not going to be used, because in original alpakka implementation
-        // commits are asynchronious and this state is used for waiting until they are finished.
-        // But in .NET Kafka driver commits are synchronious, so nothing to wait in separate state.
-        private bool Stopping(object message)
-        {
-            switch (message)
-            {
-                case Internal.Poll<K, V> poll:
-                    ReceivePoll(poll);
-                    return true;
-                
-                case KafkaConsumerActorMetadata.Internal.Stop stop: 
-                    return true;
-                
-                case Terminated terminated: 
-                    return true;
-
-                case object msg when msg is KafkaConsumerActorMetadata.Internal.RequestMessages ||
-                                     msg is KafkaConsumerActorMetadata.Internal.Commit:
-                {
-                    Sender.Tell(new Status.Failure(new StoppingException()));
-                    return true;
-                }
-                
-                case object msg when msg is KafkaConsumerActorMetadata.Internal.Assign ||
-                                     msg is KafkaConsumerActorMetadata.Internal.AssignWithOffset ||
-                                     msg is KafkaConsumerActorMetadata.Internal.Subscribe:
-                {
-                    _log.Warning($"Got unexpected message {msg.ToJson()} when KafkaConsumerActor is in stopping state");
-                    return true;
-                }
-                
-                default:
-                    return false;
-            }
         }
 
         protected override void PreStart()
@@ -212,6 +165,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
+        protected override void PostRestart(Exception reason) => base.PostRestart(reason);
+
         protected override void PostStop()
         {
             // reply to outstanding requests is important if the actor is restarted
@@ -228,11 +183,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             base.PostStop();
         }
 
-        private void HandleSubscription(KafkaConsumerActorMetadata.Internal.Subscribe subscriptionRequest)
+        private void HandleSubscription(KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscriptionRequest)
         {
             try
             {
-                _consumer.Subscribe(subscriptionRequest.Topics);
+                if (subscriptionRequest is KafkaConsumerActorMetadata.Internal.Subscribe subscribe)
+                    _consumer.Subscribe(subscribe.Topics);
+                else if (subscriptionRequest is KafkaConsumerActorMetadata.Internal.SubscribePattern subscribePattern)
+                    _consumer.Subscribe(subscribePattern.TopicPattern);
                 
                 ScheduleFirstPoolTask();
             }
@@ -306,8 +264,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 if (_requests.IsEmpty())
                 {
                     // no outstanding requests so we don't expect any messages back, but we should anyway
-                    // drive the KafkaConsumer by polling
-                    _consumer.Pause(currentAssignment);
+                    // drive the KafkaConsumer by polling to handle partition events etc.
+                    // _consumer.Pause(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
                         throw new IllegalActorStateException("Got unexpected Kafka message");
@@ -315,12 +273,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 else
                 {
                     // resume partitions to fetch
-                    IImmutableSet<TopicPartition> partitionsToFetch =
-                        _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                    IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                    /*
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
                     _consumer.Pause(pauseThese);
                     _consumer.Resume(resumeThese);
+                    */
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
             }
@@ -348,6 +307,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (consumedMessage == null)
                 return;
+
+            var position = _consumer.Position(consumedMessage.TopicPartition);
+            _log.Debug($"Position after consuming: {position}");
 
             var fetchedTopicPartition = consumedMessage.TopicPartition;
             if (!partitionsToFetch.Contains(fetchedTopicPartition))
@@ -501,7 +463,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             public override void OnPartitionsAssigned(IImmutableSet<TopicPartition> partitions)
             {
-                _actor._consumer.Pause(partitions);
+                var assignment = _actor._consumer.Assignment;
+                var partitionsToPause = partitions.Where(p => assignment.Contains(p)); 
+                // _actor._consumer.Pause(partitionsToPause);
+                
                 _actor._commitRefreshing.AssignedPositions(partitions, _actor._consumer, _actor._settings.PositionTimeout);
                 // TODO: Add warning if IPartinionEventHandler will be public and call takes more then _warningDuration
                 _partitionEventHandler.OnAssign(partitions);

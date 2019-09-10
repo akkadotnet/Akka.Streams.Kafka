@@ -47,11 +47,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                 case TopicSubscription topicSubscription:
                     ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
                     break;
-                case Assignment assignment:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Assign(assignment.TopicPartitions), SourceActor.Ref);
-                    break;
-                case AssignmentWithOffset assignmentWithOffset:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.AssignWithOffset(assignmentWithOffset.TopicPartitions), SourceActor.Ref);
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
                     break;
                 case IManualSubscription manualSubscription:
                     ConfigureManualSubscription(manualSubscription);

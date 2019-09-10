@@ -7,14 +7,44 @@ namespace Akka.Streams.Kafka.Settings
     public interface IManualSubscription : ISubscription { }
     public interface IAutoSubscription : ISubscription { }
 
+    /// <summary>
+    /// TopicSubscription
+    /// </summary>
     internal sealed class TopicSubscription : IAutoSubscription
     {
+        /// <summary>
+        /// TopicSubscription
+        /// </summary>
+        /// <param name="topics">List of topics to subscribe</param>
         public TopicSubscription(IImmutableSet<string> topics)
         {
             Topics = topics;
         }
 
+        /// <summary>
+        /// List of topics to subscribe
+        /// </summary>
         public IImmutableSet<string> Topics { get; }
+    }
+    
+    /// <summary>
+    /// TopicSubscriptionPattern
+    /// </summary>
+    internal sealed class TopicSubscriptionPattern : IAutoSubscription
+    {
+        /// <summary>
+        /// TopicSubscriptionPattern
+        /// </summary>
+        /// <param name="topicPattern">Topic pattern (regular expression to be matched)</param>
+        public TopicSubscriptionPattern(string topicPattern)
+        {
+            TopicPattern = topicPattern;
+        }
+
+        /// <summary>
+        /// Topic pattern (regular expression to be matched)
+        /// </summary>
+        public string TopicPattern { get; }
     }
 
     internal sealed class Assignment : IManualSubscription

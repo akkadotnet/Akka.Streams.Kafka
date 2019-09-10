@@ -11,8 +11,6 @@ using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
-using Akka.Util;
-using Akka.Util.Internal;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;

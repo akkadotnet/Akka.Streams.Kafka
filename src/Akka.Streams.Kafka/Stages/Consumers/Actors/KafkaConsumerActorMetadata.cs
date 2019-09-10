@@ -161,11 +161,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public IImmutableSet<TopicPartitionOffset> TopicPartitionOffsets { get; }
             }
+            
+            /// <summary>
+            /// Marker interface for subscription requests
+            /// </summary>
+            public interface ISubscriptionRequest
+            {
+            }
 
             /// <summary>
             /// Subscribe
             /// </summary>
-            public class Subscribe
+            public class Subscribe : ISubscriptionRequest
             {
                 /// <summary>
                 /// Subscribe
@@ -181,6 +188,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 public IImmutableSet<string> Topics { get; }
             }
             
+            /// <summary>
+            /// SubscribePattern
+            /// </summary>
+            public class SubscribePattern : ISubscriptionRequest
+            {
+                /// <summary>
+                /// SubscribePattern
+                /// </summary>
+                /// <param name="topicPattern">Topic pattern (regular expression to be matched)</param>
+                public SubscribePattern(string topicPattern)
+                {
+                    TopicPattern = topicPattern;
+                }
+
+                /// <summary>
+                /// Topic pattern (regular expression to be matched)
+                /// </summary>
+                public string TopicPattern { get; }
+            }
             
             /// <summary>
             /// Stops consuming actor
