@@ -289,7 +289,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     // _consumer.Pause(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
-                        throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
+                    {
+                        // While we are not pausing partitions, we need to shift position back when accidently consumed message we are not interested in
+                        _consumer.Seek(message.TopicPartitionOffset);
+                        // throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
+                    }
                 }
                 else
                 {
