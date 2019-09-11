@@ -91,7 +91,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         protected void OnShutdown()
         {
-            _completion.SetResult(NotUsed.Instance);
+            _completion.TrySetResult(NotUsed.Instance);
         }
 
         /// <summary>

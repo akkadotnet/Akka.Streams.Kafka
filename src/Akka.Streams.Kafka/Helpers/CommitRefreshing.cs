@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Helpers
             {
                 get
                 {
-                    var overdueTopicPartitions = _refreshDeadlines.Where(deadline => deadline.Value > DateTime.UtcNow)
+                    var overdueTopicPartitions = _refreshDeadlines.Where(deadline => deadline.Value < DateTime.UtcNow)
                         .Select(d => d.Key)
                         .ToImmutableHashSet();
 
@@ -88,7 +88,7 @@ namespace Akka.Streams.Kafka.Helpers
 
             public void UpdateRefreshDeadlines(IImmutableSet<TopicPartition> topicPartitions)
             {
-                _refreshDeadlines = _refreshDeadlines.AddRange(topicPartitions.ToImmutableDictionary(p => p, p => DateTime.UtcNow.Add(_commitRefreshInterval)));
+                _refreshDeadlines = _refreshDeadlines.SetItems(topicPartitions.ToImmutableDictionary(p => p, p => DateTime.UtcNow.Add(_commitRefreshInterval)));
             }
 
             public void AssignedPositions(IImmutableSet<TopicPartition> assignedPartitions, IImmutableSet<TopicPartitionOffset> assignedOffsets)

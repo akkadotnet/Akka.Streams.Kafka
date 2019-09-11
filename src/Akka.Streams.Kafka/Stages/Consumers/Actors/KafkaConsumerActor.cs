@@ -79,7 +79,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
                 {
                     ScheduleFirstPoolTask();
-                    var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableSet();
+                    var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
                     CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
                     var previousAssigned = _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
                     _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
@@ -144,7 +144,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return false;
             }
         }
-
+       
         protected override void PreStart()
         {
             base.PreStart();
@@ -164,8 +164,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _owner?.Tell(new Status.Failure(ex));
             }
         }
-
-        protected override void PostRestart(Exception reason) => base.PostRestart(reason);
 
         protected override void PostStop()
         {
@@ -280,6 +278,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _consumer.Pause(pauseThese);
                     _consumer.Resume(resumeThese);
                     */
+                    
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
             }
@@ -307,9 +306,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (consumedMessage == null)
                 return;
-
-            var position = _consumer.Position(consumedMessage.TopicPartition);
-            _log.Debug($"Position after consuming: {position}");
 
             var fetchedTopicPartition = consumedMessage.TopicPartition;
             if (!partitionsToFetch.Contains(fetchedTopicPartition))
@@ -374,7 +370,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 watch.Stop();
                 if (watch.Elapsed >= _settings.CommitTimeWarning)
                     _log.Warning($"Kafka commit took longer than `commit-time-warning`: {watch.ElapsedMilliseconds} ms");
-                
+
                 Self.Tell(new KafkaConsumerActorMetadata.Internal.Committed(commitMap));
                 sendReply(Akka.Done.Instance);
             }

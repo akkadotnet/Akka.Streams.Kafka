@@ -25,21 +25,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     
     internal class KafkaAsyncConsumerCommitter : IInternalCommitter
     {
-        private readonly IActorRef _consumerActor;
         private readonly TimeSpan _commitTimeout;
+        private readonly Lazy<IActorRef> _consumerActor;
 
-        public KafkaAsyncConsumerCommitter(IActorRef consumerActor, TimeSpan commitTimeout)
+        public KafkaAsyncConsumerCommitter(Func<IActorRef> consumerActorFactory, TimeSpan commitTimeout)
         {
-            _consumerActor = consumerActor;
             _commitTimeout = commitTimeout;
+            _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
-
 
         public Task Commit(ImmutableList<PartitionOffset> offsets)
         {
-            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset)).ToImmutableHashSet();
+            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset + 1)).ToImmutableHashSet();
 
-            return _consumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Commit(topicPartitionOffsets), _commitTimeout)
+            return _consumerActor.Value.Ask(new KafkaConsumerActorMetadata.Internal.Commit(topicPartitionOffsets), _commitTimeout)
                 .ContinueWith(t =>
                 {
                     if (t.Exception != null)
