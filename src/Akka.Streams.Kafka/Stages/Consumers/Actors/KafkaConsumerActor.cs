@@ -290,6 +290,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
                     {
+                        // TODO: Change this once pause-resume will work
                         // While we are not pausing partitions, we need to shift position back when accidently consumed message we are not interested in
                         _consumer.Seek(message.TopicPartitionOffset);
                         // throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
@@ -338,8 +339,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var fetchedTopicPartition = consumedMessage.TopicPartition;
             if (!partitionsToFetch.Contains(fetchedTopicPartition))
             {
+                // TODO: Change this once pause-resume will work
+                // While we are not pausing partitions, we need to shift position back when accidently consumed message we are not interested in
+                _consumer.Seek(consumedMessage.TopicPartitionOffset);
+                /*
                 throw  new ArgumentException($"Unexpected records polled. Expected one of {partitionsToFetch.JoinToString(", ")}," +
                                              $"but consumed result is {consumedMessage.ToJson()}, consumer assignment: {_consumer.Assignment.ToJson()}");
+                */
             }
 
             foreach (var (stageActorRef, request) in _requests.ToTuples())
