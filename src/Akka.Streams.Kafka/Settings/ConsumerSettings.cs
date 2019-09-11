@@ -47,7 +47,7 @@ namespace Akka.Streams.Kafka.Settings
                 pollTimeout: config.GetTimeSpan("poll-timeout", TimeSpan.FromMilliseconds(50)),
                 partitionHandlerWarning: config.GetTimeSpan("partition-handler-warning", TimeSpan.FromSeconds(15)),
                 commitTimeWarning: config.GetTimeSpan("commit-time-warning", TimeSpan.FromMilliseconds(40)),
-                commitTimeout: config.GetTimeSpan("commit-timeout", TimeSpan.FromMilliseconds(50)),
+                commitTimeout: config.GetTimeSpan("commit-timeout", TimeSpan.FromMilliseconds(100)),
                 commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", TimeSpan.FromMilliseconds(100), allowInfinite: true),
                 stopTimeout: config.GetTimeSpan("stop-timeout", TimeSpan.FromMilliseconds(50)),
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
