@@ -118,7 +118,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(offset, elementsCount - offset).Select(c => c.ToString()))
-                probe.ExpectNext(i, TimeSpan.FromSeconds(10000));
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
             probe.Cancel();
         }
