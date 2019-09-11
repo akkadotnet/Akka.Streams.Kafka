@@ -289,7 +289,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     // _consumer.Pause(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
-                        throw new IllegalActorStateException("Got unexpected Kafka message");
+                        throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
                 }
                 else
                 {
