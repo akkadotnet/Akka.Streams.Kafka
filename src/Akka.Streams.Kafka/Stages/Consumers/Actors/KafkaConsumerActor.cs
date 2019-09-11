@@ -373,7 +373,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void ProcessError(Exception error)
         {
             var involvedStageActors = _requests.Keys.Append(_owner).ToImmutableHashSet();
-            _log.Debug($"Sending failure to {involvedStageActors.JoinToString(", ")}");
+            _log.Debug($"Sending failure to {involvedStageActors.JoinToString(", ")}. Error: {error}");
             foreach (var actor in involvedStageActors)
             {
                 actor.Tell(new Status.Failure(error));
