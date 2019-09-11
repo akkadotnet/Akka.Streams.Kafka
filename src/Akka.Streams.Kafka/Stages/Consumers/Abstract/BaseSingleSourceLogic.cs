@@ -37,7 +37,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         
         protected StageActor SourceActor { get; private set; }
         internal IActorRef ConsumerActor { get; private set; }
-        internal MessageDispatcher ExecutionContext => Materializer.ExecutionContext;
         
         protected BaseSingleSourceLogic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion, Attributes attributes,
                                         Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 

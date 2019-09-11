@@ -23,6 +23,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         Task Commit(ImmutableList<PartitionOffset> offsets);
     }
     
+    /// <summary>
+    /// Used by <see cref="CommittableSourceMessageBuilder{K,V}"/> to commit messages by
+    /// sending <see cref="KafkaConsumerActorMetadata.Internal.Commit"/> to <see cref="KafkaConsumerActor{K,V}"/>
+    /// </summary>
     internal class KafkaAsyncConsumerCommitter : IInternalCommitter
     {
         private readonly TimeSpan _commitTimeout;
@@ -34,6 +38,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
 
+        /// <summary>
+        /// Commits specified offsets
+        /// </summary>
         public Task Commit(ImmutableList<PartitionOffset> offsets)
         {
             var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset + 1)).ToImmutableHashSet();

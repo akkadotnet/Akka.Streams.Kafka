@@ -34,10 +34,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// </summary>
     internal abstract class CommittableMessageBuilderBase<K, V> : IMessageBuilder<K, V, CommittableMessage<K, V>>
     {
+        /// <summary>
+        /// Committed object
+        /// </summary>
         public abstract IInternalCommitter Committer { get; }
+        /// <summary>
+        /// Consumer group Id
+        /// </summary>
         public abstract string GroupId { get; }
+        /// <summary>
+        /// Method for extracting string metadata from consumed record
+        /// </summary>
         public abstract string MetadataFromRecord(ConsumeResult<K, V> record);
 
+        /// <inheritdoc />
         public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
         {
             var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
@@ -54,6 +64,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         private readonly ConsumerSettings<K, V> _settings;
         private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
 
+        /// <summary>
+        /// CommittableSourceMessageBuilder
+        /// </summary>
         public CommittableSourceMessageBuilder(IInternalCommitter committer, ConsumerSettings<K, V> settings, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
             _committer = committer;
@@ -61,8 +74,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _metadataFromRecord = metadataFromRecord;
         }
 
+        /// <inheritdoc />
         public override IInternalCommitter Committer => _committer;
+
+        /// <inheritdoc />
         public override string GroupId => _settings.GroupId;
+
+        /// <inheritdoc />
         public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
     }
 }

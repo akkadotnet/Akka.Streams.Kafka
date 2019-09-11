@@ -23,6 +23,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// </summary>
         public ISubscription Subscription { get; }
 
+        /// <summary>
+        /// PlainSourceStage
+        /// </summary>
+        /// <param name="settings">Consumer settings</param>
+        /// <param name="subscription">Subscription to be used</param>
         public PlainSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription) 
             : base("PlainSource")
         {

@@ -16,18 +16,32 @@ using Newtonsoft.Json;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 {
+    /// <summary>
+    /// Kafka consuming actor
+    /// </summary>
+    /// <typeparam name="K">Message key type</typeparam>
+    /// <typeparam name="V">Message value type</typeparam>
     internal class KafkaConsumerActor<K, V> : ActorBase
     {
         private readonly IActorRef _owner;
         private readonly ConsumerSettings<K, V> _settings;
+        /// <summary>
+        /// Stores delegates for external handling of partition events
+        /// </summary>
         private readonly IPartitionEventHandler _partitionEventHandler;
         
         private ICancelable _poolCancellation;
         private Internal.Poll<K, V> _pollMessage;
         private Internal.Poll<K, V> _delayedPollMessage;
         
+        /// <summary>
+        /// Stores all incoming requests from consuming kafka stages
+        /// </summary>
         private IImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages> _requests 
             = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
+        /// <summary>
+        /// Stores stage actors, requesting for more messages
+        /// </summary>
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing;
         private IConsumer<K, V> _consumer;
@@ -50,6 +64,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private IImmutableList<IActorRef> _rebalanceCommitSenders = new ImmutableArray<IActorRef>();
 
+        /// <summary>
+        /// KafkaConsumerActor
+        /// </summary>
+        /// <param name="owner">Owner actor to send critical failures to</param>
+        /// <param name="settings">Consumer settings</param>
+        /// <param name="partitionEventHandler">Partion events handler</param>
         public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler)
         {
             _owner = owner;
@@ -189,6 +209,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _consumer.Subscribe(subscribe.Topics);
                 else if (subscriptionRequest is KafkaConsumerActorMetadata.Internal.SubscribePattern subscribePattern)
                     _consumer.Subscribe(subscribePattern.TopicPattern);
+                else
+                    throw new NotSupportedException($"Unsupported subscription type: {subscriptionRequest.GetType()}");
                 
                 ScheduleFirstPoolTask();
             }
@@ -263,6 +285,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     // no outstanding requests so we don't expect any messages back, but we should anyway
                     // drive the KafkaConsumer by polling to handle partition events etc.
+                    // TODO: Make consumer pause-resume calls work
                     // _consumer.Pause(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
@@ -273,6 +296,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     // resume partitions to fetch
                     IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                     /*
+                    // TODO: Make consumer pause-resume calls work
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
                     _consumer.Pause(pauseThese);
@@ -460,7 +484,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             public override void OnPartitionsAssigned(IImmutableSet<TopicPartition> partitions)
             {
                 var assignment = _actor._consumer.Assignment;
-                var partitionsToPause = partitions.Where(p => assignment.Contains(p)); 
+                var partitionsToPause = partitions.Where(p => assignment.Contains(p));
+                // TODO: Make consumer pause-resume calls work
                 // _actor._consumer.Pause(partitionsToPause);
                 
                 _actor._commitRefreshing.AssignedPositions(partitions, _actor._consumer, _actor._settings.PositionTimeout);

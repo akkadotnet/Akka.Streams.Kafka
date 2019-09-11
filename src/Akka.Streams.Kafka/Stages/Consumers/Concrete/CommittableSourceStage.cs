@@ -27,6 +27,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// </summary>
         public ISubscription Subscription { get; }
 
+        /// <summary>
+        /// CommittableSourceStage
+        /// </summary>
+        /// <param name="settings">Consumer settings</param>
+        /// <param name="subscription">Subscription to be used</param>
+        /// <param name="metadataFromMessage">Function to extract string metadata from consumed message</param>
         public CommittableSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, 
                                       Func<ConsumeResult<K, V>, string> metadataFromMessage = null)
             : base("CommittableSource")

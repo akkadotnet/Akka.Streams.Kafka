@@ -1,25 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.Streams.Implementation;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
-using Akka.Streams.Stage;
-using Akka.Streams.Supervision;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using Decider = Akka.Streams.Supervision.Decider;
-using Directive = Akka.Streams.Supervision.Directive;
 
-namespace Akka.Streams.Kafka.Stages.Consumers
+namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
+    /// <summary>
+    /// Base class for any single-source stage logic implementations
+    /// </summary>
+    /// <typeparam name="K"></typeparam>
+    /// <typeparam name="V"></typeparam>
+    /// <typeparam name="TMessage"></typeparam>
     internal class SingleSourceStageLogic<K, V, TMessage> : BaseSingleSourceLogic<K, V, TMessage>
     {
         private readonly SourceShape<TMessage> _shape;
@@ -102,6 +99,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                     CompleteStage();
                     break;
                 default:
+                    // Ignoring any consumed messages, because downstream is already closed
                     return;
             }
         }
