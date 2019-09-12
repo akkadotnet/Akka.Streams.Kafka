@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using Akka.Annotations;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
 
@@ -9,6 +10,7 @@ namespace Akka.Streams.Kafka.Helpers
     /// This interface is used to pass callbacks when Kafka rebalances partitions between consumers,
     /// or an kafka consumer is stopped
     /// </summary>
+    [ApiMayChange]
     internal interface IPartitionEventHandler
     {
         /// <summary>
