@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Stores delegates for external handling of partition events
         /// </summary>
-        private readonly IPartitionEventHandler _partitionEventHandler;
+        private readonly IPartitionEventHandler<K,V> _partitionEventHandler;
         
         private ICancelable _poolCancellation;
         private Internal.Poll<K, V> _pollMessage;
@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler)
+        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> partitionEventHandler)
         {
             _owner = owner;
             _settings = settings;
@@ -318,7 +318,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             catch (Exception ex)
             {
                 ProcessError(ex);
-                _log.Error(ex, "Exception when polling from consumer, stopping actor: {}", ex.ToString());
+                _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
                 Context.Stop(Self);
             }
              
@@ -475,13 +475,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </remarks>
         class RebalanceListener<K, V> : RebalanceListenerBase
         {
-            private readonly IPartitionEventHandler _partitionEventHandler;
+            private readonly IPartitionEventHandler<K,V> _partitionEventHandler;
             private readonly KafkaConsumerActor<K, V> _actor;
 
             private readonly RestrictedConsumer<K, V> _restrictedConsumer;
             private readonly TimeSpan _warningDuration;
 
-            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<K, V> actor)
+            public RebalanceListener(IPartitionEventHandler<K,V> partitionEventHandler, KafkaConsumerActor<K, V> actor)
             {
                 _partitionEventHandler = partitionEventHandler;
                 _actor = actor;
@@ -499,15 +499,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 // _actor._consumer.Pause(partitionsToPause);
                 
                 _actor._commitRefreshing.AssignedPositions(partitions, _actor._consumer, _actor._settings.PositionTimeout);
-                // TODO: Add warning if IPartinionEventHandler will be public and call takes more then _warningDuration
-                _partitionEventHandler.OnAssign(partitions);
+
+                var watch = Stopwatch.StartNew();
+                _partitionEventHandler.OnAssign(partitions, _restrictedConsumer);
+                CheckDuration(watch, "onAssign");
+                
                 _actor._rebalanceInProgress = false;
             }
 
             public override void OnPartitionsRevoked(IImmutableSet<TopicPartitionOffset> partitions)
             {
-                // TODO: Add warning if IPartinionEventHandler will be public and call takes more then _warningDuration
-                _partitionEventHandler.OnRevoke(partitions);
+                var watch = Stopwatch.StartNew();
+                _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
+                CheckDuration(watch, "onRevoke");
+                
                 _actor._commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
                 _actor._rebalanceInProgress = true;
             }
@@ -516,7 +521,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 var currentTopicPartitions = _actor._consumer.Assignment;
                 _actor._consumer.Pause(currentTopicPartitions);
-                _partitionEventHandler.OnStop(currentTopicPartitions.ToImmutableHashSet());
+                
+                var watch = Stopwatch.StartNew();
+                _partitionEventHandler.OnStop(currentTopicPartitions.ToImmutableHashSet(), _restrictedConsumer);
+                CheckDuration(watch, "onStop");
+            }
+
+            private void CheckDuration(Stopwatch watch, string method)
+            {
+                watch.Stop();
+                if (watch.Elapsed > _warningDuration)
+                {
+                    _actor._log.Warning("Partition assignment handler `{0}` took longer than `partition-handler-warning`: {1} ms", method, watch.ElapsedMilliseconds);
+                }
             }
         }
     }
