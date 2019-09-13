@@ -1,180 +1,128 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Threading;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
+using Akka.Actor;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Stage;
-using Akka.Streams.Supervision;
+using Akka.Streams.Kafka.Stages.Consumers.Actors;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Stages.Consumers
+namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
-    internal class SingleSourceStageLogic<K, V, TMessage> : GraphStageLogic
+    /// <summary>
+    /// Base class for any single-source stage logic implementations
+    /// </summary>
+    /// <typeparam name="K"></typeparam>
+    /// <typeparam name="V"></typeparam>
+    /// <typeparam name="TMessage"></typeparam>
+    internal class SingleSourceStageLogic<K, V, TMessage> : BaseSingleSourceLogic<K, V, TMessage>
     {
+        private readonly SourceShape<TMessage> _shape;
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
-        private IConsumer<K, V> _consumer;
 
-        private Action<IEnumerable<TopicPartition>> _partitionsAssigned;
-        private Action<IEnumerable<TopicPartitionOffset>> _partitionsRevoked;
-        private readonly Decider _decider;
-
-        private IEnumerable<TopicPartition> _assignedPartitions;
-        private readonly TaskCompletionSource<NotUsed> _completion;
-        private readonly CancellationTokenSource _cancellationTokenSource;
+        private readonly int _actorNumber = KafkaConsumerActorMetadata.NextNumber();
 
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
-            ISubscription subscription, Attributes attributes, 
-            TaskCompletionSource<NotUsed> completion, IMessageBuilder<K, V, TMessage> messageBuilder) 
-            : base(shape)
+                                      ISubscription subscription, Attributes attributes, 
+                                      TaskCompletionSource<NotUsed> completion, 
+                                      Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+            : base(shape, completion, attributes, messageBuilderFactory)
         {
+            _shape = shape;
             _settings = settings;
             _subscription = subscription;
-            _completion = completion;
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
-
-            SetHandler(shape.Outlet, onPull: () =>
-            {
-                try
-                {
-                    var message = _consumer.Consume(_cancellationTokenSource.Token);
-                    if (message == null) // No message received, or consume error occured
-                        return;
-
-                    if (IsAvailable(shape.Outlet))
-                    {
-                        Push(shape.Outlet, messageBuilder.CreateMessage(message, _consumer));
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Consume was canceled, looks like we are shutting down the stage
-                }
-                catch (ConsumeException ex)
-                {
-                    HandleError(ex.Error);
-                }
-            }, onDownstreamFinish: () =>
-            {
-                _completion.SetResult(NotUsed.Instance);
-            });
         }
 
-        public override void PreStart()
+        /// <inheritdoc />
+        protected override void ConfigureSubscription()
         {
-            base.PreStart();
-
-            _consumer = _settings.CreateKafkaConsumer(HandleConsumeError, HandlePartitionsAssigned, HandlePartitionsRevoked);
-            Log.Debug($"Consumer started: {_consumer.Name}");
-
             switch (_subscription)
             {
-                case TopicSubscription ts:
-                    _consumer.Subscribe(ts.Topics);
+                case TopicSubscription topicSubscription:
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
                     break;
-                case Assignment a:
-                    _consumer.Assign(a.TopicPartitions);
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
                     break;
-                case AssignmentWithOffset awo:
-                    _consumer.Assign(awo.TopicPartitions);
+                case IManualSubscription manualSubscription:
+                    ConfigureManualSubscription(manualSubscription);
                     break;
+                default:
+                    throw new NotSupportedException();
             }
+        }
 
-            _partitionsAssigned = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
-            _partitionsRevoked = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
+        /// <inheritdoc />
+        protected override IActorRef CreateConsumerActor()
+        {
+            var partitionsAssignedHandler = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
+            var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
+
+            var eventHandler = new AsyncCallbacksPartitionEventHandler(partitionsAssignedHandler, partitionsRevokedHandler);
+            
+            if (!(Materializer is ActorMaterializer actorMaterializer))
+                throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
+            
+            var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 
+                                                          $"kafka-consumer-{_actorNumber}");
+            return actor;
         }
 
         public override void PostStop()
         {
-            Log.Debug($"Consumer stopped: {_consumer.Name}");
-            _consumer.Dispose();
+            ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
 
             base.PostStop();
         }
 
-        //
-        // Consumer's events
-        //
+        protected override void PerformShutdown()
+        {
+            SetKeepGoing(true);
+            
+            if (!IsClosed(_shape.Outlet))
+                Complete(_shape.Outlet);
+            
+            SourceActor.Become(ShuttingDownReceive);
+            StopConsumerActor();
+        }
 
-        private void HandlePartitionsAssigned(IConsumer<K, V> consumer, List<TopicPartition> list)
+        private void ShuttingDownReceive(Tuple<IActorRef, object> args)
         {
-            _partitionsAssigned(list);
+            switch (args.Item2)
+            {
+                case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
+                    OnShutdown();
+                    CompleteStage();
+                    break;
+                default:
+                    // Ignoring any consumed messages, because downstream is already closed
+                    return;
+            }
         }
-        
-        private void HandlePartitionsRevoked(IConsumer<K, V> consumer, List<TopicPartitionOffset> currentOffsets)
+
+        protected void StopConsumerActor()
         {
-            _partitionsRevoked(currentOffsets);
+            Materializer.ScheduleOnce(_settings.StopTimeout, () =>
+            {
+                ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
+            });
         }
-        
+
         private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
         {
-            Log.Debug($"Partitions were assigned: {_consumer.Name}");
-            var partitionsList = partitions.ToList();
-            _consumer.Assign(partitionsList);
-            _assignedPartitions = partitionsList;
+            TopicPartitions = partitions.ToImmutableHashSet();
+            Log.Debug($"Partitions were assigned: {string.Join(", ", TopicPartitions)}");
+            RequestMessages();
         }
         
         private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
         {
-            Log.Debug($"Partitions were revoked: {_consumer.Name}");
-            _consumer.Unassign();
-            _assignedPartitions = null;
-        }
-        
-        private void HandleConsumeError(IConsumer<K, V> consumer, Error error)
-        {
-            Log.Error(error.Reason);
-            // var exception = new SerializationException(error.Reason);
-            var exception = new KafkaException(error);
-            switch (_decider(exception))
-            {
-                case Directive.Stop:
-                    // Throw
-                    _completion.TrySetException(exception);
-                    _cancellationTokenSource.Cancel();
-                    FailStage(exception);
-                    break;
-                case Directive.Resume:
-                    // keep going
-                    break;
-                case Directive.Restart:
-                    // keep going
-                    break;
-            }
-        }
-        
-        private void HandleError(Error error)
-        {
-            Log.Error(error.Reason);
-
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
-            {
-                var exception = new KafkaException(error);
-                FailStage(exception);
-            }
-            else if (KafkaExtensions.IsLocalValueSerializationError(error))
-            {
-                var exception = new SerializationException(error.Reason);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        // Throw
-                        _completion.TrySetException(exception);
-                        FailStage(exception);
-                        break;
-                    case Directive.Resume:
-                        // keep going
-                        break;
-                    case Directive.Restart:
-                        // keep going
-                        break;
-                }
-            }
+            TopicPartitions = TopicPartitions.Clear();
+            Log.Debug("Partitions were revoked");
         }
     }
 }

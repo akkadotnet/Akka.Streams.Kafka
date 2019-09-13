@@ -103,11 +103,11 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WhereNot(c => c.Record.Value == InitialMsg)
-                .SelectAsync(10, elem =>
+                .SelectAsync(10, async elem =>
                 {
-                    elem.CommitableOffset.Commit();
+                    await elem.CommitableOffset.Commit();
                     committedElements.Enqueue(elem.Record.Value);
-                    return Task.FromResult(Done.Instance);
+                    return Done.Instance;
                 })
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
                 .Run(_materializer);
@@ -121,7 +121,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 
             probe1.Cancel();
 
-            AwaitCondition(() => task.IsCompleted);
+            AwaitCondition(() => task.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Select(_ => _.Record.Value)

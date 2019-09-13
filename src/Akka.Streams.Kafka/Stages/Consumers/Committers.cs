@@ -1,5 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Threading.Tasks;
+using Akka.Actor;
+using Akka.Dispatch;
+using Akka.Streams.Kafka.Messages;
+using Akka.Streams.Kafka.Stages.Consumers.Actors;
+using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
@@ -12,24 +20,45 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Commit all offsets (of different topics) belonging to the same stage
         /// </summary>
-        Task Commit();
+        Task Commit(ImmutableList<PartitionOffset> offsets);
     }
-
+    
     /// <summary>
-    /// This is a simple committer using kafka consumer directly (not using consumer actor, etc)
+    /// Used by <see cref="CommittableSourceMessageBuilder{K,V}"/> to commit messages by
+    /// sending <see cref="KafkaConsumerActorMetadata.Internal.Commit"/> to <see cref="KafkaConsumerActor{K,V}"/>
     /// </summary>
-    internal class KafkaCommitter<K, V> : IInternalCommitter
+    internal class KafkaAsyncConsumerCommitter : IInternalCommitter
     {
-        private readonly IConsumer<K, V> _consumer;
+        private readonly TimeSpan _commitTimeout;
+        private readonly Lazy<IActorRef> _consumerActor;
 
-        public KafkaCommitter(IConsumer<K, V> consumer)
+        public KafkaAsyncConsumerCommitter(Func<IActorRef> consumerActorFactory, TimeSpan commitTimeout)
         {
-            _consumer = consumer;
+            _commitTimeout = commitTimeout;
+            _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
 
         /// <summary>
-        /// Commit all offsets (of different topics) belonging to the same stage
+        /// Commits specified offsets
         /// </summary>
-        public Task Commit() => Task.FromResult(_consumer.Commit());
+        public Task Commit(ImmutableList<PartitionOffset> offsets)
+        {
+            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset + 1)).ToImmutableHashSet();
+
+            return _consumerActor.Value.Ask(new KafkaConsumerActorMetadata.Internal.Commit(topicPartitionOffsets), _commitTimeout)
+                .ContinueWith(t =>
+                {
+                    if (t.Exception != null)
+                    {
+                        switch (t.Exception.InnerException)
+                        {
+                            case AskTimeoutException timeoutException:
+                                throw new CommitTimeoutException($"Kafka commit took longer than: {_commitTimeout}");
+                            default:
+                                throw t.Exception;
+                        }
+                    }
+                });
+        }
     }
 }

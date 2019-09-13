@@ -27,6 +27,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// </summary>
         public ISubscription Subscription { get; }
 
+        /// <summary>
+        /// CommittableSourceStage
+        /// </summary>
+        /// <param name="settings">Consumer settings</param>
+        /// <param name="subscription">Subscription to be used</param>
+        /// <param name="metadataFromMessage">Function to extract string metadata from consumed message</param>
         public CommittableSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription, 
                                       Func<ConsumeResult<K, V>, string> metadataFromMessage = null)
             : base("CommittableSource")
@@ -45,8 +51,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// <returns>Stage logic</returns>
         protected override GraphStageLogic Logic(SourceShape<CommittableMessage<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
         { 
-            return new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, 
-                                                                              completion, new CommittableSourceMessageBuilder<K, V>(Settings, _metadataFromMessage));
+            return new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, completion, GetMessageBuilder);
+        }
+
+        private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
+        {
+            var committer = new KafkaAsyncConsumerCommitter(() => logic.ConsumerActor, Settings.CommitTimeout);
+            return new CommittableSourceMessageBuilder<K, V>(committer, Settings, _metadataFromMessage);
         }
     }
 }

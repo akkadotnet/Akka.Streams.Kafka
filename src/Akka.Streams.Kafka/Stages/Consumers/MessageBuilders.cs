@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Akka.Actor;
+using Akka.Dispatch;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
@@ -16,7 +18,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// We pass consumer here, because there is no way to get consumer instance from
         /// some global configuration, like Alpakka does getting consumer actor ref
         /// </remarks>
-        TMessage CreateMessage(ConsumeResult<K, V> record, IConsumer<K, V> consumer);
+        TMessage CreateMessage(ConsumeResult<K, V> record);
     }
     
     /// <summary>
@@ -24,39 +26,61 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// </summary>
     public class PlainMessageBuilder<K, V> : IMessageBuilder<K, V, ConsumeResult<K, V>>
     {
-        public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumer<K, V> consumer) => record;
+        public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record) => record;
     }
     
     /// <summary>
     /// This base class used for different committable source message builders
     /// </summary>
-    public abstract class CommittableMessageBuilder<K, V> : IMessageBuilder<K, V, CommittableMessage<K, V>>
+    internal abstract class CommittableMessageBuilderBase<K, V> : IMessageBuilder<K, V, CommittableMessage<K, V>>
     {
+        /// <summary>
+        /// Committed object
+        /// </summary>
+        public abstract IInternalCommitter Committer { get; }
+        /// <summary>
+        /// Consumer group Id
+        /// </summary>
         public abstract string GroupId { get; }
+        /// <summary>
+        /// Method for extracting string metadata from consumed record
+        /// </summary>
         public abstract string MetadataFromRecord(ConsumeResult<K, V> record);
 
-        public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumer<K, V> consumer)
+        /// <inheritdoc />
+        public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
         {
             var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
-            return new CommittableMessage<K, V>(record, new CommittableOffset(new KafkaCommitter<K, V>(consumer), offset, MetadataFromRecord(record)));
+            return new CommittableMessage<K, V>(record, new CommittableOffset(Committer, offset, MetadataFromRecord(record)));
         }
     }
 
     /// <summary>
-    /// Message builder used for <see cref="CommittableSourceStage{K,V}"/>
+    /// Message builder used by <see cref="CommittableSourceStage{K,V}"/>
     /// </summary>
-    public class CommittableSourceMessageBuilder<K, V> : CommittableMessageBuilder<K, V>
+    internal class CommittableSourceMessageBuilder<K, V> : CommittableMessageBuilderBase<K, V>
     {
+        private readonly IInternalCommitter _committer;
         private readonly ConsumerSettings<K, V> _settings;
         private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
 
-        public CommittableSourceMessageBuilder(ConsumerSettings<K, V> settings, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        /// <summary>
+        /// CommittableSourceMessageBuilder
+        /// </summary>
+        public CommittableSourceMessageBuilder(IInternalCommitter committer, ConsumerSettings<K, V> settings, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
+            _committer = committer;
             _settings = settings;
             _metadataFromRecord = metadataFromRecord;
         }
 
+        /// <inheritdoc />
+        public override IInternalCommitter Committer => _committer;
+
+        /// <inheritdoc />
         public override string GroupId => _settings.GroupId;
+
+        /// <inheritdoc />
         public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
     }
 }

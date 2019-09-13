@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Stages.Consumers;
@@ -98,7 +99,7 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public Task Commit()
         {
-            return _committer.Commit();
+            return _committer.Commit(ImmutableList.Create(Offset));
         }
     }
 
