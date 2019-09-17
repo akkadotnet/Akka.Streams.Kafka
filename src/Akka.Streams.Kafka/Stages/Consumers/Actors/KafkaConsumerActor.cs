@@ -502,6 +502,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 var watch = Stopwatch.StartNew();
                 _partitionEventHandler.OnAssign(partitions, _restrictedConsumer);
+                watch.Stop();
                 CheckDuration(watch, "onAssign");
                 
                 _actor._rebalanceInProgress = false;
@@ -511,6 +512,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 var watch = Stopwatch.StartNew();
                 _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
+                watch.Stop();
                 CheckDuration(watch, "onRevoke");
                 
                 _actor._commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
@@ -524,12 +526,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 
                 var watch = Stopwatch.StartNew();
                 _partitionEventHandler.OnStop(currentTopicPartitions.ToImmutableHashSet(), _restrictedConsumer);
+                watch.Stop();
                 CheckDuration(watch, "onStop");
             }
 
             private void CheckDuration(Stopwatch watch, string method)
             {
-                watch.Stop();
                 if (watch.Elapsed > _warningDuration)
                 {
                     _actor._log.Warning("Partition assignment handler `{0}` took longer than `partition-handler-warning`: {1} ms", method, watch.ElapsedMilliseconds);
