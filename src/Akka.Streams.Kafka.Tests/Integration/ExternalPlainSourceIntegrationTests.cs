@@ -10,6 +10,8 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.TestKit;
+using Akka.TestKit;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -133,6 +135,55 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             // Make sure source tasks finish accordingly
             AwaitCondition(() => partitionTask1.IsFaulted && partitionTask2.IsFaulted && partitionTask3.IsCompletedSuccessfully);
+            
+            // Cleanup
+            consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
+        }
+
+        [Fact]
+        public async Task ExternalPlainSource_verify_consuming_actor_pause_resume_partitions_works_fine()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+
+            // Create consumer actor
+            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
+            
+            // Send one message per each partition
+            await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 100), ProducerSettings);
+            await ProduceStrings(new TopicPartition(topic, 1), Enumerable.Range(1, 100), ProducerSettings);
+            
+            // Subscribe to partitions
+            var (partitionTask1, probe1) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (partitionTask2, probe2) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            
+            var probes = new[] { probe1, probe2 };
+            
+            // All partitions resumed
+            probes.ForEach(p => p.Request(1));
+            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(1000)));
+
+            await Task.Delay(1000); // All partitions become paused when now demand
+
+            // Make resumed and second paused
+            probe1.Request(1);
+            probe1.ExpectNext(TimeSpan.FromSeconds(1000)); 
+            
+            await Task.Delay(1000); // All partitions become paused when now demand
+            
+            // Make second resumed and first paused
+            probe2.Request(1);
+            probe2.ExpectNext(TimeSpan.FromSeconds(1000)); 
+            
+            await Task.Delay(1000); // All partitions become paused when now demand
+            
+            // All partitions resumed back
+            probes.ForEach(p => p.Request(1));
+            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(1000)));
+            
+            // Stop and check gracefull shutdown
+            probes.ForEach(p => p.Cancel());
+            AwaitCondition(() => partitionTask1.IsCompletedSuccessfully && partitionTask2.IsCompletedSuccessfully);
             
             // Cleanup
             consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);

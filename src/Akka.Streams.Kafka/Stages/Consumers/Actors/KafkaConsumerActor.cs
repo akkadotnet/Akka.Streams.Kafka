@@ -345,6 +345,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var messages = ImmutableList<ConsumeResult<K, V>>.Empty.Add(consumedMessage);
                     stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages));
+                    _requests = _requests.Remove(stageActorRef);
                 }
             }
         }
