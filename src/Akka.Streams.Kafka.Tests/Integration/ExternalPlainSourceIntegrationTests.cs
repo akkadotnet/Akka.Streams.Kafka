@@ -21,52 +21,19 @@ namespace Akka.Streams.Kafka.Tests.Integration
 {
     public class ExternalPlainSourceIntegrationTests : KafkaIntegrationTests
     {
-        private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
-        
-        private readonly KafkaFixture _fixture;
-        private readonly ActorMaterializer _materializer;
-
         public ExternalPlainSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(ExternalPlainSourceIntegrationTests), output)
+            : base(nameof(ExternalPlainSourceIntegrationTests), output, fixture)
         {
-            _fixture = fixture;
-            _materializer = Sys.Materializer();
-        }
-
-        private string Uuid { get; } = Guid.NewGuid().ToString();
-
-        private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
-        private string CreateGroup(int number) => $"group-{number}-{Uuid}";
-
-        private ProducerSettings<Null, string> ProducerSettings
-        {
-            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
-        }
-
-        private ConsumerSettings<Null, TOut> CreateConsumerSettings<TOut>(string group)
-        {
-            return ConsumerSettings<Null, TOut>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
-                .WithProperty("auto.offset.reset", "earliest")
-                .WithGroupId(group);
         }
         
-        private async Task ProduceStrings(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
-        {
-            await Source
-                .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition, Message = new Message<Null, string> { Value = elem.ToString() } })
-                .RunWith(KafkaProducer.PlainSink(producerSettings), _materializer);
-        }
-
-        private Tuple<Task, TestSubscriber.Probe<TOut>> CreateProbe<TOut>(IActorRef consumer, IManualSubscription sub)
+        protected Tuple<Task, TestSubscriber.Probe<TValue>> CreateProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
-                .PlainExternalSource<Null, TOut>(consumer, sub)
+                .PlainExternalSource<Null, TValue>(consumer, sub)
                 .Where(c => !c.Value.Equals(InitialMsg))
                 .Select(c => c.Value)
-                .ToMaterialized(this.SinkProbe<TOut>(), Keep.Both)
-                .Run(_materializer);
+                .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
+                .Run(Materializer);
         }
 
         [Fact]

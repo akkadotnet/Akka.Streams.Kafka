@@ -1,18 +1,87 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Akka.Actor;
 using Akka.Configuration;
+using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.TestKit;
+using Confluent.Kafka;
 using Xunit;
 using Xunit.Abstractions;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests
 {
     [Collection(KafkaSpecsFixture.Name)]
     public class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output) 
+        private readonly KafkaFixture _fixture;
+        protected IMaterializer Materializer { get; }
+
+        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), actorSystemName, output)
         {
+            _fixture = fixture;
+            Materializer = Sys.Materializer();
+            
             Sys.Log.Info("Starting test: " + output.GetCurrentTestName());
+        }
+        
+        private string Uuid { get; } = Guid.NewGuid().ToString();
+        
+        protected const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
+        
+        protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
+        protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
+        
+        protected ProducerSettings<Null, string> ProducerSettings
+        {
+            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+        }
+
+        protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
+        {
+            return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
+                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithGroupId(group);
+        }
+        
+        protected async Task ProduceStrings(string topic, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        {
+            await Source
+                .From(range)
+                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = new TopicPartition(topic, 0), Message = new Message<Null, string> { Value = elem.ToString() } })
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+        
+        protected async Task ProduceStrings(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        {
+            await Source
+                .From(range)
+                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+
+        protected async Task GivenInitializedTopic(string topic)
+        {
+            using (var producer = ProducerSettings.CreateKafkaProducer())
+            {
+                await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
+                producer.Flush(TimeSpan.FromSeconds(1));
+            }
+        }
+        
+        protected async Task GivenInitializedTopic(TopicPartition topicPartition)
+        {
+            using (var producer = ProducerSettings.CreateKafkaProducer())
+            {
+                await producer.ProduceAsync(topicPartition, new Message<Null, string> { Value = InitialMsg });
+                producer.Flush(TimeSpan.FromSeconds(1));
+            }
         }
 
         private static Config Default()

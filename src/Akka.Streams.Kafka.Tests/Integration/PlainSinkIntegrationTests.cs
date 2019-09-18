@@ -18,41 +18,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
 {
     public class PlainSinkIntegrationTests : KafkaIntegrationTests
     {
-        private readonly KafkaFixture _fixture;
-        private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
-        private readonly ActorMaterializer _materializer;
-
-        private string Uuid { get; } = Guid.NewGuid().ToString();
-
-        private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
-        private string CreateGroup(int number) => $"group-{number}-{Uuid}";
-
         public PlainSinkIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(null, output)
+            : base(null, output, fixture)
         {
-            _fixture = fixture;
-            _materializer = Sys.Materializer();
-        }
-
-        private async Task GivenInitializedTopic(string topic)
-        {
-            using (var producer = ProducerSettings.CreateKafkaProducer())
-            {
-                await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
-            }
-        }
-
-        private ProducerSettings<Null, string> ProducerSettings
-        {
-            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
-        }
-
-        private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
-        {
-            return ConsumerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
-                .WithProperty("auto.offset.reset", "earliest")
-                .WithGroupId(group);
         }
 
         [Fact]
@@ -60,12 +28,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
+            var topicPartition1 = new TopicPartition(topic1, 0);
 
-            await GivenInitializedTopic(topic1);
+            await GivenInitializedTopic(topicPartition1);
 
-            var consumerSettings = CreateConsumerSettings(group1);
+            var consumerSettings = CreateConsumerSettings<string>(group1);
             var consumer = consumerSettings.CreateKafkaConsumer();
-            consumer.Assign(new List<TopicPartition> { new TopicPartition(topic1, 0) });
+            consumer.Assign(new List<TopicPartition> { topicPartition1 });
 
             var task = new TaskCompletionSource<NotUsed>();
             int messagesReceived = 0;
@@ -73,8 +42,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
-                .RunWith(KafkaProducer.PlainSink(ProducerSettings), _materializer);
+                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition1, Message = new Message<Null, string> { Value = elem } })
+                .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             var dateTimeStart = DateTime.UtcNow;
 
@@ -113,7 +82,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(c => c.ToString())
                 .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
                 .Via(KafkaProducer.PlainFlow(config))
-                .RunWith(this.SinkProbe<DeliveryReport<Null, string>>(), _materializer);
+                .RunWith(this.SinkProbe<DeliveryReport<Null, string>>(), Materializer);
 
             probe.ExpectSubscription();
             probe.OnError(new KafkaException(ErrorCode.Local_Transport));
