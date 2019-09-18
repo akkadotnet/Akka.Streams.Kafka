@@ -204,6 +204,17 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => Copy(dispatcherId: dispatcherId);
         
         /// <summary>
+        /// Sets key deserializer
+        /// </summary>
+        public ConsumerSettings<TKey, TValue> WithKeyDeserializer(IDeserializer<TKey> keyDeserializer) => Copy(keyDeserializer: keyDeserializer);
+        
+        /// <summary>
+        /// Sets value deserializer
+        /// </summary>
+        public ConsumerSettings<TKey, TValue> WithValueDeserializer(IDeserializer<TValue> valueDeserializer) => Copy(valueDeserializer: valueDeserializer);
+        
+        
+        /// <summary>
         /// Assigned consumer group Id, or null
         /// </summary>
         public string GroupId => Properties.ContainsKey("group.id") ? Properties["group.id"] : null;
