@@ -9,11 +9,6 @@ namespace Akka.Streams.Kafka.Tests
     [Collection(KafkaSpecsFixture.Name)]
     public class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        /// <summary>
-        /// Allows to write logs to file (useful for debugging when tests are running forever and no output in console is available)
-        /// </summary>
-        private static readonly bool UseFileLogging = Environment.GetEnvironmentVariable("AKKA_STREAMS_KAFKA_FILE_LOGGING") != null;
-        
         public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output) 
             : base(Default(), actorSystemName, output)
         {
@@ -27,7 +22,7 @@ namespace Akka.Streams.Kafka.Tests
             
             var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
 
-            if (UseFileLogging)
+            if (TestsConfiguration.UseFileLogging)
             {
                 config = config.WithFallback(
                     ConfigurationFactory.ParseString("akka.loggers = [\"Akka.Streams.Kafka.Tests.Logging.SimpleFileLoggerActor, Akka.Streams.Kafka.Tests\"]"));

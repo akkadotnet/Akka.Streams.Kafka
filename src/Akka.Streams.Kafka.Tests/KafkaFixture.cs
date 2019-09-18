@@ -44,6 +44,11 @@ namespace Akka.Streams.Kafka.Tests
                 throw new NotSupportedException($"Unsupported OS [{RuntimeInformation.OSDescription}]");
 
             _client = config.CreateClient();
+
+            if (TestsConfiguration.UseExistingDockerContainer)
+            {
+                KafkaPort = 29092;
+            }
         }
         
         public int KafkaPort { get; private set; }
@@ -51,6 +56,12 @@ namespace Akka.Streams.Kafka.Tests
 
         public async Task InitializeAsync()
         {
+            if (TestsConfiguration.UseExistingDockerContainer)
+            {
+                // When using existing container, no actions should be performed on startup
+                return;
+            }
+            
             // Load images, if they not exist yet
             await EnsureImageExists(ZookeeperImageName, ZookeeperImageTag);
             await EnsureImageExists(KafkaImageName, KafkaImageTag);
@@ -104,7 +115,11 @@ namespace Akka.Streams.Kafka.Tests
         {
             if (_client != null)
             {
-                await ResourceCleanup();
+                // Shutdown running containers only when we were not using pre-existing container
+                if (!TestsConfiguration.UseExistingDockerContainer)
+                {
+                    await ResourceCleanup();
+                }
                 
                 _client.Dispose();
             }

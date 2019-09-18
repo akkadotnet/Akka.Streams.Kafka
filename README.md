@@ -118,3 +118,27 @@ KafkaConsumer.CommitableSource(consumerSettings, Subscriptions.Topics("topic1"))
 The above example uses separate mapAsync stages for processing and committing. This guarantees that for parallelism higher than 1 we will keep correct ordering of messages sent for commit.
 
 Committing the offset for each message as illustrated above is rather slow. It is recommended to batch the commits for better throughput, with the trade-off that more messages may be re-delivered in case of failures.
+
+## Local development
+
+There are some helpers to simplify local development
+
+### Tests: File logging
+
+Sometimes it is useful to have all logs written to a file in addition to console. 
+
+There is a built-in file logger, that will be added to default Akka.NET loggers if you will set `AKKA_STREAMS_KAFKA_TEST_FILE_LOGGING` environment variable on your local system to any value.
+
+When set, all logs will be written to `logs` subfolder near to your test assembly, one file per test. Here is how log file name is generated:
+
+```C#
+public readonly string LogPath = $"logs\\{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid():N}.txt";
+```
+
+### Tests: kafka container reuse
+
+By default, tests are configured to be friendly to CI - that is, before starting tests docker kafka images will be downloaded (if not yet exist) and containers started, and after all tests finish full cleanup will be performed (except the fact that downloaded docker images will not be removed).
+
+While this might be useful when running tests locally, there are situations when you would like to save startup/shutdown tests time by using some pre-existing container, that will be used for all test runs and will not be stopped/started each time.
+
+To achieve that, set `AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE` environment variable on your local machine to any value. This will force using existing kafka container, listening on port `29092` . Use `docker-compose up` console command in the root of project folder to get this container up and running.
