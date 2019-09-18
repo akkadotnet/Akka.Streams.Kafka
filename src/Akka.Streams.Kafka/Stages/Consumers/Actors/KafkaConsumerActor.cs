@@ -49,6 +49,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private bool _stopInProgress = false;
         private bool _delayedPoolInFlight = false;
         private RebalanceListenerBase _partitionAssignmentHandler = new EmptyRebalanceListener();
+        private IImmutableSet<TopicPartition> _resumedPartitions = ImmutableHashSet<TopicPartition>.Empty;
 
         /// <summary>
         /// While `true`, committing is delayed.
@@ -285,28 +286,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     // no outstanding requests so we don't expect any messages back, but we should anyway
                     // drive the KafkaConsumer by polling to handle partition events etc.
-                    // TODO: Make consumer pause-resume calls work
-                    // _consumer.Pause(currentAssignment);
+                    _consumer.Pause(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
                     {
-                        // TODO: Change this once pause-resume will work
-                        // While we are not pausing partitions, we need to shift position back when accidently consumed message we are not interested in
-                        _consumer.Seek(message.TopicPartitionOffset);
-                        // throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
+                        throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
                     }
                 }
                 else
                 {
                     // resume partitions to fetch
                     IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    /*
-                    // TODO: Make consumer pause-resume calls work
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
                     _consumer.Pause(pauseThese);
-                    _consumer.Resume(resumeThese);
-                    */
+                    _consumer.Resume(resumeThese.Except(_resumedPartitions));
+                    _resumedPartitions = _resumedPartitions.Union(resumeThese);
                     
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
@@ -339,13 +334,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var fetchedTopicPartition = consumedMessage.TopicPartition;
             if (!partitionsToFetch.Contains(fetchedTopicPartition))
             {
-                // TODO: Change this once pause-resume will work
-                // While we are not pausing partitions, we need to shift position back when accidently consumed message we are not interested in
-                _consumer.Seek(consumedMessage.TopicPartitionOffset);
-                /*
                 throw  new ArgumentException($"Unexpected records polled. Expected one of {partitionsToFetch.JoinToString(", ")}," +
                                              $"but consumed result is {consumedMessage.ToJson()}, consumer assignment: {_consumer.Assignment.ToJson()}");
-                */
             }
 
             foreach (var (stageActorRef, request) in _requests.ToTuples())
@@ -495,8 +485,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 var assignment = _actor._consumer.Assignment;
                 var partitionsToPause = partitions.Where(p => assignment.Contains(p));
-                // TODO: Make consumer pause-resume calls work
-                // _actor._consumer.Pause(partitionsToPause);
+                _actor._consumer.Pause(partitionsToPause);
                 
                 _actor._commitRefreshing.AssignedPositions(partitions, _actor._consumer, _actor._settings.PositionTimeout);
                 // TODO: Add warning if IPartinionEventHandler will be public and call takes more then _warningDuration
