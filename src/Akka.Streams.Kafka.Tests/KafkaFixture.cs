@@ -82,6 +82,7 @@ namespace Akka.Streams.Kafka.Tests
             await CreateContainer(KafkaImageName, KafkaImageTag, _kafkaContainerName, KafkaPort, new Dictionary<string, string>()
             {
                 ["KAFKA_BROKER_ID"] = "1",
+                ["KAFKA_NUM_PARTITIONS"] = "3",
                 ["KAFKA_ZOOKEEPER_CONNECT"] = $"{_zookeeperContainerName}:{zookeeperPort}", // referencing zookeeper container directly in common docker network
                 ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://localhost:{KafkaPort}",
                 ["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] = "true",
