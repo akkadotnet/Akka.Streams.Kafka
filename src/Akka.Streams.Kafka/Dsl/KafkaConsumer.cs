@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using Akka.Actor;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
@@ -27,6 +28,15 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<ConsumeResult<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return Source.FromGraph(new PlainSourceStage<K, V>(settings, subscription));
+        }
+
+        /// <summary>
+        /// Special source that can use an external `KafkaAsyncConsumer`. This is useful when you have
+        /// a lot of manually assigned topic-partitions and want to keep only one kafka consumer.
+        /// </summary>
+        public static Source<ConsumeResult<K, V>, Task> PlainExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription)
+        {
+            return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription));
         }
 
         /// <summary>
