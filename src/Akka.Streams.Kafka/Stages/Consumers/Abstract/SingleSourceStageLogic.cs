@@ -61,7 +61,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             var partitionsAssignedHandler = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
 
-            var eventHandler = new AsyncCallbacksPartitionEventHandler(partitionsAssignedHandler, partitionsRevokedHandler);
+            IPartitionEventHandler<K, V> eventHandler = new AsyncCallbacksPartitionEventHandler<K,V>(partitionsAssignedHandler, partitionsRevokedHandler);
+            // This allows to override partition events handling by subclasses
+            eventHandler = AddToPartitionAssignmentHandler(eventHandler);
             
             if (!(Materializer is ActorMaterializer actorMaterializer))
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
@@ -88,6 +90,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             SourceActor.Become(ShuttingDownReceive);
             StopConsumerActor();
+        }
+
+        /// <summary>
+        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
+        /// </summary>
+        protected virtual IPartitionEventHandler<K, V> AddToPartitionAssignmentHandler(IPartitionEventHandler<K, V> handler)
+        {
+            return handler;
         }
 
         private void ShuttingDownReceive(Tuple<IActorRef, object> args)
