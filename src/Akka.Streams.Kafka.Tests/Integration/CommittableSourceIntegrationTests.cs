@@ -71,7 +71,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumerSettings = CreateConsumerSettings<string>(group1);
             var committedElements = new ConcurrentQueue<string>();
 
-            var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+            var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
                 .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, async elem =>
                 {
@@ -86,7 +86,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             foreach (var _ in Enumerable.Range(1, 25))
             {
-                probe1.ExpectNext(Done.Instance, TimeSpan.FromSeconds(10));
+                probe1.ExpectNext(Done.Instance, TimeSpan.FromSeconds(1000));
             }
                 
             probe1.Cancel();

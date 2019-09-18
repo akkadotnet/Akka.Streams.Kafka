@@ -128,25 +128,25 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             // All partitions resumed
             probes.ForEach(p => p.Request(1));
-            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(1000)));
+            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(10)));
 
             await Task.Delay(1000); // All partitions become paused when now demand
 
             // Make resumed and second paused
             probe1.Request(1);
-            probe1.ExpectNext(TimeSpan.FromSeconds(1000)); 
+            probe1.ExpectNext(TimeSpan.FromSeconds(10)); 
             
             await Task.Delay(1000); // All partitions become paused when now demand
             
             // Make second resumed and first paused
             probe2.Request(1);
-            probe2.ExpectNext(TimeSpan.FromSeconds(1000)); 
+            probe2.ExpectNext(TimeSpan.FromSeconds(10)); 
             
             await Task.Delay(1000); // All partitions become paused when now demand
             
             // All partitions resumed back
             probes.ForEach(p => p.Request(1));
-            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(1000)));
+            probes.ForEach(p => p.ExpectNext(TimeSpan.FromSeconds(10)));
             
             // Stop and check gracefull shutdown
             probes.ForEach(p => p.Cancel());
