@@ -286,7 +286,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     // no outstanding requests so we don't expect any messages back, but we should anyway
                     // drive the KafkaConsumer by polling to handle partition events etc.
-                    _consumer.Pause(currentAssignment);
+                    PausePartitions(currentAssignment);
                     var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
                     if (message != null)
                     {
@@ -299,9 +299,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
-                    _consumer.Pause(pauseThese);
-                    _consumer.Resume(resumeThese.Except(_resumedPartitions));
-                    _resumedPartitions = _resumedPartitions.Union(resumeThese);
+                    PausePartitions(pauseThese);
+                    ResumePartitions(resumeThese);
                     
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
@@ -345,7 +344,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var messages = ImmutableList<ConsumeResult<K, V>>.Empty.Add(consumedMessage);
                     stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages));
-                    // _requests = _requests.Remove(stageActorRef);
+                    _requests = _requests.Remove(stageActorRef);
                 }
             }
         }
@@ -433,6 +432,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
+        private void PausePartitions(List<TopicPartition> partitions)
+        {
+            _consumer.Pause(partitions);
+            _resumedPartitions = _resumedPartitions.Except(partitions);
+        }
+
+        private void ResumePartitions(List<TopicPartition> partitions)
+        {
+            var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
+            _consumer.Resume(partitionsToResume);
+            _resumedPartitions = _resumedPartitions.Union(partitionsToResume);
+        }
+
         class Internal
         {
             public class Poll<k, V>
@@ -485,8 +497,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             public override void OnPartitionsAssigned(IImmutableSet<TopicPartition> partitions)
             {
                 var assignment = _actor._consumer.Assignment;
-                var partitionsToPause = partitions.Where(p => assignment.Contains(p));
-                _actor._consumer.Pause(partitionsToPause);
+                var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToList();
+                _actor.PausePartitions(partitionsToPause);
                 
                 _actor._commitRefreshing.AssignedPositions(partitions, _actor._consumer, _actor._settings.PositionTimeout);
 
@@ -512,7 +524,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             public override void PostStop()
             {
                 var currentTopicPartitions = _actor._consumer.Assignment;
-                _actor._consumer.Pause(currentTopicPartitions);
+                _actor.PausePartitions(currentTopicPartitions);
                 
                 var watch = Stopwatch.StartNew();
                 _partitionEventHandler.OnStop(currentTopicPartitions.ToImmutableHashSet(), _restrictedConsumer);
