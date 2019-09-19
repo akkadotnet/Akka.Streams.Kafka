@@ -1,13 +1,19 @@
 using System.Collections.Immutable;
 using System.Threading;
 using Akka.Actor;
+using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 {
-    internal class KafkaConsumerActorMetadata
+    /// <summary>
+    /// Containes metadata for <see cref="KafkaConsumerActor{K,V}"/>.
+    /// Generally this should not be used from outside of the library.
+    /// </summary>
+    [InternalApi]
+    public class KafkaConsumerActorMetadata
     {
         private static volatile int _number = 1;
         /// <summary>
@@ -19,16 +25,27 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
+        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) => 
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new EmptyPartitionEventHandler<K,V>())).WithDispatcher(settings.DispatcherId);
+        
+        /// <summary>
+        /// Gets actor props
+        /// </summary>
+        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
+        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler)).WithDispatcher(settings.DispatcherId);
         
-        internal class Internal
+        /// <summary>
+        /// Contains <see cref="KafkaConsumerActor{K,V}"/>  message definitions.
+        /// Generally this should not be used from outside of the library.
+        /// </summary>
+        [InternalApi]
+        public class Internal
         {
             /// <summary>
             /// Messages
