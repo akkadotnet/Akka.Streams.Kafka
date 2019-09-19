@@ -25,16 +25,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
             : base(nameof(ExternalPlainSourceIntegrationTests), output, fixture)
         {
         }
-        
-        protected Tuple<Task, TestSubscriber.Probe<TValue>> CreateProbe<TValue>(IActorRef consumer, IManualSubscription sub)
-        {
-            return KafkaConsumer
-                .PlainExternalSource<Null, TValue>(consumer, sub)
-                .Where(c => !c.Value.Equals(InitialMsg))
-                .Select(c => c.Value)
-                .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
-                .Run(Materializer);
-        }
 
         [Fact]
         public async Task ExternalPlainSource_with_external_consumer_Should_work()
@@ -47,8 +37,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
             
             //Manually assign topic partition to it
-            var (partitionTask1, probe1) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
             
             // Produce messages to partitions
             await ProduceStrings(new TopicPartition(topic, new Partition(0)), Enumerable.Range(1, elementsCount), ProducerSettings);
@@ -82,9 +72,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(settings));
             
             // Subscribe to partitions
-            var (partitionTask1, probe1) = CreateProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
-            var (partitionTask3, probe3) = CreateProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 2)));
+            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (partitionTask3, probe3) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 2)));
 
             // request from 2 streams
             probe1.Request(1);
@@ -121,8 +111,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await ProduceStrings(new TopicPartition(topic, 1), Enumerable.Range(1, 100), ProducerSettings);
             
             // Subscribe to partitions
-            var (partitionTask1, probe1) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
             
             var probes = new[] { probe1, probe2 };
             
