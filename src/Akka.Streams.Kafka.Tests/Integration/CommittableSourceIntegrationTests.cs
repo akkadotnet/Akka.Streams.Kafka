@@ -86,7 +86,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             foreach (var _ in Enumerable.Range(1, 25))
             {
-                probe1.ExpectNext(Done.Instance, TimeSpan.FromSeconds(1000));
+                probe1.ExpectNext(Done.Instance, TimeSpan.FromSeconds(10));
             }
                 
             probe1.Cancel();
