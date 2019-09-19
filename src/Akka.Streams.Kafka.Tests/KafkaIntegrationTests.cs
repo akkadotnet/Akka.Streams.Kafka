@@ -83,6 +83,16 @@ namespace Akka.Streams.Kafka.Tests
                 producer.Flush(TimeSpan.FromSeconds(1));
             }
         }
+        
+        protected Tuple<Task, TestSubscriber.Probe<TValue>> CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
+        {
+            return KafkaConsumer
+                .PlainExternalSource<Null, TValue>(consumer, sub)
+                .Where(c => !c.Value.Equals(InitialMsg))
+                .Select(c => c.Value)
+                .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
+                .Run(Materializer);
+        }
 
         private static Config Default()
         {
