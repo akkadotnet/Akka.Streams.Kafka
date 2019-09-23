@@ -44,6 +44,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var settings = CreateConsumerSettings<string>(CreateGroup(1));
             var totalMessages = 10;
             var lastMessage = new TaskCompletionSource<Done>();
+            
+            await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
 
             var (task, probe) = KafkaConsumer.AtMostOnceSource(settings, Subscriptions.Topics(topic))
                 .SelectAsync(1, m =>
@@ -55,8 +57,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 })
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
                 .Run(Materializer);
-
-            await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
 
             probe.Request(10);
             
