@@ -50,7 +50,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
         {
-            var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+            var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
             return new CommittableMessage<K, V>(record, new CommittableOffset(Committer, offset, MetadataFromRecord(record)));
         }
     }
@@ -115,7 +115,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
         {
-            var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+            var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
             return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
         }
     }

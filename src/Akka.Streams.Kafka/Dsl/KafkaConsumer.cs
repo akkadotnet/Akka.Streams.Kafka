@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Dsl
         // TODO: Add 'see' tags to this method documentation
         [ApiMayChange]
         public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, Task> SourceWithOffsetContext<K, V>(
-            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
         {
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
                 .AsSourceWithContext(m => m.Item2)
