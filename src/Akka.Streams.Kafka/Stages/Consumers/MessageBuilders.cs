@@ -83,4 +83,40 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
     }
+
+    /// <summary>
+    /// Message builder used by <see cref="SourceWithOffsetContextStage{K,V}"/>
+    /// </summary>
+    internal class OffsetContextBuilder<K, V> : IMessageBuilder<K, V, (ConsumeResult<K, V>, ICommittableOffset)>
+    {
+        /// <summary>
+        /// Method for extracting string metadata from consumed record
+        /// </summary>
+        private readonly Func<ConsumeResult<K, V>, string> _metadataFromMessage;
+        /// <summary>
+        /// Committed object
+        /// </summary>
+        public IInternalCommitter Committer { get; }
+        /// <summary>
+        /// Consumer group Id
+        /// </summary>
+        public string GroupId { get; }
+        
+        /// <summary>
+        /// OffsetContextBuilder
+        /// </summary>
+        public OffsetContextBuilder(IInternalCommitter committer, ConsumerSettings<K, V> setting, Func<ConsumeResult<K, V>, string> metadataFromMessage)
+        {
+            _metadataFromMessage = metadataFromMessage;
+            Committer = committer;
+            GroupId = setting.GroupId;
+        }
+
+        /// <inheritdoc />
+        public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
+        {
+            var offset = new PartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+            return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
+        }
+    }
 }
