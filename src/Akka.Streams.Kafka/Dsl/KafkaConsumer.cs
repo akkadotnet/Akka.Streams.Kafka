@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Annotations;
 using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
@@ -63,7 +64,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// delivered one time but in failure cases could be duplicated.
         ///
         /// It is intended to be used with Akka's [flow with context](https://doc.akka.io/docs/akka/current/stream/operators/Flow/asFlowWithContext.html),
-        /// 'Producer.FlowWithContext' and/or 'Committer.SinkWithOffsetContext'
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
         /// </summary>
         // TODO: Add 'see' tags to this method documentation
         [ApiMayChange]
