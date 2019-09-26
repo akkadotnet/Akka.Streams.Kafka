@@ -77,14 +77,12 @@ namespace Akka.Streams.Kafka.Messages
     internal class CommittableOffset : ICommittableOffsetMetadata
     {
         private readonly IInternalCommitter _committer;
-        
-        /// <summary>
-        /// Offset value
-        /// </summary>
+
+
+        /// <inheritdoc />
         public PartitionOffset Offset { get; }
-        /// <summary>
-        /// Cosumed record metadata
-        /// </summary>
+        
+        /// <inheritdoc />
         public string Metadata { get; }
 
         public CommittableOffset(IInternalCommitter committer, PartitionOffset offset, string metadata)
