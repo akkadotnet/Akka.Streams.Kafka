@@ -44,7 +44,7 @@ namespace Akka.Streams.Kafka.Tests
 
         protected CommitterSettings CommitterSettings
         {
-            get => CommitterSettings.Create(Sys).WithMaxBatch(1).WithMaxInterval(TimeSpan.FromSeconds(1)).WithParallelism(1);
+            get => CommitterSettings.Create(Sys);
         }
 
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
