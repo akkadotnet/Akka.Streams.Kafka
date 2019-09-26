@@ -66,7 +66,6 @@ namespace Akka.Streams.Kafka.Dsl
         /// It is intended to be used with Akka's [flow with context](https://doc.akka.io/docs/akka/current/stream/operators/Flow/asFlowWithContext.html),
         /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
         /// </summary>
-        // TODO: Add 'see' tags to this method documentation
         [ApiMayChange]
         public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, Task> SourceWithOffsetContext<K, V>(
             ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
