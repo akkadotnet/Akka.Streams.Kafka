@@ -8,11 +8,17 @@ using Akka.Streams.Kafka.Stages.Consumers;
 
 namespace Akka.Streams.Kafka.Messages
 {
+    /// <summary>
+    /// Stores committable offsets batch and allows to commit them with <see cref="Commit"/> method
+    /// </summary>
     internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
     {
+        /// <summary>
+        /// CommittableOffsetBatch
+        /// </summary>
         public CommittableOffsetBatch(IImmutableDictionary<GroupTopicPartition, OffsetAndMetadata> offsetsAndMetadata, 
-            IImmutableDictionary<string, IInternalCommitter> committers, 
-            long batchSize)
+                                      IImmutableDictionary<string, IInternalCommitter> committers, 
+                                      long batchSize)
         {
             OffsetsAndMetadata = offsetsAndMetadata;
             Committers = committers;
@@ -78,6 +84,9 @@ namespace Akka.Streams.Kafka.Messages
             }
         }
 
+        /// <summary>
+        /// Adds offsets from given committable batch to existing ones
+        /// </summary>
         private ICommittableOffsetBatch UpdateWithBatch(ICommittableOffsetBatch committableOffsetBatch)
         {
             if (!(committableOffsetBatch is CommittableOffsetBatch committableOffsetBatchImpl))
@@ -107,6 +116,9 @@ namespace Akka.Streams.Kafka.Messages
             return new CommittableOffsetBatch(newOffsetsAndMetdata, newCommitters, BatchSize + committableOffsetBatchImpl.BatchSize);
         }
 
+        /// <summary>
+        /// Adds committable offset to existing ones
+        /// </summary>
         private ICommittableOffsetBatch UpdateWithOffset(ICommittableOffset committableOffset)
         {
             var partitionOffset = committableOffset.Offset;
