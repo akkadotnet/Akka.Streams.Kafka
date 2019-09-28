@@ -13,7 +13,7 @@ using Confluent.Kafka;
 namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
 {
     /// <summary>
-    /// This stage is used for <see cref="KafkaConsumer.CommittableSource{K,V}"/>
+    /// This stage is used for <see cref="KafkaConsumer.PlainPartitionedSource{K,V}"/>
     /// </summary>
     /// <typeparam name="K">The key type</typeparam>
     /// <typeparam name="V">The value type</typeparam>
