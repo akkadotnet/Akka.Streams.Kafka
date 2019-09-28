@@ -16,5 +16,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Exceptions
         /// </summary>
         /// <param name="message">Message</param>
         public ConsumerFailed(string message) : base(message) { }
+        /// <summary>
+        /// Consumer failed
+        /// </summary>
+        /// <param name="message">Message</param>
+        /// <param name="innerException">Inner exception</param>
+        public ConsumerFailed(string message, Exception innerException) : base(message, innerException) { }
     }
 }

@@ -147,6 +147,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     }
                     return true;
                 
+                case KafkaConsumerActorMetadata.Internal.Seek seek:
+                    seek.Offsets.ForEach(topicPartitionOffset => _consumer.Seek(topicPartitionOffset));
+                    Sender.Tell(Done.Instance);
+                    return true;
+                
                 case KafkaConsumerActorMetadata.Internal.Committed committed:
                     _commitRefreshing.Committed(committed.Offsets);
                     return true;

@@ -51,5 +51,17 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
+
+        /// <summary>
+        /// The `plainPartitionedSource` is a way to track automatic partition assignment from kafka.
+        /// When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding
+        /// source of `ConsumerRecord`s.
+        /// When a topic-partition is revoked, the corresponding source completes.
+        /// </summary>
+        public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), Task> PlainPartitionedSource<K, V>(ConsumerSettings<K, V> settings, 
+                                                                                                                  IAutoSubscription subscription)
+        {
+            return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, null, _ => { }));
+        }
     }
 }

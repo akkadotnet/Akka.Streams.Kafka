@@ -229,6 +229,26 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             /// Stops consuming actor
             /// </summary>
             public class Stop{ }
+
+            /// <summary>
+            /// Seek
+            /// </summary>
+            public class Seek
+            {
+                /// <summary>
+                /// Seek
+                /// </summary>
+                /// <param name="offsets">Offsets to seek</param>
+                public Seek(IImmutableSet<TopicPartitionOffset> offsets)
+                {
+                    Offsets = offsets;
+                }
+
+                /// <summary>
+                /// Offsets to seek
+                /// </summary>
+                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
+            }
         }
     }
 }
