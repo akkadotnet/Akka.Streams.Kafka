@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Collections.Immutable;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Settings;
@@ -7,6 +9,7 @@ using Confluent.Kafka;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
+using Akka.Streams.Util;
 
 namespace Akka.Streams.Kafka.Dsl
 {
@@ -61,7 +64,9 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), Task> PlainPartitionedSource<K, V>(ConsumerSettings<K, V> settings, 
                                                                                                                   IAutoSubscription subscription)
         {
-            return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, null, _ => { }));
+            return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, 
+                                    Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>.None, 
+                                    _ => { }));
         }
     }
 }
