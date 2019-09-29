@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Threading;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Settings;
@@ -50,6 +51,19 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<CommittableMessage<K, V>, Task> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
+        }
+
+        /// <summary>
+        /// Convenience for "at-most once delivery" semantics.
+        /// The offset of each message is committed to Kafka before being emitted downstream.
+        /// </summary>
+        public static Source<ConsumeResult<K, V>, Task> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        {
+            return CommittableSource(settings, subscription).SelectAsync(1, async message =>
+            {
+               await message.CommitableOffset.Commit();
+               return message.Record;
+            });
         }
     }
 }
