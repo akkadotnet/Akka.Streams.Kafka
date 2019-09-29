@@ -61,5 +61,18 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return Source.FromGraph<CommittableMessage<K, V>, Task>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
+
+        /// <summary>
+        /// Convenience for "at-most once delivery" semantics.
+        /// The offset of each message is committed to Kafka before being emitted downstream.
+        /// </summary>
+        public static Source<ConsumeResult<K, V>, Task> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        {
+            return CommittableSource(settings, subscription).SelectAsync(1, async message =>
+            {
+               await message.CommitableOffset.Commit();
+               return message.Record;
+            });
+        }
     }
 }
