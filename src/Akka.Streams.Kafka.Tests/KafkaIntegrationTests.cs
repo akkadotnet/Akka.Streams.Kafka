@@ -16,7 +16,7 @@ using Config = Akka.Configuration.Config;
 namespace Akka.Streams.Kafka.Tests
 {
     [Collection(KafkaSpecsFixture.Name)]
-    public class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
         private readonly KafkaFixture _fixture;
         protected IMaterializer Materializer { get; }
