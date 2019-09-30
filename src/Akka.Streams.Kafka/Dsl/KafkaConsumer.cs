@@ -63,6 +63,15 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord));
         }
+        
+        /// <summary>
+        /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
+        /// </summary>
+        public static Source<CommittableMessage<K, V>, Task> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
+                                                                                       string groupId, TimeSpan commitTimeout)
+        {
+            return Source.FromGraph<CommittableMessage<K, V>, Task>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+        }
 
         /// <summary>
         /// Convenience for "at-most once delivery" semantics.
