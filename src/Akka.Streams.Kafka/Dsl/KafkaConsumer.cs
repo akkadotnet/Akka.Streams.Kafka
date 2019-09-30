@@ -1,5 +1,4 @@
 ﻿using System;
-﻿using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Annotations;
@@ -74,6 +73,15 @@ namespace Akka.Streams.Kafka.Dsl
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
                 .AsSourceWithContext(m => m.Item2)
                 .Select(m => m.Item1);
+        }
+        
+        /// <summary>
+        /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
+        /// </summary>
+        public static Source<CommittableMessage<K, V>, Task> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
+                                                                                       string groupId, TimeSpan commitTimeout)
+        {
+            return Source.FromGraph<CommittableMessage<K, V>, Task>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
 
         /// <summary>

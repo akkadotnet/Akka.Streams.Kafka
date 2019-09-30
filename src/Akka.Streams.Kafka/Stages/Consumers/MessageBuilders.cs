@@ -60,26 +60,24 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// </summary>
     internal class CommittableSourceMessageBuilder<K, V> : CommittableMessageBuilderBase<K, V>
     {
-        private readonly IInternalCommitter _committer;
-        private readonly ConsumerSettings<K, V> _settings;
         private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
+        
+        /// <inheritdoc />
+        public override IInternalCommitter Committer { get; }
+
+        /// <inheritdoc />
+        public override string GroupId { get; }
 
         /// <summary>
         /// CommittableSourceMessageBuilder
         /// </summary>
-        public CommittableSourceMessageBuilder(IInternalCommitter committer, ConsumerSettings<K, V> settings, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        public CommittableSourceMessageBuilder(IInternalCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
-            _committer = committer;
-            _settings = settings;
+            Committer = committer;
+            GroupId = groupId;
             _metadataFromRecord = metadataFromRecord;
         }
-
-        /// <inheritdoc />
-        public override IInternalCommitter Committer => _committer;
-
-        /// <inheritdoc />
-        public override string GroupId => _settings.GroupId;
-
+        
         /// <inheritdoc />
         public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
     }
