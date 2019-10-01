@@ -18,7 +18,7 @@ using Directive = Akka.Streams.Supervision.Directive;
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
-    /// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic"/>
+    /// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic{K,V,TMessage}"/>
     /// </summary>
     /// <typeparam name="K">Key type</typeparam>
     /// <typeparam name="V">Value type</typeparam>
