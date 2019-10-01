@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Annotations;
 using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
@@ -53,6 +55,26 @@ namespace Akka.Streams.Kafka.Dsl
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
 
+        /// <summary>
+        /// API MAY CHANGE
+        ///
+        /// This source emits <see cref="ConsumeResult{TKey,TValue}"/> together with the offset position as flow context, thus makes it possible
+        /// to commit offset positions to Kafka.
+        /// This is useful when "at-least once delivery" is desired, as each message will likely be
+        /// delivered one time but in failure cases could be duplicated.
+        ///
+        /// It is intended to be used with Akka's [flow with context](https://doc.akka.io/docs/akka/current/stream/operators/Flow/asFlowWithContext.html),
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
+        /// </summary>
+        [ApiMayChange]
+        public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, Task> SourceWithOffsetContext<K, V>(
+            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
+        {
+            return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
+                .AsSourceWithContext(m => m.Item2)
+                .Select(m => m.Item1);
+        }
+        
         /// <summary>
         /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
         /// </summary>
