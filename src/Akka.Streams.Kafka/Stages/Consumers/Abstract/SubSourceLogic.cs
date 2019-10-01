@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
@@ -257,6 +259,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private class SubSourceStage<K, V, TMessage> : GraphStage<SourceShape<TMessage>>
         {
+            private readonly TopicPartition _topicPartition;
+            private readonly IActorRef _consumerActor;
+            private readonly Action<(TopicPartition, TaskCompletionSource<Done>)> _subSourceStartedCallback;
+            private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subSourceCancelledCallback;
+            private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
+            private readonly int _actorNumber;
+            
+            public Outlet<TMessage> Out { get; }
             public override SourceShape<TMessage> Shape { get; }
 
             public SubSourceStage(TopicPartition topicPartition, IActorRef consumerActor,
@@ -265,11 +275,111 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                                   IMessageBuilder<K, V, TMessage> messageBuilder,
                                   int actorNumber)
             {
-                // TODO
+                _topicPartition = topicPartition;
+                _consumerActor = consumerActor;
+                _subSourceStartedCallback = subSourceStartedCallback;
+                _subSourceCancelledCallback = subSourceCancelledCallback;
+                _messageBuilder = messageBuilder;
+                _actorNumber = actorNumber;
+                
+                Out = new Outlet<TMessage>("out");
+                Shape = new SourceShape<TMessage>(Out);
             }
             
             
-            protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes) => throw new NotImplementedException();
+            protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
+            {
+                return new SubSourceStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, 
+                                               _subSourceStartedCallback, _subSourceCancelledCallback);
+            }
+            
+            private class SubSourceStageLogic : GraphStageLogic
+            {
+                private readonly SourceShape<TMessage> _shape;
+                private readonly TopicPartition _topicPartition;
+                private readonly IActorRef _consumerActor;
+                private readonly int _actorNumber;
+                private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
+                private readonly Action<(TopicPartition, TaskCompletionSource<Done>)> _subSourceStartedCallback;
+                private KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
+                private bool _requested = false;
+                private StageActor _subSourceActor;
+                private Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
+                
+                public SubSourceStageLogic(SourceShape<TMessage> shape, TopicPartition topicPartition, IActorRef consumerActor,
+                                           int actorNumber, IMessageBuilder<K, V, TMessage> messageBuilder,
+                                           Action<(TopicPartition, TaskCompletionSource<Done>)> subSourceStartedCallback,
+                                           Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback) 
+                    : base(shape)
+                {
+                    _shape = shape;
+                    _topicPartition = topicPartition;
+                    _consumerActor = consumerActor;
+                    _actorNumber = actorNumber;
+                    _messageBuilder = messageBuilder;
+                    _subSourceStartedCallback = subSourceStartedCallback;
+                    _requestMessages = new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
+                    
+                    SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: () =>
+                    {
+                        var firstUnconsumed = _buffer.Count > 0 ? new Option<ConsumeResult<K, V>>(_buffer.Dequeue()) : Option<ConsumeResult<K, V>>.None;
+                        subSourceCancelledCallback((topicPartition, firstUnconsumed));
+                            
+                        CompleteStage();
+                    });
+                }
+
+                public override void PreStart()
+                {
+                    Log.Debug("{0} Starting SubSource for partition {1}", _actorNumber, _topicPartition);
+                    
+                    base.PreStart();
+
+                    _subSourceStartedCallback((_topicPartition, new TaskCompletionSource<Done>()));
+                    _subSourceActor = GetStageActor(args =>
+                    {
+                        var (actor, message) = args;
+
+                        switch (message)
+                        {
+                            case KafkaConsumerActorMetadata.Internal.Messages<K, V> messages:
+                                _requested = false;
+                                
+                                foreach (var consumerMessage in messages.MessagesList)
+                                    _buffer.Enqueue(consumerMessage);
+
+                                Pump();
+                                break;
+                            case Status.Failure failure:
+                                FailStage(failure.Cause);
+                                break;
+                            case Terminated terminated when terminated.ActorRef.Equals(_consumerActor):
+                                FailStage(new ConsumerFailed());
+                                break;
+                        }
+                    });
+                    
+                    _subSourceActor.Watch(_consumerActor);
+                }
+                
+                private void Pump()
+                {
+                    if (IsAvailable(_shape.Outlet))
+                    {
+                        if (_buffer.Count > 0)
+                        {
+                            var message = _buffer.Dequeue();
+                            Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                            Pump();
+                        }
+                        else if (!_requested)
+                        {
+                            _requested = true;
+                            _consumerActor.Tell(_requestMessages, _subSourceActor.Ref);
+                        }
+                    }
+                }
+            }
         }
     }
 }
