@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Dispatch;
+using Akka.Pattern;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
@@ -20,7 +21,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Commit all offsets (of different topics) belonging to the same stage
         /// </summary>
-        Task Commit(ImmutableList<PartitionOffset> offsets);
+        Task Commit(ImmutableList<GroupTopicPartitionOffset> offsets);
+        /// <summary>
+        /// Commit offsets in batch
+        /// </summary>
+        Task Commit(ICommittableOffsetBatch batch);
     }
     
     /// <summary>
@@ -38,10 +43,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
 
-        /// <summary>
-        /// Commits specified offsets
-        /// </summary>
-        public Task Commit(ImmutableList<PartitionOffset> offsets)
+        /// <inheritdoc />
+        public Task Commit(ImmutableList<GroupTopicPartitionOffset> offsets)
         {
             var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset + 1)).ToImmutableHashSet();
 
@@ -59,6 +62,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                         }
                     }
                 });
+        }
+
+        /// <inheritdoc />
+        public async Task Commit(ICommittableOffsetBatch batch)
+        {
+            if (!(batch is CommittableOffsetBatch batchImpl))
+                throw new ArgumentException($"Unknown CommittableOffsetBatch, got {batch.GetType().FullName}, but expected {nameof(CommittableOffsetBatch)}");
+            
+            await Task.WhenAll(batchImpl.OffsetsAndMetadata.GroupBy(o => o.Key.GroupId).Select(group =>
+            {
+                if (!batchImpl.Committers.TryGetValue(group.Key, out var committer))
+                    throw new IllegalStateException($"Unknown committer, got groupId = {group.Key}");
+
+                var offsets = group.Select(offset => new GroupTopicPartitionOffset(offset.Key, offset.Value.Offset)).ToImmutableList();
+                return committer.Commit(offsets);
+            }));
         }
     }
 }
