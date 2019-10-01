@@ -25,19 +25,23 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var topic = CreateTopic(1);
             var settings = CreateConsumerSettings<string>(CreateGroup(1));
-            var messages = Enumerable.Range(1, 10).ToList();
+            var elementCount = 10;
+            var batchSize = 2;
+            var messages = Enumerable.Range(1, elementCount).ToList();
 
             await ProduceStrings(topic, messages, ProducerSettings);
+
+            var committerSettings = CommitterSettings.WithMaxBatch(batchSize);
             
             var (task, probe) = KafkaConsumer.SourceWithOffsetContext(settings, Subscriptions.Topics(topic))
                 .SelectAsync(10, message => Task.FromResult(Done.Instance))
-                .Via(Committer.FlowWithOffsetContext<Done>(CommitterSettings))
+                .Via(Committer.FlowWithOffsetContext<Done>(committerSettings))
                 .AsSource()
                 .ToMaterialized(this.SinkProbe<Tuple<NotUsed, ICommittableOffsetBatch>>(), Keep.Both)
                 .Run(Materializer);
 
             probe.Request(10);
-            var committedBatches = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(10));
+            var committedBatches = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(elementCount / batchSize));
 
             probe.Cancel();
             
