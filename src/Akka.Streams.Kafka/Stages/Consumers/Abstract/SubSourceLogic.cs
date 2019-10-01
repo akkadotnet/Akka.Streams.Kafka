@@ -99,7 +99,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             if (timerKey is CloseRevokedPartitions)
             {
-                Log.Debug("#{} Closing SubSources for revoked partitions: {}", _actorNumber, _partitionsToRevoke.JoinToString(", "));
+                Log.Debug("#{0} Closing SubSources for revoked partitions: {1}", _actorNumber, _partitionsToRevoke.JoinToString(", "));
 
                 _onRevoke(_partitionsToRevoke);
                 _pendingPartitions = _pendingPartitions.Except(_partitionsToRevoke);
@@ -116,7 +116,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             if (Log.IsDebugEnabled && formerlyUnknown.Any())
             {
-                Log.Debug("#{} Assigning new partitions: {}", _actorNumber, formerlyUnknown.JoinToString(", "));
+                Log.Debug("#{0} Assigning new partitions: {1}", _actorNumber, formerlyUnknown.JoinToString(", "));
             }
             
             // make sure re-assigned partitions don't get closed on CloseRevokedPartitions timer
@@ -173,7 +173,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             if (firstUnconsumed.HasValue)
             {
                 var topicPartitionOffset = new TopicPartitionOffset(topicPartition, firstUnconsumed.Value.Offset);
-                Log.Debug("#{} Seeking {} to {} after partition SubSource cancelled", _actorNumber, topicPartition, topicPartitionOffset.Offset);
+                Log.Debug("#{0} Seeking {1} to {2} after partition SubSource cancelled", _actorNumber, topicPartition, topicPartitionOffset.Offset);
                 
                 SeekAndEmitSubSources(formerlyUnknown: ImmutableHashSet<TopicPartition>.Empty, offsets: ImmutableList.Create(topicPartitionOffset).ToImmutableHashSet());
             }
