@@ -59,8 +59,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Run(Materializer);
 
             probe.Request(10);
-            
-            AwaitCondition(() => lastMessage.Task.IsCompletedSuccessfully, TimeSpan.FromSeconds(30));
+
+            await lastMessage.Task;
            
             probe.Cancel();
             
