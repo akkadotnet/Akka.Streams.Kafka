@@ -9,6 +9,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
+using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
@@ -64,6 +65,19 @@ namespace Akka.Streams.Kafka.Tests
                 .From(range)
                 .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+
+        /// <summary>
+        /// Asserts that task will finish successfully until specified timeout.
+        /// Throws task exception if task failes
+        /// </summary>
+        protected async Task AssertCompletesSuccessfullyWithing(TimeSpan timeout, Task task)
+        {
+            var timeoutTask = Task.Delay(timeout);
+
+            await Task.WhenAny(timeoutTask, task);
+
+            task.IsCompletedSuccessfully.Should().Be(true, $"Timeout {timeout} while waitilng task finish successfully");
         }
 
         protected async Task GivenInitializedTopic(string topic)
