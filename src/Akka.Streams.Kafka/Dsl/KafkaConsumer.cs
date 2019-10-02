@@ -56,6 +56,17 @@ namespace Akka.Streams.Kafka.Dsl
         }
 
         /// <summary>
+        /// The <see cref="CommitWithMetadataSource{K,V}"/> makes it possible to add additional metadata (in the form of a string)
+        /// when an offset is committed based on the record. This can be useful (for example) to store information about which
+        /// node made the commit, what time the commit was made, the timestamp of the record etc.
+        /// </summary>
+        public static Source<CommittableMessage<K, V>, Task> CommitWithMetadataSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription,
+                                                                                            Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        {
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord));
+        }
+
+        /// <summary>
         /// API MAY CHANGE
         ///
         /// This source emits <see cref="ConsumeResult{TKey,TValue}"/> together with the offset position as flow context, thus makes it possible

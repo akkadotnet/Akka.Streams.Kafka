@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             result.Result.Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
         }
 
-        [Fact]
+        [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]
         public async Task AtMostOnceSource_Should_work()
         {
             var topic = CreateTopic(1);
@@ -59,8 +59,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Run(Materializer);
 
             probe.Request(10);
-            
-            AwaitCondition(() => lastMessage.Task.IsCompletedSuccessfully, TimeSpan.FromSeconds(30));
+
+            await lastMessage.Task;
            
             probe.Cancel();
             
