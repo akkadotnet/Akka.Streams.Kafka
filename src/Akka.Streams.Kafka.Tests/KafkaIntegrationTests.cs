@@ -51,6 +51,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
                 .WithBootstrapServers(_fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
