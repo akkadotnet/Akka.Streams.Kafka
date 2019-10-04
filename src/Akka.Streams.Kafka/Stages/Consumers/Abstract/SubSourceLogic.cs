@@ -88,6 +88,47 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: PerformShutdown);
         }
 
+        public override void PreStart()
+        {
+            base.PreStart();
+
+            SourceActor = GetStageActor(args =>
+            {
+                switch (args.Item2)
+                {
+                    case Status.Failure failure:
+                        FailStage(failure.Cause);
+                        break;
+                        
+                    case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
+                        FailStage(new ConsumerFailed());
+                        break;
+                }
+            });
+            
+            if (!(Materializer is ActorMaterializer actorMaterializer))
+                throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
+            
+            var eventHandler = new AsyncCallbacksPartitionEventHandler<K, V>(_partitionAssignedCallback, _partitionRevokedCallback);
+            
+            var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
+            ConsumerActor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 
+                                                              $"kafka-consumer-{_actorNumber}");
+            
+            SourceActor.Watch(ConsumerActor);
+
+            switch (_subscription)
+            {
+                case TopicSubscription topicSubscription:
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
+                    break;
+                
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
+                    break;
+            }
+        }
+
         public override void PostStop()
         {
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
@@ -217,7 +258,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _pendingPartitions = _pendingPartitions.Skip(1).ToImmutableHashSet();
                 _partitionsInStartup = _partitionsInStartup.Add(topicPartition);
                 
-                var subSourceStage = new SubSourceStage<K, V, TMessage>(topicPartition, ConsumerActor, _subsourceStartedCallback, _subsourceCancelledCallback, _messageBuilder, _actorNumber);
+                var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(topicPartition, ConsumerActor, _subsourceStartedCallback, 
+                                                                              _subsourceCancelledCallback, _messageBuilder, _actorNumber);
                 var subsource = Source.FromGraph(subSourceStage);
                 
                 Push(_shape.Outlet, (topicPartition, subsource));
@@ -257,22 +299,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Materializer.ScheduleOnce(_settings.StopTimeout, () => ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop()));
         }
 
-        private class SubSourceStage<K, V, TMessage> : GraphStage<SourceShape<TMessage>>
+        private class SubSourceStreamStage<K, V, TMsg> : GraphStage<SourceShape<TMsg>>
         {
             private readonly TopicPartition _topicPartition;
             private readonly IActorRef _consumerActor;
             private readonly Action<(TopicPartition, TaskCompletionSource<Done>)> _subSourceStartedCallback;
             private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subSourceCancelledCallback;
-            private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
+            private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
             private readonly int _actorNumber;
             
-            public Outlet<TMessage> Out { get; }
-            public override SourceShape<TMessage> Shape { get; }
+            public Outlet<TMsg> Out { get; }
+            public override SourceShape<TMsg> Shape { get; }
 
-            public SubSourceStage(TopicPartition topicPartition, IActorRef consumerActor,
+            public SubSourceStreamStage(TopicPartition topicPartition, IActorRef consumerActor,
                                   Action<(TopicPartition, TaskCompletionSource<Done>)> subSourceStartedCallback,
                                   Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback,
-                                  IMessageBuilder<K, V, TMessage> messageBuilder,
+                                  IMessageBuilder<K, V, TMsg> messageBuilder,
                                   int actorNumber)
             {
                 _topicPartition = topicPartition;
@@ -282,32 +324,31 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _messageBuilder = messageBuilder;
                 _actorNumber = actorNumber;
                 
-                Out = new Outlet<TMessage>("out");
-                Shape = new SourceShape<TMessage>(Out);
+                Out = new Outlet<TMsg>("out");
+                Shape = new SourceShape<TMsg>(Out);
             }
-            
             
             protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
             {
-                return new SubSourceStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, 
+                return new SubSourceStreamStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, 
                                                _subSourceStartedCallback, _subSourceCancelledCallback);
             }
             
-            private class SubSourceStageLogic : GraphStageLogic
+            private class SubSourceStreamStageLogic : GraphStageLogic
             {
-                private readonly SourceShape<TMessage> _shape;
+                private readonly SourceShape<TMsg> _shape;
                 private readonly TopicPartition _topicPartition;
                 private readonly IActorRef _consumerActor;
                 private readonly int _actorNumber;
-                private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
+                private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
                 private readonly Action<(TopicPartition, TaskCompletionSource<Done>)> _subSourceStartedCallback;
                 private KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
                 private bool _requested = false;
                 private StageActor _subSourceActor;
                 private Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
                 
-                public SubSourceStageLogic(SourceShape<TMessage> shape, TopicPartition topicPartition, IActorRef consumerActor,
-                                           int actorNumber, IMessageBuilder<K, V, TMessage> messageBuilder,
+                public SubSourceStreamStageLogic(SourceShape<TMsg> shape, TopicPartition topicPartition, IActorRef consumerActor,
+                                           int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder,
                                            Action<(TopicPartition, TaskCompletionSource<Done>)> subSourceStartedCallback,
                                            Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback) 
                     : base(shape)
@@ -324,8 +365,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     {
                         var firstUnconsumed = _buffer.Count > 0 ? new Option<ConsumeResult<K, V>>(_buffer.Dequeue()) : Option<ConsumeResult<K, V>>.None;
                         subSourceCancelledCallback((topicPartition, firstUnconsumed));
-                            
-                        CompleteStage();
                     });
                 }
 
@@ -361,7 +400,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     
                     _subSourceActor.Watch(_consumerActor);
                 }
-                
+
+                public override void PostStop()
+                {
+                    CompleteStage();
+                    
+                    base.PostStop();
+                }
+
                 private void Pump()
                 {
                     if (IsAvailable(_shape.Outlet))

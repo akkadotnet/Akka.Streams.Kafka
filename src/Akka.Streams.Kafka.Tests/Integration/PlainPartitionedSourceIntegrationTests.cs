@@ -25,20 +25,20 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
-            int partitionsCount = 3;
-            int totalMessages = 1000 * 10;
+            var totalMessages = 1000 * 10;
 
-            var consumerConfig = CreateConsumerSettings<string>(group)
-                .WithProperty("metadata.max.age.ms", "100");  // default was 5 * 60 * 1000 (five minutes)
+            var consumerSettings = CreateConsumerSettings<string>(group);
 
-            var (consumeTask, probe) = KafkaConsumer.PlainPartitionedSource(consumerConfig, Subscriptions.Topics(topic))
-                .GroupBy(4, tuple => tuple.Item1)
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
+
+            var (consumeTask, probe) = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+                .GroupBy(3, tuple => tuple.Item1)
                 .SelectAsync(8, async tuple =>
                 {
                     var (topicPartition, source) = tuple;
                     Log.Info($"Sub-source for {topicPartition}");
                     var sourceMessages = await source
-                        .Scan(0, (i, message) => i++)
+                        .Scan(0, (i, message) => i + 1)
                         .Select(i => LogReceivedMessages(topicPartition, i))
                         .RunWith(Sink.Last<long>(), Materializer);
 
@@ -50,36 +50,17 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Scan(0L, (i, subValue) => i + subValue)
                 .ToMaterialized(this.SinkProbe<long>(), Keep.Both)
                 .Run(Materializer);
-
-            var produceTask = Source.From(Enumerable.Range(0, totalMessages))
-                .Select(LogSentMessages)
-                .Select(number =>
-                {
-                    if (number == totalMessages / 2)
-                    {
-                        Log.Warning($"Stopping one Kafka container after {number} messages");
-                        // TODO: Stop one of multiple docker containers in kafka cluster
-                    }
-
-                    return number;
-                })
-                .Select(number => new MessageAndMeta<Null, string>()
-                {
-                    TopicPartition = new TopicPartition(topic, number % partitionsCount), 
-                    Message = new Message<Null, string>() { Value = number.ToString() }
-                })
-                .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
             
-            probe.Request(totalMessages);
-            
-            AwaitCondition(() => produceTask.IsCompletedSuccessfully, TimeSpan.FromSeconds(30));
-            
-            probe.Cancel();
-            foreach (var i in Enumerable.Range(0, totalMessages))
+            AwaitCondition(() =>
             {
-                probe.ExpectNext(i);
-            }
-            
+                Log.Debug("Expecting next number...");
+                var next = probe.RequestNext(TimeSpan.FromSeconds(10));
+                Log.Debug("Got requested number: " + next);
+                return next == totalMessages;
+            }, TimeSpan.FromSeconds(20));
+
+            probe.Cancel();
+
             AwaitCondition(() => consumeTask.IsCompletedSuccessfully);
         }
 
