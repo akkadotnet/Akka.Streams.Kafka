@@ -18,6 +18,6 @@
     <AkkaVersion>1.4.0-beta2</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>15.9.0</TestSdkVersion>
+    <TestSdkVersion>16.3.0</TestSdkVersion>
   </PropertyGroup>
 </Project>
