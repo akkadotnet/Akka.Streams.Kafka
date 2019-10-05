@@ -12,6 +12,7 @@ using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
+using Akka.Streams.Util;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
@@ -54,7 +55,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
-            InternalControl = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback);
+            InternalControl = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback, new Option<Action>(PerformShutdown));
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -126,7 +127,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     break;
                 
                 case Status.Failure failure:
-                    FailStage(failure.Cause);
+                    var exception = failure.Cause;
+                    switch (_decider(failure.Cause))
+                    {
+                        case Directive.Stop:
+                            // Throw
+                            FailStage(exception);
+                            break;
+                        case Directive.Resume:
+                            // keep going
+                            break;
+                        case Directive.Restart:
+                            // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
+                            break;
+                    }
                     break;
                 
                 case Terminated terminated:

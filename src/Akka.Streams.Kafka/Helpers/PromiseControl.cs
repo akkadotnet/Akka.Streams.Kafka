@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
+using Akka.Streams.Util;
 
 namespace Akka.Streams.Kafka.Helpers
 {
@@ -13,18 +14,21 @@ namespace Akka.Streams.Kafka.Helpers
         private readonly SourceShape<TSourceOut> _shape;
         private readonly Action<Outlet<TSourceOut>> _completeStageOutlet;
         private readonly Action<bool> _setStageKeepGoing;
-        
+        private readonly Option<Action> _performShutdown;
+
         private readonly TaskCompletionSource<Done> _shutdownTaskSource = new TaskCompletionSource<Done>();
         private readonly TaskCompletionSource<Done> _stopTaskSource = new TaskCompletionSource<Done>();
         private readonly Action _stopCallback;
         private readonly Action _shutdownCallback;
 
         public PromiseControl(SourceShape<TSourceOut> shape, Action<Outlet<TSourceOut>> completeStageOutlet, 
-                              Action<bool> setStageKeepGoing,  Func<Action, Action> asyncCallbackFactory)
+                              Action<bool> setStageKeepGoing,  Func<Action, Action> asyncCallbackFactory,
+                              Option<Action> performShutdown)
         {
             _shape = shape;
             _completeStageOutlet = completeStageOutlet;
             _setStageKeepGoing = setStageKeepGoing;
+            _performShutdown = performShutdown;
 
             _stopCallback = asyncCallbackFactory(PerformStop);
             _shutdownCallback = asyncCallbackFactory(PerformShutdown);
@@ -45,7 +49,7 @@ namespace Akka.Streams.Kafka.Helpers
         }
 
         /// <inheritdoc />
-        public Task IsShutdown() => _shutdownTaskSource.Task;
+        public Task IsShutdown => _shutdownTaskSource.Task;
 
         /// <inheritdoc />
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
@@ -65,6 +69,8 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         public virtual void PerformShutdown()
         {
+            if (_performShutdown.HasValue)
+                _performShutdown.Value.Invoke();
         }
 
         /// <summary>

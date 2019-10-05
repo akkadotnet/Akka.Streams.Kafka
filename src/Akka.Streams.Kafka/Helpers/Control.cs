@@ -29,7 +29,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// and the underlying <see cref="IConsumer{TKey,TValue}"/> has been closed. Shutdown can be triggered
         /// from downstream cancellation, errors, or <see cref="Shutdown"/>
         /// </summary>
-        Task IsShutdown();
+        Task IsShutdown { get; }
 
         /// <summary>
         /// Stop producing messages from the `Source`, wait for stream completion
@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Helpers
         public Task Shutdown() => Control.Shutdown();
 
         /// <inheritdoc />
-        public Task IsShutdown() => Control.IsShutdown();
+        public Task IsShutdown => Control.IsShutdown;
 
         /// <inheritdoc />
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => Control.DrainAndShutdown(streamCompletion);
@@ -102,7 +102,7 @@ namespace Akka.Streams.Kafka.Helpers
         public Task Shutdown() => Task.FromException(Exception);
 
         /// <inheritdoc />
-        public Task IsShutdown() => Task.FromException(Exception);
+        public Task IsShutdown => Task.FromException(Exception);
 
         /// <inheritdoc />
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
