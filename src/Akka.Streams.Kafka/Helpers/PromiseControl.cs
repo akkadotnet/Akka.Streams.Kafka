@@ -14,7 +14,6 @@ namespace Akka.Streams.Kafka.Helpers
         private readonly SourceShape<TSourceOut> _shape;
         private readonly Action<Outlet<TSourceOut>> _completeStageOutlet;
         private readonly Action<bool> _setStageKeepGoing;
-        private readonly Option<Action> _performShutdown;
 
         private readonly TaskCompletionSource<Done> _shutdownTaskSource = new TaskCompletionSource<Done>();
         private readonly TaskCompletionSource<Done> _stopTaskSource = new TaskCompletionSource<Done>();
@@ -22,13 +21,11 @@ namespace Akka.Streams.Kafka.Helpers
         private readonly Action _shutdownCallback;
 
         public PromiseControl(SourceShape<TSourceOut> shape, Action<Outlet<TSourceOut>> completeStageOutlet, 
-                              Action<bool> setStageKeepGoing,  Func<Action, Action> asyncCallbackFactory,
-                              Option<Action> performShutdown)
+                              Action<bool> setStageKeepGoing,  Func<Action, Action> asyncCallbackFactory)
         {
             _shape = shape;
             _completeStageOutlet = completeStageOutlet;
             _setStageKeepGoing = setStageKeepGoing;
-            _performShutdown = performShutdown;
 
             _stopCallback = asyncCallbackFactory(PerformStop);
             _shutdownCallback = asyncCallbackFactory(PerformShutdown);
@@ -69,8 +66,6 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         public virtual void PerformShutdown()
         {
-            if (_performShutdown.HasValue)
-                _performShutdown.Value.Invoke();
         }
 
         /// <summary>

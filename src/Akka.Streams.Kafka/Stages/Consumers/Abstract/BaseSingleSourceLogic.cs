@@ -20,7 +20,7 @@ using Directive = Akka.Streams.Supervision.Directive;
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
-    /// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic"/>
+    /// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic{K,V,TMessage}"/>
     /// </summary>
     /// <typeparam name="K">Key type</typeparam>
     /// <typeparam name="V">Value type</typeparam>
@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
-            InternalControl = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback, new Option<Action>(PerformShutdown));
+            InternalControl = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -174,5 +174,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         protected abstract void PerformShutdown();
+
+        protected class BaseSingleSourceControl : PromiseControl<TMessage>
+        {
+            private readonly Action _performShutdown;
+
+            public BaseSingleSourceControl(SourceShape<TMessage> shape, Action<Outlet<TMessage>> completeStageOutlet, Action<bool> setStageKeepGoing, 
+                                           Func<Action, Action> asyncCallbackFactory, Action performShutdown) 
+                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory)
+            {
+                _performShutdown = performShutdown;
+            }
+
+            public override void PerformShutdown() => _performShutdown();
+        }
     }
 }
