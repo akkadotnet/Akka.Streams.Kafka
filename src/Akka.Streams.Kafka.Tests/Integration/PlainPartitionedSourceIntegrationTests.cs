@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
@@ -21,7 +22,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainPartitionedSource_Should_not_lose_any_messages_when_Kafka_node_dies()
+        public async Task PlainPartitionedSource_should_work()
         {
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
@@ -29,9 +30,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings<string>(group);
 
-            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
-
-            var (consumeTask, probe) = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+            var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .GroupBy(3, tuple => tuple.Item1)
                 .SelectAsync(8, async tuple =>
                 {
@@ -46,22 +45,20 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     return sourceMessages;
                 })
                 .MergeSubstreams()
-                .As<Source<long, Task>>()
+                .As<Source<long, IControl>>()
                 .Scan(0L, (i, subValue) => i + subValue)
-                .ToMaterialized(this.SinkProbe<long>(), Keep.Both)
+                .ToMaterialized(Sink.Last<long>(), Keep.Both)
+                .MapMaterializedValue(tuple => DrainingControl<long>.Create(tuple.Item1, tuple.Item2))
                 .Run(Materializer);
             
-            AwaitCondition(() =>
-            {
-                Log.Debug("Expecting next number...");
-                var next = probe.RequestNext(TimeSpan.FromSeconds(10));
-                Log.Debug("Got requested number: " + next);
-                return next == totalMessages;
-            }, TimeSpan.FromSeconds(20));
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
-            probe.Cancel();
+            // Give it some time to consume all messages
+            await Task.Delay(5000);
 
-            AwaitCondition(() => consumeTask.IsCompletedSuccessfully);
+            var shutdown = control.DrainAndShutdown();
+            AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
+            shutdown.Result.Should().Be(totalMessages);
         }
 
         private int LogSentMessages(int counter)

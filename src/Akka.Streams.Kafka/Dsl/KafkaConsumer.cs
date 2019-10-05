@@ -21,7 +21,7 @@ namespace Akka.Streams.Kafka.Dsl
     public static class KafkaConsumer
     {
         /// <summary>
-        /// The <see cref="PlainSource{K,V}"/> emits <see cref="ConsumerRecord"/> elements (as received from the underlying 
+        /// The <see cref="PlainSource{K,V}"/> emits <see cref="ConsumeResult{TKey,TValue}"/> elements (as received from the underlying 
         /// <see cref="IConsumer{TKey,TValue}"/>). It has no support for committing offsets to Kafka. It can be used when the
         /// offset is stored externally or with auto-commit (note that auto-commit is by default disabled).
         /// The consumer application doesn't need to use Kafka's built-in offset storage and can store offsets in a store of its own
@@ -63,8 +63,8 @@ namespace Akka.Streams.Kafka.Dsl
         /// source of `ConsumerRecord`s.
         /// When a topic-partition is revoked, the corresponding source completes.
         /// </summary>
-        public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), Task> PlainPartitionedSource<K, V>(ConsumerSettings<K, V> settings, 
-                                                                                                                  IAutoSubscription subscription)
+        public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), IControl> PlainPartitionedSource<K, V>(ConsumerSettings<K, V> settings, 
+                                                                                                                            IAutoSubscription subscription)
         {
             return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, 
                                     Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>.None, 

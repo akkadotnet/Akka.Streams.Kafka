@@ -18,6 +18,6 @@ namespace Akka.Streams.Kafka.Tests
         /// <remarks>
         /// When this option is enabled, use docker-compose to start kafka manually (see docker-compose.yml file in the root folder)
         /// </remarks>
-        public static readonly bool UseExistingDockerContainer = Environment.GetEnvironmentVariable("AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE") != null;
+        public static readonly bool UseExistingDockerContainer = false && Environment.GetEnvironmentVariable("AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE") != null;
     }
 }

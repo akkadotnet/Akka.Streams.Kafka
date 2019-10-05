@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Akka.Event;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Stage;
@@ -50,11 +51,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
             OnRevoke = onRevoke;
         }
 
-        protected override GraphStageLogic Logic(SourceShape<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>)> shape, 
-                                                 TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
+        protected override (GraphStageLogic, IControl) Logic(SourceShape<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>)> shape, 
+                                                             Attributes inheritedAttributes)
         {
-            return new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, _ => new PlainMessageBuilder<K, V>(), 
-                                                                 GetOffsetsOnAssign, OnRevoke, completion);
+            var logic = new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, _ => new PlainMessageBuilder<K, V>(), 
+                                                                      GetOffsetsOnAssign, OnRevoke);
+            return (logic, logic.Control);
         }
     }
 }
