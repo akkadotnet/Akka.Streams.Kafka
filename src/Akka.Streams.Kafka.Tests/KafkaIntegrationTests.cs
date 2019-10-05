@@ -5,6 +5,7 @@ using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
@@ -90,7 +91,7 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
         
-        protected Tuple<Task, TestSubscriber.Probe<TValue>> CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
+        protected Tuple<IControl, TestSubscriber.Probe<TValue>> CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub)
