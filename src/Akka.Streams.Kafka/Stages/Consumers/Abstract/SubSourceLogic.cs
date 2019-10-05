@@ -61,9 +61,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected StageActor SourceActor { get; private set; }
         protected IActorRef ConsumerActor { get; private set; }
         
-        protected SubSourcePromiseControl InternalControl { get; }
-
-        public IControl Control => InternalControl;
+        public PromiseControl<(TopicPartition, Source<TMessage, NotUsed>)> Control { get; }
 
         /// <summary>
         /// SubSourceLogic
@@ -81,7 +79,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _getOffsetsOnAssign = getOffsetsOnAssign;
             _onRevoke = onRevoke;
             
-            InternalControl  = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformStop, PerformShutdown);
+            Control  = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformStop, PerformShutdown);
 
             _updatePendingPartitionsAndEmitSubSourcesCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(UpdatePendingPartitionsAndEmitSubSources);
             _partitionAssignedCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(HandlePartitionsAssigned);
@@ -138,7 +136,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
             
-            InternalControl.OnShutdown();
+            Control.OnShutdown();
             
             base.PostStop();
         }
@@ -281,7 +279,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             Complete(_shape.Outlet);
             
-            InternalControl.OnStop();
+            Control.OnStop();
         }
 
         private void PerformShutdown()
@@ -299,7 +297,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 var (actor, message) = args;
                 if (message is Terminated terminated && terminated.ActorRef.Equals(ConsumerActor))
                 {
-                    InternalControl.OnShutdown();
+                    Control.OnShutdown();
                     CompleteStage();
                 }
             });
@@ -380,8 +378,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 private StageActor _subSourceActor;
                 private Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
 
-                private readonly SubSourceStreamPromiseControl _internalControl;
-                public IControl Control => _internalControl;
+                public PromiseControl<TMsg> Control { get; }
                 
                 public SubSourceStreamStageLogic(SourceShape<TMsg> shape, TopicPartition topicPartition, IActorRef consumerActor,
                                            int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder,
@@ -397,7 +394,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     _subSourceStartedCallback = subSourceStartedCallback;
                     _requestMessages = new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
                     
-                    _internalControl = new SubSourceStreamPromiseControl(shape, Complete, SetKeepGoing, GetAsyncCallback, Log.Debug, actorNumber, topicPartition, CompleteStage);
+                    Control = new SubSourceStreamPromiseControl(shape, Complete, SetKeepGoing, GetAsyncCallback, Log.Debug, actorNumber, topicPartition, CompleteStage);
                     
                     SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: () =>
                     {
@@ -441,7 +438,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                 public override void PostStop()
                 {
-                    _internalControl.OnShutdown();
+                    Control.OnShutdown();
                     
                     base.PostStop();
                 }
