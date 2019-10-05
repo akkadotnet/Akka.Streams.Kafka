@@ -33,7 +33,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var committerSettings = CommitterSettings.WithMaxBatch(batchSize);
             
-            var (task, probe) = KafkaConsumer.SourceWithOffsetContext(settings, Subscriptions.Topics(topic))
+            var (control, probe) = KafkaConsumer.SourceWithOffsetContext(settings, Subscriptions.Topics(topic))
                 .SelectAsync(10, message => Task.FromResult(Done.Instance))
                 .Via(Committer.FlowWithOffsetContext<Done>(committerSettings))
                 .AsSource()
@@ -45,7 +45,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Cancel();
             
-            AwaitCondition(() => task.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
 
             committedBatches.Select(r => r.Item2).Sum(batch => batch.BatchSize).Should().Be(10);
         }

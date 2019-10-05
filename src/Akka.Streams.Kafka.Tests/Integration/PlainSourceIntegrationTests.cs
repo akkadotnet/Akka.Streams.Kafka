@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Tests.Logging;
@@ -28,13 +29,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
     
 
-        private TestSubscriber.Probe<string> CreateProbe(ConsumerSettings<Null, string> consumerSettings, ISubscription sub)
+        private Tuple<IControl, TestSubscriber.Probe<string>> CreateProbe(ConsumerSettings<Null, string> consumerSettings, ISubscription sub)
         {
             return KafkaConsumer
                 .PlainSource(consumerSettings, sub)
                 .Where(c => !c.Value.Equals(InitialMsg))
                 .Select(c => c.Value)
-                .RunWith(this.SinkProbe<string>(), Materializer);
+                .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
+                .Run(Materializer);
         }
 
         [Fact]
@@ -51,7 +53,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
 
-            var probe = CreateProbe(consumerSettings, Subscriptions.Assignment(topicPartition1));
+            var (_, probe) = CreateProbe(consumerSettings, Subscriptions.Assignment(topicPartition1));
             
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
@@ -75,7 +77,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
 
-            var probe = CreateProbe(consumerSettings, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topicPartition1, new Offset(offset))));
+            var (_, probe) = CreateProbe(consumerSettings, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topicPartition1, new Offset(offset))));
 
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(offset, elementsCount - offset).Select(c => c.ToString()))
@@ -98,13 +100,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
 
-            var probe = CreateProbe(consumerSettings, Subscriptions.Topics(topic1));
+            var (control, probe) = CreateProbe(consumerSettings, Subscriptions.Topics(topic1));
 
             probe.Request(elementsCount);
             foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
                 probe.ExpectNext(i, TimeSpan.FromSeconds(10));
 
-            probe.Cancel();
+            var shutdown = control.Shutdown();
+            AwaitCondition(() => shutdown.IsCompleted);
         }
 
         [Fact]
@@ -120,8 +123,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithBootstrapServers("localhost:10092")
                 .WithGroupId(group1);
 
-            var probe = CreateProbe(config, Subscriptions.Assignment(topicPartition1));
-            probe.Request(1).ExpectError().Should().BeOfType<KafkaException>();
+            var (control, probe) = CreateProbe(config, Subscriptions.Assignment(topicPartition1));
+            probe.Request(1);
+            AwaitCondition(() => control.IsShutdown.IsCompleted, TimeSpan.FromSeconds(10));
         }
 
         [Fact]

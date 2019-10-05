@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
@@ -37,10 +38,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         }
 
         /// <inheritdoc />
-        protected override GraphStageLogic Logic(SourceShape<ConsumeResult<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
+        protected override (GraphStageLogic, IControl) Logic(SourceShape<ConsumeResult<K, V>> shape, Attributes inheritedAttributes)
         {
-            return new ExternalSingleSourceLogic<K, V, ConsumeResult<K, V>>(shape, Consumer, Subscription, completion, 
-                                                                            inheritedAttributes, _ => new PlainMessageBuilder<K, V>());
+            var logic = new ExternalSingleSourceLogic<K, V, ConsumeResult<K, V>>(shape, Consumer, Subscription,
+                                                                                 inheritedAttributes, _ => new PlainMessageBuilder<K, V>());
+
+            return (logic, logic.Control);
         }
     }
 }

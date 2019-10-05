@@ -91,7 +91,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 
             probe1.Cancel();
 
-            AwaitCondition(() => task.IsCompletedSuccessfully);
+            AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .Select(_ => _.Record.Value)

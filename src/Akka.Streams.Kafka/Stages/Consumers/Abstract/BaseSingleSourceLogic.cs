@@ -6,11 +6,13 @@ using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Dispatch;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
+using Akka.Streams.Util;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
@@ -26,7 +28,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
     internal abstract class BaseSingleSourceLogic<K, V, TMessage> : GraphStageLogic
     {
         private readonly SourceShape<TMessage> _shape;
-        private readonly TaskCompletionSource<NotUsed> _completion;
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
@@ -34,17 +35,27 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
+
+        /// <summary>
+        /// Implements <see cref="IControl"/> for logic control
+        /// </summary>
+        protected readonly PromiseControl<TMessage> InternalControl;
         
         protected StageActor SourceActor { get; private set; }
         internal IActorRef ConsumerActor { get; private set; }
+
+        /// <summary>
+        /// Implements <see cref="IControl"/> to provide control over executed source
+        /// </summary>
+        public virtual IControl Control => InternalControl;
         
-        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion, Attributes attributes,
+        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, Attributes attributes,
                                         Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
             : base(shape)
         {
             _shape = shape;
-            _completion = completion;
             _messageBuilder = messageBuilderFactory(this);
+            InternalControl = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback, new Option<Action>(PerformShutdown));
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -65,7 +76,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public override void PostStop()
         {
-            OnShutdown();
+            InternalControl.OnShutdown();
             
             base.PostStop();
         }
@@ -79,19 +90,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// This should configure consumer subscription on stage start
         /// </summary>
         protected abstract void ConfigureSubscription();
-
-        /// <summary>
-        /// This is called when stage downstream is finished
-        /// </summary>
-        protected abstract void PerformShutdown();
-
-        /// <summary>
-        /// Makes this logic task finished
-        /// </summary>
-        protected void OnShutdown()
-        {
-            _completion.TrySetResult(NotUsed.Instance);
-        }
 
         /// <summary>
         /// Configures manual subscription
@@ -134,14 +132,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     {
                         case Directive.Stop:
                             // Throw
-                            _completion.TrySetException(exception);
                             FailStage(exception);
                             break;
                         case Directive.Resume:
                             // keep going
                             break;
                         case Directive.Restart:
-                            // keep going
+                            // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
                             break;
                     }
                     break;
@@ -175,5 +172,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
+
+        protected abstract void PerformShutdown();
     }
 }

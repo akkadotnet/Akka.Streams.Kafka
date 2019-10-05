@@ -30,7 +30,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// possible, but when it is, it will make the consumption fully atomic and give "exactly once" semantics that are
         /// stronger than the "at-least once" semantics you get with Kafka's offset commit functionality.
         /// </summary>
-        public static Source<ConsumeResult<K, V>, Task> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        public static Source<ConsumeResult<K, V>, IControl> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return Source.FromGraph(new PlainSourceStage<K, V>(settings, subscription));
         }
@@ -39,7 +39,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// Special source that can use an external `KafkaAsyncConsumer`. This is useful when you have
         /// a lot of manually assigned topic-partitions and want to keep only one kafka consumer.
         /// </summary>
-        public static Source<ConsumeResult<K, V>, Task> PlainExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription)
+        public static Source<ConsumeResult<K, V>, IControl> PlainExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription)
         {
             return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription));
         }
@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// If you need to store offsets in anything other than Kafka, <see cref="PlainSource{K,V}"/> should
         /// be used instead of this API.
         /// </summary>
-        public static Source<CommittableMessage<K, V>, Task> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        public static Source<CommittableMessage<K, V>, IControl> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
@@ -76,7 +76,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// when an offset is committed based on the record. This can be useful (for example) to store information about which
         /// node made the commit, what time the commit was made, the timestamp of the record etc.
         /// </summary>
-        public static Source<CommittableMessage<K, V>, Task> CommitWithMetadataSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription,
+        public static Source<CommittableMessage<K, V>, IControl> CommitWithMetadataSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription,
                                                                                             Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord));
@@ -94,7 +94,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
         /// </summary>
         [ApiMayChange]
-        public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, Task> SourceWithOffsetContext<K, V>(
+        public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, IControl> SourceWithOffsetContext<K, V>(
             ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
         {
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
@@ -105,17 +105,17 @@ namespace Akka.Streams.Kafka.Dsl
         /// <summary>
         /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
         /// </summary>
-        public static Source<CommittableMessage<K, V>, Task> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
+        public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
                                                                                        string groupId, TimeSpan commitTimeout)
         {
-            return Source.FromGraph<CommittableMessage<K, V>, Task>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+            return Source.FromGraph<CommittableMessage<K, V>, IControl>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
 
         /// <summary>
         /// Convenience for "at-most once delivery" semantics.
         /// The offset of each message is committed to Kafka before being emitted downstream.
         /// </summary>
-        public static Source<ConsumeResult<K, V>, Task> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        public static Source<ConsumeResult<K, V>, IControl> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return CommittableSource(settings, subscription).SelectAsync(1, async message =>
             {

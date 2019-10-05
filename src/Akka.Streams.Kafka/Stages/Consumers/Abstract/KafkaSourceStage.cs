@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Stage;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
@@ -12,7 +13,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
     /// <typeparam name="K">Key type</typeparam>
     /// <typeparam name="V">Value type</typeparam>
     /// <typeparam name="TMessage">Stage output messages type</typeparam>
-    public abstract class KafkaSourceStage<K, V, TMessage> : GraphStageWithMaterializedValue<SourceShape<TMessage>, Task>
+    public abstract class KafkaSourceStage<K, V, TMessage> : GraphStageWithMaterializedValue<SourceShape<TMessage>, IControl>
     {
         /// <summary>
         /// Name of the stage
@@ -44,17 +45,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// Provides actual stage logic
         /// </summary>
         /// <param name="shape">Shape of the stage</param>
-        /// <param name="completion">Used to specify stage task completion</param>
         /// <param name="inheritedAttributes">Stage attributes</param>
         /// <returns>Stage logic</returns>
-        protected abstract GraphStageLogic Logic(SourceShape<TMessage> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes);
+        protected abstract (GraphStageLogic, IControl) Logic(SourceShape<TMessage> shape, Attributes inheritedAttributes);
 
         /// <inheritdoc />
-        public override ILogicAndMaterializedValue<Task> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
+        public override ILogicAndMaterializedValue<IControl> CreateLogicAndMaterializedValue(Attributes inheritedAttributes)
         {
-            var completion = new TaskCompletionSource<NotUsed>();
-            var result = Logic(Shape, completion, inheritedAttributes);
-            return new LogicAndMaterializedValue<Task>(result, completion.Task);
+            var (logic, materializedValue) = Logic(Shape, inheritedAttributes);
+            return new LogicAndMaterializedValue<IControl>(logic, materializedValue);
         }
     }
 }

@@ -26,13 +26,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
             
-            var (task, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
+            var (control, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
                 .Select(m => m.Value)
                 .Take(5)
                 .ToMaterialized(Sink.Seq<string>(), Keep.Both)
                 .Run(Materializer);
             
-            AwaitCondition(() => task.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
             
             result.Result.Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
         }
