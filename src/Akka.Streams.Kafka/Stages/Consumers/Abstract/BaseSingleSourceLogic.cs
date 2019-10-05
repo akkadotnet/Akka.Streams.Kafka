@@ -36,18 +36,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
 
-        /// <summary>
-        /// Implements <see cref="IControl"/> for logic control
-        /// </summary>
-        protected readonly PromiseControl<TMessage> InternalControl;
-        
         protected StageActor SourceActor { get; private set; }
         internal IActorRef ConsumerActor { get; private set; }
 
         /// <summary>
         /// Implements <see cref="IControl"/> to provide control over executed source
         /// </summary>
-        public virtual IControl Control => InternalControl;
+        public virtual PromiseControl<TMessage> Control { get; }
         
         protected BaseSingleSourceLogic(SourceShape<TMessage> shape, Attributes attributes,
                                         Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
@@ -55,7 +50,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
-            InternalControl = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
+            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
@@ -76,7 +71,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public override void PostStop()
         {
-            InternalControl.OnShutdown();
+            Control.OnShutdown();
             
             base.PostStop();
         }
