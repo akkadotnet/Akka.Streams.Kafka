@@ -2,7 +2,9 @@
 using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Annotations;
 using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
@@ -69,6 +71,46 @@ namespace Akka.Streams.Kafka.Dsl
                                     _ => { }));
         }
         
+        /// <summary>
+        /// The <see cref="CommitWithMetadataSource{K,V}"/> makes it possible to add additional metadata (in the form of a string)
+        /// when an offset is committed based on the record. This can be useful (for example) to store information about which
+        /// node made the commit, what time the commit was made, the timestamp of the record etc.
+        /// </summary>
+        public static Source<CommittableMessage<K, V>, Task> CommitWithMetadataSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription,
+                                                                                            Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        {
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord));
+        }
+
+        /// <summary>
+        /// API MAY CHANGE
+        ///
+        /// This source emits <see cref="ConsumeResult{TKey,TValue}"/> together with the offset position as flow context, thus makes it possible
+        /// to commit offset positions to Kafka.
+        /// This is useful when "at-least once delivery" is desired, as each message will likely be
+        /// delivered one time but in failure cases could be duplicated.
+        ///
+        /// It is intended to be used with Akka's [flow with context](https://doc.akka.io/docs/akka/current/stream/operators/Flow/asFlowWithContext.html),
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
+        /// </summary>
+        [ApiMayChange]
+        public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, Task> SourceWithOffsetContext<K, V>(
+            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
+        {
+            return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
+                .AsSourceWithContext(m => m.Item2)
+                .Select(m => m.Item1);
+        }
+        
+        /// <summary>
+        /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
+        /// </summary>
+        public static Source<CommittableMessage<K, V>, Task> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
+                                                                                       string groupId, TimeSpan commitTimeout)
+        {
+            return Source.FromGraph<CommittableMessage<K, V>, Task>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+        }
+
         /// <summary>
         /// Convenience for "at-most once delivery" semantics.
         /// The offset of each message is committed to Kafka before being emitted downstream.

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
@@ -65,6 +66,12 @@ namespace Akka.Streams.Kafka.Dsl
             return string.IsNullOrEmpty(settings.DispatcherId)
                 ? flow
                 : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
+        }
+
+        // TODO
+        public static FlowWithContext<IEnvelope<K, V, NotUsed>, C, DeliveryReport<K, V>, C, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings)
+        {
+            throw new NotImplementedException();
         }
     }
 }

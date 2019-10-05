@@ -43,10 +43,16 @@ namespace Akka.Streams.Kafka.Tests
             get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
         }
 
+        protected CommitterSettings CommitterSettings
+        {
+            get => CommitterSettings.Create(Sys);
+        }
+
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
         {
             return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
                 .WithBootstrapServers(_fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
