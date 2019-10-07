@@ -62,7 +62,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = new TopicPartition(topic, 0), Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
