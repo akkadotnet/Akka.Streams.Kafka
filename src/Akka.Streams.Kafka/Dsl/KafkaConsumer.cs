@@ -108,7 +108,7 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
                                                                                        string groupId, TimeSpan commitTimeout)
         {
-            return Source.FromGraph<CommittableMessage<K, V>, IControl>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+            return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
 
         /// <summary>

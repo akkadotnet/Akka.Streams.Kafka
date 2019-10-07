@@ -240,8 +240,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
             else
             {
-                _subSources.SetItem(topicPartition, control);
-                _partitionsInStartup.Remove(topicPartition);
+                _subSources = _subSources.SetItem(topicPartition, control);
+                _partitionsInStartup = _partitionsInStartup.Remove(topicPartition);
             }
         }
 
@@ -373,10 +373,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 private readonly int _actorNumber;
                 private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
                 private readonly Action<(TopicPartition, IControl)> _subSourceStartedCallback;
-                private KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
+                private readonly KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
                 private bool _requested = false;
                 private StageActor _subSourceActor;
-                private Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
+                private readonly Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
 
                 public PromiseControl<TMsg> Control { get; }
                 
@@ -394,7 +394,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     _subSourceStartedCallback = subSourceStartedCallback;
                     _requestMessages = new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
                     
-                    Control = new SubSourceStreamPromiseControl(shape, Complete, SetKeepGoing, GetAsyncCallback, Log.Debug, actorNumber, topicPartition, CompleteStage);
+                    Control = new SubSourceStreamPromiseControl(shape, Complete, SetKeepGoing, GetAsyncCallback, (message, args) => Log.Debug(message, args), 
+                                                                actorNumber, topicPartition, CompleteStage);
                     
                     SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: () =>
                     {

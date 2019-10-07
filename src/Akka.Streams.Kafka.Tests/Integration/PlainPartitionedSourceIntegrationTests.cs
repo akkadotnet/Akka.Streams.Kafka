@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
             // Give it some time to consume all messages
-            await Task.Delay(5000);
+            await Task.Delay(10000);
 
             var shutdown = control.DrainAndShutdown();
             AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
