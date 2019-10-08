@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
@@ -13,9 +13,12 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
+using Akka.Streams.Supervision;
 using Akka.Streams.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
+using Decider = Akka.Streams.Supervision.Decider;
+using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
@@ -40,6 +43,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subsourceCancelledCallback;
         private readonly Action<(TopicPartition, IControl)> _subsourceStartedCallback;
         private readonly Action<ConsumerFailed> _stageFailCallback;
+        private readonly Decider _decider;
         
         /// <summary>
         /// Kafka has notified us that we have these partitions assigned, but we have not created a source for them yet.
@@ -69,7 +73,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         public SubSourceLogic(SourceShape<(TopicPartition, Source<TMessage, NotUsed>)> shape, ConsumerSettings<K, V> settings,
                               IAutoSubscription subscription, Func<SubSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
                               Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>> getOffsetsOnAssign,
-                              Action<IImmutableSet<TopicPartition>> onRevoke) 
+                              Action<IImmutableSet<TopicPartition>> onRevoke, Attributes attributes) 
             : base(shape)
         {
             _shape = shape;
@@ -78,6 +82,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _messageBuilder = messageBuilderFactory(this);
             _getOffsetsOnAssign = getOffsetsOnAssign;
             _onRevoke = onRevoke;
+            
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             Control  = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformStop, PerformShutdown);
 
@@ -100,7 +107,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 switch (args.Item2)
                 {
                     case Status.Failure failure:
-                        FailStage(failure.Cause);
+                        var exception = failure.Cause;
+                        switch (_decider(failure.Cause))
+                        {
+                            case Directive.Stop:
+                                // Throw
+                                FailStage(exception);
+                                break;
+                            case Directive.Resume:
+                                // keep going
+                                break;
+                            case Directive.Restart:
+                                // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
+                                break;
+                        }
                         break;
                         
                     case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
@@ -258,11 +278,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             {
                 var topicPartition = _pendingPartitions.First();
 
-                _pendingPartitions = _pendingPartitions.Skip(1).ToImmutableHashSet();
+                _pendingPartitions = _pendingPartitions.Remove(topicPartition);
                 _partitionsInStartup = _partitionsInStartup.Add(topicPartition);
                 
                 var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(topicPartition, ConsumerActor, _subsourceStartedCallback, 
-                                                                              _subsourceCancelledCallback, _messageBuilder, _actorNumber);
+                                                                              _subsourceCancelledCallback, _messageBuilder, _decider, _actorNumber);
                 var subsource = Source.FromGraph(subSourceStage);
                 
                 Push(_shape.Outlet, (topicPartition, subsource));
@@ -338,6 +358,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subSourceCancelledCallback;
             private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
             private readonly int _actorNumber;
+            private readonly Decider _decider;
             
             public Outlet<TMsg> Out { get; }
             public override SourceShape<TMsg> Shape { get; }
@@ -346,6 +367,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                                   Action<(TopicPartition, IControl)> subSourceStartedCallback,
                                   Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback,
                                   IMessageBuilder<K, V, TMsg> messageBuilder,
+                                  Decider decider,
                                   int actorNumber)
             {
                 _topicPartition = topicPartition;
@@ -353,6 +375,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _subSourceStartedCallback = subSourceStartedCallback;
                 _subSourceCancelledCallback = subSourceCancelledCallback;
                 _messageBuilder = messageBuilder;
+                _decider = decider;
                 _actorNumber = actorNumber;
                 
                 Out = new Outlet<TMsg>("out");
@@ -361,7 +384,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
             {
-                return new SubSourceStreamStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, 
+                return new SubSourceStreamStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, _decider,
                                                _subSourceStartedCallback, _subSourceCancelledCallback);
             }
             
@@ -376,12 +399,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 private readonly KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
                 private bool _requested = false;
                 private StageActor _subSourceActor;
-                private readonly Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
+                private readonly Decider _decider;
+                private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
 
                 public PromiseControl<TMsg> Control { get; }
                 
                 public SubSourceStreamStageLogic(SourceShape<TMsg> shape, TopicPartition topicPartition, IActorRef consumerActor,
-                                           int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder,
+                                           int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder, Decider decider,
                                            Action<(TopicPartition, IControl)> subSourceStartedCallback,
                                            Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback) 
                     : base(shape)
@@ -391,6 +415,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     _consumerActor = consumerActor;
                     _actorNumber = actorNumber;
                     _messageBuilder = messageBuilder;
+                    _decider = decider;
                     _subSourceStartedCallback = subSourceStartedCallback;
                     _requestMessages = new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
                     
@@ -399,8 +424,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     
                     SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: () =>
                     {
-                        var firstUnconsumed = _buffer.Count > 0 ? new Option<ConsumeResult<K, V>>(_buffer.Dequeue()) : Option<ConsumeResult<K, V>>.None;
+                        var firstUnconsumed = _buffer.TryDequeue(out var message) ? new Option<ConsumeResult<K, V>>(message) : Option<ConsumeResult<K, V>>.None;
                         subSourceCancelledCallback((topicPartition, firstUnconsumed));
+                        CompleteStage();
                     });
                 }
 
@@ -426,7 +452,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                                 Pump();
                                 break;
                             case Status.Failure failure:
-                                FailStage(failure.Cause);
+                                var exception = failure.Cause;
+                                switch (_decider(failure.Cause))
+                                {
+                                    case Directive.Stop:
+                                        // Throw
+                                        FailStage(exception);
+                                        break;
+                                    case Directive.Resume:
+                                        // keep going
+                                        break;
+                                    case Directive.Restart:
+                                        // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
+                                        break;
+                                }
                                 break;
                             case Terminated terminated when terminated.ActorRef.Equals(_consumerActor):
                                 FailStage(new ConsumerFailed());
@@ -448,9 +487,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 {
                     if (IsAvailable(_shape.Outlet))
                     {
-                        if (_buffer.Count > 0)
+                        if (_buffer.TryDequeue(out var message))
                         {
-                            var message = _buffer.Dequeue();
                             Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
                             Pump();
                         }

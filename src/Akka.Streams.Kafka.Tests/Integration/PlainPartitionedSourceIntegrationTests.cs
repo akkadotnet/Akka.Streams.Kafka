@@ -170,6 +170,93 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var shutdown = control1.Shutdown();
             AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
         }
+
+        [Fact]
+        public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_is_cancelled()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+            var totalMessages = 100;
+
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
+            
+            var consumedMessagesTask = KafkaConsumer.PlainPartitionedSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
+                .Log(topic, m => $"Consuming topic partition {m.Item1}")
+                .MergeMany(3, tuple =>
+                {
+                    var (topicPartition, source) = tuple;
+                    return source
+                        .MapMaterializedValue(notUsed => new NoopControl())
+                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Value})")
+                        .Take(10);
+                })
+                .Select(m => int.Parse(m.Value))
+                .Log("Merged stream", m => m)
+                .Scan(0, (c, _) => c + 1)
+                .TakeWhile(m => m < totalMessages, inclusive: true)
+                .RunWith(Sink.Last<int>(), Materializer);
+            
+            AwaitCondition(() => consumedMessagesTask.IsCompleted, TimeSpan.FromSeconds(10));
+
+            consumedMessagesTask.Result.Should().Be(totalMessages);
+        }
+
+        [Fact]
+        public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_failes()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+            var totalMessages = 105;
+
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
+
+            var (queue, accumulatorTask) = Source.Queue<long>(8, OverflowStrategy.Backpressure)
+                .Scan(0, (c, _) => c + 1)
+                .TakeWhile(val => val < totalMessages)
+                .ToMaterialized(Sink.Aggregate<int, int>(0, (c, _) => c + 1), Keep.Both)
+                .Run(Materializer);
+            
+            var (killSwitch, consumerCompletion) = KafkaConsumer.PlainPartitionedSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
+                .Log(topic, m => $"Consuming topic partition {m.Item1}")
+                .ViaMaterialized(KillSwitches.Single<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Keep.Both)
+                .ToMaterialized(Sink.ForEach<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(tuple =>
+                {
+                    var (topicPartition, source) = tuple;
+                    source
+                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Value})")
+                        .SelectAsync(1, async message =>
+                        {
+                            await queue.OfferAsync(message.Offset);
+                            var value = int.Parse(message.Value);
+                            
+                            if (value % 10 == 0)
+                            {
+                                Log.Debug("Reached message to fail: {0}", value);
+                                throw new Exception("Stopping subsource");
+                            }
+
+                            return value;
+                        })
+                        .Select(value =>
+                        {
+                            if (value % 10 == 0)
+                            {
+                                Log.Debug("Reached message to fail: {0}", value);
+                                throw new Exception("Stopping subsource");
+                            }
+
+                            return value;
+                        })
+                        .RunWith(Sink.Ignore<int>(), Materializer);
+                }), Keep.Both)
+                .Run(Materializer);
+            
+            AwaitCondition(() => accumulatorTask.IsCompleted, TimeSpan.FromSeconds(10));
+            accumulatorTask.Result.Should().Be(totalMessages);
+            
+            killSwitch.Item2.Shutdown();
+            AwaitCondition(() => consumerCompletion.IsCompleted, TimeSpan.FromSeconds(10));
+        }
         
         private long LogReceivedMessages(TopicPartition tp, int counter)
         {

@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
                                                              Attributes inheritedAttributes)
         {
             var logic = new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, _ => new PlainMessageBuilder<K, V>(), 
-                                                                      GetOffsetsOnAssign, OnRevoke);
+                                                                      GetOffsetsOnAssign, OnRevoke, inheritedAttributes);
             return (logic, logic.Control);
         }
     }
