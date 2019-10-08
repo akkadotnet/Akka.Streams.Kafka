@@ -18,7 +18,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
         }
 
-        [Fact]
+        [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/74")]
         public async Task AtMostOnceSource_Should_stop_consuming_actor_when_used_with_Take()
         {
             var topic = CreateTopic(1);
