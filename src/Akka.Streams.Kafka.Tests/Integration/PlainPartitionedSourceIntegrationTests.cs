@@ -1,12 +1,15 @@
 using System;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -138,6 +141,34 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(Sink.First<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Materializer);
 
             result.Invoking(r => r.Wait()).Should().Throw<KafkaException>();
+        }
+         
+        [Fact]
+        public async Task PlainPartitionedSource_should_be_signalled_about_serialization_errors()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+
+            var settings = CreateConsumerSettings<int>(group).WithValueDeserializer(Deserializers.Int32);
+            
+            var (control1, partitionedProbe) = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics(topic))
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Deciders.StoppingDecider))
+                .ToMaterialized(this.SinkProbe<(TopicPartition, Source<ConsumeResult<Null, int>, NotUsed>)>(), Keep.Both)
+                .Run(Materializer);
+
+            partitionedProbe.Request(3);
+            
+            var subsources = partitionedProbe.Within(TimeSpan.FromSeconds(10), () => partitionedProbe.ExpectNextN(3).Select(t => t.Item2).ToList());
+            var substream = subsources.Aggregate((s1, s2) => s1.Merge(s2)).RunWith(this.SinkProbe<ConsumeResult<Null, int>>(), Materializer);
+
+            substream.Request(1);
+            
+            await ProduceStrings(topic, new int[] { 0 }, ProducerSettings); // Produce "0" string
+            
+            Within(TimeSpan.FromSeconds(10), () => substream.ExpectError().Should().BeOfType<SerializationException>());
+
+            var shutdown = control1.Shutdown();
+            AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
         }
         
         private long LogReceivedMessages(TopicPartition tp, int counter)
