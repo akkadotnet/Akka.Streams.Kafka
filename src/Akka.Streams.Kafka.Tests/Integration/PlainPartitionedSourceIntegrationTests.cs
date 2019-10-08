@@ -97,8 +97,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
             shutdown.Result.Should().BeTrue();
         }
 
-        /* Needs to be finished */
-        /*
         [Fact]
         public async Task PlainPartitionedSource_should_stop_partition_sources_when_stopped()
         {
@@ -110,19 +108,36 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerSettings = CreateConsumerSettings<string>(group).WithStopTimeout(TimeSpan.FromMilliseconds(10));
             var (control, probe) = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
-                .MergeMany<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>), ConsumeResult<Null, string>, IControl>(1, tuple => tuple.Item2)
-                .Select(message => message.Value)
+                .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
+                .Select(message =>
+                {
+                    Log.Debug($"Consumed partition {message.Partition.Value}");
+                    return message.Value;
+                })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
-        }
-        */
 
-        private int LogSentMessages(int counter)
-        {
-            if (counter % 1000 == 0)
-                Log.Info($"Sent {counter} messages so far");
+            probe.Request(totalMessages).Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
+                    
+            var stopped = control.Stop();
+            probe.ExpectComplete();
             
-            return counter;
+            AwaitCondition(() => stopped.IsCompleted, TimeSpan.FromSeconds(10));
+
+            await control.Shutdown();
+            probe.Cancel();
+        }
+
+        [Fact]
+        public async Task PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
+        {
+            var settings = CreateConsumerSettings<string>(CreateGroup(1))
+                .WithBootstrapServers("localhost:1111"); // Bad address
+
+            var result = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics("topic"))
+                .RunWith(Sink.First<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Materializer);
+
+            result.Invoking(r => r.Wait()).Should().Throw<KafkaException>();
         }
         
         private long LogReceivedMessages(TopicPartition tp, int counter)
