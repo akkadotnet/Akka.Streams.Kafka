@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
             
-            var (task, probe) = KafkaConsumer.CommitWithMetadataSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic), MetadataFromMessage)
+            var (control, probe) = KafkaConsumer.CommitWithMetadataSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic), MetadataFromMessage)
                 .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
                 .Run(Materializer);
 
@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Cancel();
             
-            AwaitCondition(() => task.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
         }
     }
 }

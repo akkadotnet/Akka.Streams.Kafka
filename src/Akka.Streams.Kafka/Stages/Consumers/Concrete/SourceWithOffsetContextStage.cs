@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
@@ -46,14 +47,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         }
 
         /// <inheritdoc />
-        protected override GraphStageLogic Logic(
+        protected override (GraphStageLogic, IControl) Logic(
             SourceShape<(ConsumeResult<K, V>, ICommittableOffset)> shape,
-            TaskCompletionSource<NotUsed> completion,
             Attributes inheritedAttributes)
         {
-            return new SingleSourceStageLogic<K, V, (ConsumeResult<K, V>, ICommittableOffset)>(shape, Settings, Subscription, 
-                                                                                               inheritedAttributes, completion, 
-                                                                                               GetMessageBuilder);
+            var logic = new SingleSourceStageLogic<K, V, (ConsumeResult<K, V>, ICommittableOffset)>(shape, Settings, Subscription, 
+                                                                                                    inheritedAttributes, 
+                                                                                                    GetMessageBuilder);
+            return (logic, logic.Control);
         }
         
         private OffsetContextBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, (ConsumeResult<K, V>, ICommittableOffset)> logic)
