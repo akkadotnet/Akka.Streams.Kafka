@@ -78,7 +78,7 @@ namespace Akka.Streams.Kafka.Tests
         /// Asserts that task will finish successfully until specified timeout.
         /// Throws task exception if task failes
         /// </summary>
-        protected async Task AssertCompletesSuccessfullyWithing(TimeSpan timeout, Task task)
+        protected async Task AssertCompletesSuccessfullyWithin(TimeSpan timeout, Task task)
         {
             var timeoutTask = Task.Delay(timeout);
 
