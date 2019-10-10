@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Akka.Streams" Version="$(AkkaVersion)" />
-    <PackageReference Include="Confluent.Kafka" Version="1.2.0" />
+    <PackageReference Include="Confluent.Kafka" Version="1.2.1" />
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 
