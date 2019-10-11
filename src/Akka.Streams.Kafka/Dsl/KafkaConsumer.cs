@@ -121,7 +121,7 @@ namespace Akka.Streams.Kafka.Dsl
         }
 
         /// <summary>
-        /// Convenience for "at-most once delivery" semantics.
+        /// Convenience for "at-most once delivery" semantics. 
         /// The offset of each message is committed to Kafka before being emitted downstream.
         /// </summary>
         public static Source<ConsumeResult<K, V>, IControl> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
