@@ -60,6 +60,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
                                                                       getOffsetsOnAssign: GetOffsetsOnAssign, 
                                                                       onRevoke: OnRevoke, 
                                                                       attributes: inheritedAttributes);
+
             return (logic, logic.Control);
         }
     }
