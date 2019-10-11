@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Annotations;
@@ -10,6 +11,7 @@ using Confluent.Kafka;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
+using Akka.Streams.Util;
 
 namespace Akka.Streams.Kafka.Dsl
 {
@@ -19,7 +21,7 @@ namespace Akka.Streams.Kafka.Dsl
     public static class KafkaConsumer
     {
         /// <summary>
-        /// The <see cref="PlainSource{K,V}"/> emits <see cref="ConsumerRecord"/> elements (as received from the underlying 
+        /// The <see cref="PlainSource{K,V}"/> emits <see cref="ConsumeResult{TKey,TValue}"/> elements (as received from the underlying 
         /// <see cref="IConsumer{TKey,TValue}"/>). It has no support for committing offsets to Kafka. It can be used when the
         /// offset is stored externally or with auto-commit (note that auto-commit is by default disabled).
         /// The consumer application doesn't need to use Kafka's built-in offset storage and can store offsets in a store of its own
@@ -55,6 +57,20 @@ namespace Akka.Streams.Kafka.Dsl
             return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
         }
 
+        /// <summary>
+        /// The `plainPartitionedSource` is a way to track automatic partition assignment from kafka.
+        /// When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding
+        /// source of `ConsumerRecord`s.
+        /// When a topic-partition is revoked, the corresponding source completes.
+        /// </summary>
+        public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), IControl> PlainPartitionedSource<K, V>(ConsumerSettings<K, V> settings, 
+                                                                                                                            IAutoSubscription subscription)
+        {
+            return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, 
+                                    Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>.None, 
+                                    _ => { }));
+        }
+        
         /// <summary>
         /// The <see cref="CommitWithMetadataSource{K,V}"/> makes it possible to add additional metadata (in the form of a string)
         /// when an offset is committed based on the record. This can be useful (for example) to store information about which
@@ -92,7 +108,7 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
                                                                                        string groupId, TimeSpan commitTimeout)
         {
-            return Source.FromGraph<CommittableMessage<K, V>, IControl>(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+            return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
 
         /// <summary>

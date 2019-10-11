@@ -78,7 +78,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// and shut down the consumer `Source` so that all consumed messages
         /// reach the end of the stream.
         /// </summary>
-        public Task<T> DrainAndShutdown(Task<T> streamCompletion) => Control.DrainAndShutdownDefault(StreamCompletion);
+        public Task<T> DrainAndShutdown() => Control.DrainAndShutdown(StreamCompletion);
         
         /// <summary>
         /// Combine control and a stream completion signal materialized values into
