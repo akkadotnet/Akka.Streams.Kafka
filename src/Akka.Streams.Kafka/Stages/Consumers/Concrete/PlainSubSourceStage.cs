@@ -51,11 +51,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
             OnRevoke = onRevoke;
         }
 
+        /// <inheritdoc />
         protected override (GraphStageLogic, IControl) Logic(SourceShape<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>)> shape, 
                                                              Attributes inheritedAttributes)
         {
-            var logic = new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, _ => new PlainMessageBuilder<K, V>(), 
-                                                                      GetOffsetsOnAssign, OnRevoke, inheritedAttributes);
+            var logic = new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, 
+                                                                      messageBuilderFactory: _ => new PlainMessageBuilder<K, V>(), 
+                                                                      getOffsetsOnAssign: GetOffsetsOnAssign, 
+                                                                      onRevoke: OnRevoke, 
+                                                                      attributes: inheritedAttributes);
             return (logic, logic.Control);
         }
     }
