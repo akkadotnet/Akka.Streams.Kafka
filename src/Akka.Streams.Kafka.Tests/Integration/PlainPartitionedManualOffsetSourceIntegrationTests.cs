@@ -7,6 +7,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
+using Akka.Streams.Util;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -76,6 +77,42 @@ namespace Akka.Streams.Kafka.Tests.Integration
             messages.ToHashSet().Count.Should().Be(99); // All consumed messages should be different (only one value is missing)
             
             probe.Cancel();
+        }
+        
+        [Fact]
+        public async Task PlainPartitionedManualOffsetSource_Should_call_the_OnRevoke_hook()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+            var consumerSettings = CreateConsumerSettings<string>(group);
+
+            var partitionsAssigned = false;
+            var revoked = Option<IImmutableSet<TopicPartition>>.None;
+            
+            var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, Subscriptions.Topics(topic),
+                assignedPartitions =>
+                {
+                    partitionsAssigned = true;
+                    return Task.FromResult(ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>);
+                },
+                revokedPartitions =>
+                {
+                    revoked = new Option<IImmutableSet<TopicPartition>>(revokedPartitions);
+                })
+                .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
+                .Select(m => m.Value);
+            
+            var (control1, firstConsumer) = source.ToMaterialized(this.SinkProbe<string>(), Keep.Both).Run(Materializer);
+            
+            AwaitCondition(() => partitionsAssigned, TimeSpan.FromSeconds(10), "First consumer should get asked for offsets");
+
+            var secondConsumer = source.RunWith(this.SinkProbe<string>(), Materializer);
+            
+            AwaitCondition(() => revoked.Value?.Count > 0, TimeSpan.FromSeconds(10));
+
+            firstConsumer.Cancel();
+            secondConsumer.Cancel();
+            AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
         }
     }
 }
