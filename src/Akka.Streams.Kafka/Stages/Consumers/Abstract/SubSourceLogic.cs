@@ -63,7 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         
 
         protected StageActor SourceActor { get; private set; }
-        protected IActorRef ConsumerActor { get; private set; }
+        public IActorRef ConsumerActor { get; private set; }
         
         public PromiseControl<(TopicPartition, Source<TMessage, NotUsed>)> Control { get; }
 

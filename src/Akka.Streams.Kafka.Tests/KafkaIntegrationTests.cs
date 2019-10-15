@@ -66,6 +66,14 @@ namespace Akka.Streams.Kafka.Tests
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
+        protected async Task ProduceStrings(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        {
+            await Source
+                .From(range)
+                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = partitionSelector(elem), Message = new Message<Null, string> { Value = elem.ToString() } })
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+        
         protected async Task ProduceStrings(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
         {
             await Source
