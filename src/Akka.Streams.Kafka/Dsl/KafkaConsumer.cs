@@ -132,5 +132,28 @@ namespace Akka.Streams.Kafka.Dsl
                return message.Record;
             });
         }
+
+        /// <summary>
+        /// The <see cref="PlainPartitionedManualOffsetSource{K,V}"/> is similar to <see cref="PlainPartitionedSource{K,V}"/>
+        /// but allows the use of an offset store outside of Kafka, while retaining the automatic partition assignment.
+        /// When a topic-partition is assigned to a consumer, the <see cref="getOffsetsOnAssign"/>
+        /// function will be called to retrieve the offset, followed by a seek to the correct spot in the partition.
+        ///
+        /// The <see cref="onRevoke"/> function gives the consumer a chance to store any uncommitted offsets, and do any other cleanup
+        /// that is required. Also allows the user access to the `onPartitionsRevoked` hook, useful for cleaning up any
+        /// partition-specific resources being used by the consumer.
+        /// </summary>
+        public static Source<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>), IControl> PlainPartitionedManualOffsetSource<K, V>(
+            ConsumerSettings<K, V> settings, 
+            IAutoSubscription subscription, 
+            Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>> getOffsetsOnAssign,
+            Action<IImmutableSet<TopicPartition>> onRevoke)
+        {
+            return Source.FromGraph(new PlainSubSourceStage<K, V>(
+                settings, 
+                subscription, 
+                new Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>(getOffsetsOnAssign), 
+                onRevoke));
+        }
     }
 }
