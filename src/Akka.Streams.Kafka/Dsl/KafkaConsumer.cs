@@ -106,13 +106,22 @@ namespace Akka.Streams.Kafka.Dsl
         /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
         /// </summary>
         public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
-                                                                                       string groupId, TimeSpan commitTimeout)
+                                                                                                 string groupId, TimeSpan commitTimeout)
         {
             return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
         }
 
         /// <summary>
-        /// Convenience for "at-most once delivery" semantics.
+        /// The same as <see cref="PlainPartitionedSource{K,V}"/> but with offset commit support.
+        /// </summary>
+        public static Source<(TopicPartition, Source<CommittableMessage<K, V>, NotUsed>), IControl> CommittablePartitionedSource<K, V>(
+                ConsumerSettings<K, V> settings, IAutoSubscription subscription)
+        {
+            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription));
+        }
+
+        /// <summary>
+        /// Convenience for "at-most once delivery" semantics. 
         /// The offset of each message is committed to Kafka before being emitted downstream.
         /// </summary>
         public static Source<ConsumeResult<K, V>, IControl> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
