@@ -211,6 +211,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             try
             {
+                // Without this delay kafka does not allow to perform seek operation (gives Local: Erroneous state error)
+                await Task.Delay(50);
+                
                 await ConsumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Seek(offsets), TimeSpan.FromSeconds(10));
                 
                 _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
