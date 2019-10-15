@@ -132,5 +132,14 @@ namespace Akka.Streams.Kafka.Dsl
                return message.Record;
             });
         }
+
+        /// <summary>
+        /// The same as <see cref="PlainPartitionedSource{K,V}"/> but with offset commit with metadata support.
+        /// </summary>
+        public static Source<(TopicPartition, Source<CommittableMessage<K, V>, NotUsed>), IControl> CommitWithMetadataPartitionedSource<K, V>(
+            ConsumerSettings<K, V> settings, IAutoSubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        {
+            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription, metadataFromRecord));
+        }
     }
 }
