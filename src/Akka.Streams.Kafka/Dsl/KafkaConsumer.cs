@@ -134,6 +134,14 @@ namespace Akka.Streams.Kafka.Dsl
         }
 
         /// <summary>
+        /// The same as <see cref="PlainPartitionedSource{K,V}"/> but with offset commit with metadata support.
+        /// </summary>
+        public static Source<(TopicPartition, Source<CommittableMessage<K, V>, NotUsed>), IControl> CommitWithMetadataPartitionedSource<K, V>(
+            ConsumerSettings<K, V> settings, IAutoSubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        {
+            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription, metadataFromRecord));
+        }
+
         /// The <see cref="PlainPartitionedManualOffsetSource{K,V}"/> is similar to <see cref="PlainPartitionedSource{K,V}"/>
         /// but allows the use of an offset store outside of Kafka, while retaining the automatic partition assignment.
         /// When a topic-partition is assigned to a consumer, the <see cref="getOffsetsOnAssign"/>
