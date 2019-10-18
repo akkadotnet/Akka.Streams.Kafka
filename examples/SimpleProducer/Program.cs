@@ -31,8 +31,8 @@ namespace SimpleProducer
             Source
                 .Cycle(() => Enumerable.Range(1, 100).GetEnumerator())
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = "akka100", Message = new Message<Null, string> { Value = elem }})
-                .Via(KafkaProducer.PlainFlow(producerSettings))
+                .Select(elem => new ProducerRecord<Null, string> { Topic = "akka100", Message = new Message<Null, string> { Value = elem }})
+                .Via(KafkaProducer.FlexiFlow(producerSettings))
                 .Select(record =>
                 {
                     Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {record.Offset}: {record.Value}");

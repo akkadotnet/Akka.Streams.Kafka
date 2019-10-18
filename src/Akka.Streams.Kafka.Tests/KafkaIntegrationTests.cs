@@ -62,7 +62,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(topic, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = partitionSelector(elem), Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(partitionSelector(elem), elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
@@ -78,7 +78,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
 

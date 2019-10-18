@@ -10,7 +10,8 @@ namespace Akka.Streams.Kafka.Settings
     public sealed class ProducerSettings<TKey, TValue>
     {
         public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, 
-                                string dispatcherId, TimeSpan flushTimeout, IImmutableDictionary<string, string> properties)
+                                string dispatcherId, TimeSpan flushTimeout,
+                                IImmutableDictionary<string, string> properties)
         {
             KeySerializer = keySerializer;
             ValueSerializer = valueSerializer;

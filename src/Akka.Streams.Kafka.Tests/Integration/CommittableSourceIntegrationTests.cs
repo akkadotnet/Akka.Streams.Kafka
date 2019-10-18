@@ -35,7 +35,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Source
                 .From(Enumerable.Range(1, elementsCount))
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition1, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition1, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
@@ -65,7 +65,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Source
                 .From(Enumerable.Range(1, 100))
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition1, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition1, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
@@ -103,7 +103,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             // some concurrent publish
             await Source
                 .From(Enumerable.Range(101, 100))
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition1, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition1, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             probe2.Request(100);
