@@ -37,8 +37,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
             
             //Manually assign topic partition to it
-            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (control1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (control2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
             
             // Produce messages to partitions
             await ProduceStrings(new TopicPartition(topic, new Partition(0)), Enumerable.Range(1, elementsCount), ProducerSettings);
@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe2.Cancel();
             
             // Make sure stages are stopped gracefully
-            AwaitCondition(() => partitionTask1.IsCompletedSuccessfully && partitionTask2.IsCompletedSuccessfully);
+            AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully && control2.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
             consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
@@ -72,9 +72,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(settings));
             
             // Subscribe to partitions
-            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
-            var (partitionTask3, probe3) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 2)));
+            var (control1, probe1) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (control2, probe2) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (control3, probe3) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 2)));
 
             // request from 2 streams
             probe1.Request(1);
@@ -91,7 +91,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe3.Cancel();
             
             // Make sure source tasks finish accordingly
-            AwaitCondition(() => partitionTask1.IsFaulted && partitionTask2.IsFaulted && partitionTask3.IsCompletedSuccessfully);
+            AwaitCondition(() => control1.IsShutdown.IsCompleted && control2.IsShutdown.IsCompleted && control3.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
             consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
@@ -111,8 +111,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await ProduceStrings(new TopicPartition(topic, 1), Enumerable.Range(1, 100), ProducerSettings);
             
             // Subscribe to partitions
-            var (partitionTask1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
-            var (partitionTask2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
+            var (control1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
+            var (control2, probe2) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 1)));
             
             var probes = new[] { probe1, probe2 };
             
@@ -140,7 +140,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             // Stop and check gracefull shutdown
             probes.ForEach(p => p.Cancel());
-            AwaitCondition(() => partitionTask1.IsCompletedSuccessfully && partitionTask2.IsCompletedSuccessfully);
+            AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully && control2.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
             consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);

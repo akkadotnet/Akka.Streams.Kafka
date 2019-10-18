@@ -5,6 +5,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
+using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -24,15 +25,15 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
 
-            await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
+            await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
             
-            var (task, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
+            var (control, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
                 .Select(m => m.Value)
                 .Take(5)
                 .ToMaterialized(Sink.Seq<string>(), Keep.Both)
                 .Run(Materializer);
             
-            AwaitCondition(() => task.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
             
             result.Result.Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
         }

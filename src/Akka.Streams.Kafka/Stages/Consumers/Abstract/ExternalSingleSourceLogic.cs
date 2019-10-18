@@ -18,9 +18,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IManualSubscription _subscription;
 
         public ExternalSingleSourceLogic(SourceShape<TMessage> shape, IActorRef consumerActor, IManualSubscription subscription,
-                                         TaskCompletionSource<NotUsed> completion, Attributes attributes, 
+                                         Attributes attributes, 
                                          Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, completion, attributes, messageBuilderFactory)
+            : base(shape, attributes, messageBuilderFactory)
         {
             _consumerActor = consumerActor;
             _subscription = subscription;

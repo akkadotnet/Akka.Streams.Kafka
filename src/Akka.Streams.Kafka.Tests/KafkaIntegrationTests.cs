@@ -5,10 +5,12 @@ using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
+using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
@@ -60,7 +62,15 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = new TopicPartition(topic, 0), Message = new Message<Null, string> { Value = elem.ToString() } })
+                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic, Message = new Message<Null, string> { Value = elem.ToString() } })
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+        
+        protected async Task ProduceStrings(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        {
+            await Source
+                .From(range)
+                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = partitionSelector(elem), Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
@@ -70,6 +80,19 @@ namespace Akka.Streams.Kafka.Tests
                 .From(range)
                 .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition, Message = new Message<Null, string> { Value = elem.ToString() } })
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+        }
+
+        /// <summary>
+        /// Asserts that task will finish successfully until specified timeout.
+        /// Throws task exception if task failes
+        /// </summary>
+        protected async Task AssertCompletesSuccessfullyWithin(TimeSpan timeout, Task task)
+        {
+            var timeoutTask = Task.Delay(timeout);
+
+            await Task.WhenAny(timeoutTask, task);
+
+            task.IsCompletedSuccessfully.Should().Be(true, $"Timeout {timeout} while waitilng task finish successfully");
         }
 
         protected async Task GivenInitializedTopic(string topic)
@@ -90,7 +113,7 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
         
-        protected Tuple<Task, TestSubscriber.Probe<TValue>> CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
+        protected Tuple<IControl, TestSubscriber.Probe<TValue>> CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub)

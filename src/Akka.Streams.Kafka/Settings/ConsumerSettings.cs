@@ -51,6 +51,7 @@ namespace Akka.Streams.Kafka.Settings
                 commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", TimeSpan.Zero, allowInfinite: true),
                 stopTimeout: config.GetTimeSpan("stop-timeout", TimeSpan.FromSeconds(30)),
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
+                waitClosePartition: config.GetTimeSpan("wait-close-partition", TimeSpan.FromSeconds(1)),
                 bufferSize: config.GetInt("buffer-size", 50),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 properties: ImmutableDictionary<string, string>.Empty);
@@ -81,6 +82,10 @@ namespace Akka.Streams.Kafka.Settings
         /// When partition assigned events handling takes more then this timeout, the warning will be logged
         /// </summary>
         public TimeSpan PartitionHandlerWarning { get; }
+        /// <summary>
+        /// Time to wait for pending requests when a partition is closed.
+        /// </summary>
+        public TimeSpan WaitClosePartition { get; }
         /// <summary>
         /// When offset committing takes more then this timeout, the warning will be logged
         /// </summary>
@@ -116,6 +121,7 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, 
                                 TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout, 
                                 TimeSpan positionTimeout, TimeSpan commitTimeWarning, TimeSpan partitionHandlerWarning,
+                                TimeSpan waitClosePartition,
                                 int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
         {
             KeyDeserializer = keyDeserializer;
@@ -131,6 +137,7 @@ namespace Akka.Streams.Kafka.Settings
             BufferSize = bufferSize;
             DispatcherId = dispatcherId;
             Properties = properties;
+            WaitClosePartition = waitClosePartition;
         }
 
         /// <summary>
@@ -177,6 +184,10 @@ namespace Akka.Streams.Kafka.Settings
         /// When partition assigned events handling takes more then this timeout, the warning will be logged
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithPartitionHandlerWarning(TimeSpan partitionHandlerWarning) => Copy(partitionHandlerWarning: partitionHandlerWarning);
+        /// <summary>
+        /// Time to wait for pending requests when a partition is closed.
+        /// </summary>
+        public ConsumerSettings<TKey, TValue> WithWaitClosePartition(TimeSpan waitClosePartition) => Copy(waitClosePartition: waitClosePartition);
         
         /// <summary>
         /// If set to a finite duration, the consumer will re-send the last committed offsets periodically for all assigned partitions.
@@ -230,6 +241,7 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? commitRefreshInterval = null,
             TimeSpan? stopTimeout = null,
             TimeSpan? positionTimeout = null,
+            TimeSpan? waitClosePartition = null,
             int? bufferSize = null,
             string dispatcherId = null,
             IImmutableDictionary<string, string> properties = null) =>
@@ -243,6 +255,7 @@ namespace Akka.Streams.Kafka.Settings
                 commitTimeWarning: commitTimeWarning ?? this.CommitTimeWarning,
                 commitRefreshInterval: commitRefreshInterval ?? this.CommitRefreshInterval,
                 stopTimeout: stopTimeout ?? this.StopTimeout,
+                waitClosePartition: waitClosePartition ?? this.WaitClosePartition,
                 positionTimeout: positionTimeout ?? this.PositionTimeout,
                 bufferSize: bufferSize ?? this.BufferSize,
                 dispatcherId: dispatcherId ?? this.DispatcherId,

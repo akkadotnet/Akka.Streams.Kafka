@@ -27,9 +27,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
-                                      TaskCompletionSource<NotUsed> completion, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, completion, attributes, messageBuilderFactory)
+            : base(shape, attributes, messageBuilderFactory)
         {
             _shape = shape;
             _settings = settings;
@@ -105,7 +104,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             switch (args.Item2)
             {
                 case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
-                    OnShutdown();
+                    Control.OnShutdown();
                     CompleteStage();
                     break;
                 default:

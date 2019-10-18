@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
@@ -46,12 +47,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// Provides actual stage logic
         /// </summary>
         /// <param name="shape">Shape of the stage</param>
-        /// <param name="completion">Used to specify stage task completion</param>
         /// <param name="inheritedAttributes">Stage attributes</param>
         /// <returns>Stage logic</returns>
-        protected override GraphStageLogic Logic(SourceShape<CommittableMessage<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
+        protected override (GraphStageLogic, IControl) Logic(SourceShape<CommittableMessage<K, V>> shape, Attributes inheritedAttributes)
         { 
-            return new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, completion, GetMessageBuilder);
+            var logic = new SingleSourceStageLogic<K, V, CommittableMessage<K, V>>(shape, Settings, Subscription, inheritedAttributes, GetMessageBuilder);
+            return (logic, logic.Control);
         }
 
         private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)

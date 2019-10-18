@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
@@ -48,9 +49,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         }
 
         /// <inheritdoc />
-        protected override GraphStageLogic Logic(SourceShape<CommittableMessage<K, V>> shape, TaskCompletionSource<NotUsed> completion, Attributes inheritedAttributes)
+        protected override (GraphStageLogic, IControl) Logic(SourceShape<CommittableMessage<K, V>> shape, Attributes inheritedAttributes)
         {
-            return new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription, completion, inheritedAttributes, GetMessageBuilder);
+            var logic = new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription, inheritedAttributes, GetMessageBuilder);
+
+            return (logic, logic.Control);
         }
         
         private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
