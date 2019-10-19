@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Akka.Annotations;
 using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
@@ -136,10 +138,80 @@ namespace Akka.Streams.Kafka.Dsl
                 : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
         }
 
-        // TODO
-        public static FlowWithContext<IEnvelope<K, V, NotUsed>, C, DeliveryReport<K, V>, C, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings)
+       
+        /// <summary>
+        /// <para>
+        /// API MAY CHANGE
+        /// </para>
+        /// <para>
+        /// Create a flow to conditionally publish records to Kafka topics and then pass it on.
+        /// </para>
+        /// <para>
+        /// It publishes records to Kafka topics conditionally:
+        /// <list type="bullet">
+        ///    <item><description>
+        ///         <see cref="Message{K,V,TPassThrough}"/> publishes a single message to its topic, and continues in the stream as <see cref="Result{K,V,TPassThrough}"/>
+        ///     </description></item>
+        ///     <item><description>
+        ///         <see cref="MultiMessage{K,V,TPassThrough}"/> publishes all messages in its `records` field, and continues in the stream as <see cref="MultiResult{K,V,TPassThrough}"/>
+        ///     </description></item>
+        ///     <item><description>
+        ///         <see cref="PassThroughMessage{K,V,TPassThrough}"/> does not publish anything, and continues in the stream as <see cref="PassThroughResult{K,V,TPassThrough}"/>
+        ///     </description></item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// </para>
+        /// </summary>
+        /// <param name="settings"></param>
+        /// <typeparam name="K">Keys type</typeparam>
+        /// <typeparam name="V">Values type</typeparam>
+        /// <typeparam name="C">Flow context type</typeparam>
+        [ApiMayChange]
+        public static FlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings)
         {
-            throw new NotImplementedException();
+            return FlexiFlow<K, V, C>(settings).AsFlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed, IEnvelope<K, V, C>>(
+                collapseContext: (env, c) => env.WithPassThrough(c), 
+                extractContext: res => res.PassThrough);
+        }
+
+        /// <summary>
+        /// <para>
+        /// API MAY CHANGE
+        /// </para>
+        /// <para>
+        /// Create a flow to conditionally publish records to Kafka topics and then pass it on.
+        /// </para>
+        /// <para>
+        /// It publishes records to Kafka topics conditionally:
+        /// <list type="bullet">
+        ///    <item><description>
+        ///         <see cref="Message{K,V,TPassThrough}"/> publishes a single message to its topic, and continues in the stream as <see cref="Result{K,V,TPassThrough}"/>
+        ///     </description></item>
+        ///     <item><description>
+        ///         <see cref="MultiMessage{K,V,TPassThrough}"/> publishes all messages in its `records` field, and continues in the stream as <see cref="MultiResult{K,V,TPassThrough}"/>
+        ///     </description></item>
+        ///     <item><description>
+        ///         <see cref="PassThroughMessage{K,V,TPassThrough}"/> does not publish anything, and continues in the stream as <see cref="PassThroughResult{K,V,TPassThrough}"/>
+        ///     </description></item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// </para>
+        /// </summary>
+        /// <param name="settings">Producer settings</param>
+        /// <param name="producer">Producer instance to reuse</param>
+        /// <typeparam name="K">Keys type</typeparam>
+        /// <typeparam name="V">Values type</typeparam>
+        /// <typeparam name="C">Flow context type</typeparam>
+        [ApiMayChange]
+        public static FlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings, IProducer<K, V> producer)
+        {
+            return FlexiFlow<K, V, C>(settings, producer).AsFlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed, IEnvelope<K, V, C>>(
+                collapseContext: (env, c) => env.WithPassThrough(c), 
+                extractContext: res => res.PassThrough);
         }
     }
 }

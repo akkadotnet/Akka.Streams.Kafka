@@ -84,6 +84,14 @@ namespace Akka.Streams.Kafka.Messages
         /// <summary>
         /// ProducerRecord
         /// </summary>
+        public ProducerRecord(string topic, K key, V value)
+            : this(topic, null, null, new Message<K, V>(){ Key = key, Value = value})
+        {
+        }
+        
+        /// <summary>
+        /// ProducerRecord
+        /// </summary>
         public ProducerRecord(string topic, V value)
             : this(topic, null, null, new Message<K, V>(){ Value = value })
         {
