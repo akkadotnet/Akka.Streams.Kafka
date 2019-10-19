@@ -45,6 +45,7 @@ namespace Akka.Streams.Kafka.Helpers
     /// one, so that the stream can be stopped in a controlled way without losing
     /// commits.
     /// </summary>
+    /// <typeparam name="T">Stream completion result type</typeparam>
     public class DrainingControl<T> : IControl
     {
         public IControl Control { get; }
@@ -86,6 +87,13 @@ namespace Akka.Streams.Kafka.Helpers
         /// commits.
         /// </summary>
         public static DrainingControl<T> Create(IControl control, Task<T> streamCompletion) => new DrainingControl<T>(control, streamCompletion);
+        
+        /// <summary>
+        /// Combine control and a stream completion signal materialized values into
+        /// one, so that the stream can be stopped in a controlled way without losing
+        /// commits.
+        /// </summary>
+        public static DrainingControl<T> Create(Tuple<IControl, Task<T>> tuple) => new DrainingControl<T>(tuple.Item1, tuple.Item2);
     }
 
     /// <summary>

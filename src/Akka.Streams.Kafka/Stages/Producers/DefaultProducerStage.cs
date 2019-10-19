@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages
                 onPush: () =>
                 {
                     var msg = Grab(_stage.In) as IEnvelope<K, V, P>;
-                    
+
                     switch (msg)
                     {
                         case Message<K, V, P> message:
@@ -97,7 +97,7 @@ namespace Akka.Streams.Kafka.Stages
                                 return result.Task;
                             });
                             PostSend(msg);
-                            var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough));
+                            var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
                             Push(stage.Out, resultTask as Task<TOut>);
                             break;
                         }
@@ -105,8 +105,8 @@ namespace Akka.Streams.Kafka.Stages
                         case PassThroughMessage<K, V, P> passThroughMessage:
                         {
                             PostSend(msg);
-                            var resultTask = Task.FromResult(new PassThroughResult<K, V, P>(msg.PassThrough)) as Task<TOut>;
-                            Push(stage.Out, resultTask);
+                            var resultTask = Task.FromResult(new PassThroughResult<K, V, P>(passThroughMessage.PassThrough) as IResults<K, V, P>);
+                            Push(stage.Out, resultTask as Task<TOut>);
                             break;
                         }
                     }

@@ -38,15 +38,26 @@ namespace Akka.Streams.Kafka.Tests
         
         protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
+
+        protected ProducerSettings<Null, string> ProducerSettings => BuildProducerSettings<Null, string>();
         
-        protected ProducerSettings<Null, string> ProducerSettings
+        protected ProducerSettings<TKey, TValue> BuildProducerSettings<TKey, TValue>()
         {
-            get => ProducerSettings<Null, string>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
         }
 
         protected CommitterSettings CommitterSettings
         {
             get => CommitterSettings.Create(Sys);
+        }
+        
+        protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group)
+        {
+            return ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
+                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithGroupId(group);
         }
 
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
@@ -58,27 +69,27 @@ namespace Akka.Streams.Kafka.Tests
                 .WithGroupId(group);
         }
         
-        protected async Task ProduceStrings(string topic, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        protected async Task ProduceStrings<TKey>(string topic, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
-                .Select(elem => new ProducerRecord<Null, string>(topic, elem.ToString()))
+                .Select(elem => new ProducerRecord<TKey, string>(topic, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
-        protected async Task ProduceStrings(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        protected async Task ProduceStrings<TKey>(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
-                .Select(elem => new ProducerRecord<Null, string>(partitionSelector(elem), elem.ToString()))
+                .Select(elem => new ProducerRecord<TKey, string>(partitionSelector(elem), elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
         
-        protected async Task ProduceStrings(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<Null, string> producerSettings)
+        protected async Task ProduceStrings<TKey>(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
-                .Select(elem => new ProducerRecord<Null, string>(topicPartition, elem.ToString()))
+                .Select(elem => new ProducerRecord<TKey, string>(topicPartition, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
 
@@ -91,8 +102,9 @@ namespace Akka.Streams.Kafka.Tests
             var timeoutTask = Task.Delay(timeout);
 
             await Task.WhenAny(timeoutTask, task);
-
-            task.IsCompletedSuccessfully.Should().Be(true, $"Timeout {timeout} while waitilng task finish successfully");
+            
+            task.IsCompleted.Should().Be(true, $"task should complete within {timeout} timeout");
+            task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
         }
 
         protected async Task GivenInitializedTopic(string topic)

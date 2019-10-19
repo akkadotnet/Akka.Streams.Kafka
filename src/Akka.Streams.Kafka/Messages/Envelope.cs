@@ -255,12 +255,10 @@ namespace Akka.Streams.Kafka.Messages
     }
 
     /// <summary>
-    /// <see cref="IResults{K,V,TPassThrough}"/> implementation enitted when <see cref="PassTH"/>
+    /// <see cref="IResults{K,V,TPassThrough}"/> implementation emitted when <see cref="PassThroughMessage{K,V,TPassThrough}"/>
+    /// has passed through the flow.
     /// </summary>
-    /// <typeparam name="K"></typeparam>
-    /// <typeparam name="V"></typeparam>
-    /// <typeparam name="TPassThrough"></typeparam>
-    public sealed class PassThroughResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
+    internal sealed class PassThroughResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
     {
         public PassThroughResult(TPassThrough passThrough)
         {
