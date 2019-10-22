@@ -188,7 +188,7 @@ namespace Akka.Streams.Kafka.Messages
     }
 
     /// <summary>
-    /// Output type produced by <see cref="KafkaProducer.FlexiFlow"/>
+    /// Output type produced by <see cref="KafkaProducer.FlexiFlow{TKey,TValue,TPassThrough}(Akka.Streams.Kafka.Settings.ProducerSettings{TKey,TValue})"/>
     /// </summary>
     public interface IResults<K, V, out TPassThrough>
     {
@@ -203,7 +203,7 @@ namespace Akka.Streams.Kafka.Messages
     ///
     /// Includes the original message, metadata returned from <see cref="Producer{TKey,TValue}"/> and the `offset` of the produced message.
     /// </summary>
-    internal sealed class Result<K, V, TPassThrough> : IResults<K, V, TPassThrough>
+    public sealed class Result<K, V, TPassThrough> : IResults<K, V, TPassThrough>
     {
         /// <summary>
         /// Message metadata
@@ -230,7 +230,7 @@ namespace Akka.Streams.Kafka.Messages
         }
     }
 
-    internal sealed class MultiResultPart<K, V>
+    public sealed class MultiResultPart<K, V>
     {
         public DeliveryReport<K, V> Metadata { get; }
         public ProducerRecord<K, V> Record { get; }
@@ -242,7 +242,7 @@ namespace Akka.Streams.Kafka.Messages
         }
     }
 
-    internal sealed class MultiResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
+    public sealed class MultiResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
     {
         public MultiResult(IImmutableSet<MultiResultPart<K, V>> parts, TPassThrough passThrough)
         {
@@ -258,7 +258,7 @@ namespace Akka.Streams.Kafka.Messages
     /// <see cref="IResults{K,V,TPassThrough}"/> implementation emitted when <see cref="PassThroughMessage{K,V,TPassThrough}"/>
     /// has passed through the flow.
     /// </summary>
-    internal sealed class PassThroughResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
+    public sealed class PassThroughResult<K, V, TPassThrough> : IResults<K, V, TPassThrough>
     {
         public PassThroughResult(TPassThrough passThrough)
         {
