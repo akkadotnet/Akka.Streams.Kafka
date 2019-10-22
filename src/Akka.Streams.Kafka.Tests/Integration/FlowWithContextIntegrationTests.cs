@@ -37,6 +37,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var producerSettings = BuildProducerSettings<string, string>();
             var committerSettings = CommitterSettings;
             var totalMessages = 10;
+            var totalConsumed = 0;
             
             await ProduceStrings(topic1, Enumerable.Range(1, totalMessages), producerSettings);
 
@@ -72,17 +73,20 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Run(Materializer);
             
             var (control2, result) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
-                .ToMaterialized(Sink.Seq<ConsumeResult<string, string>>(), Keep.Both)
+                .Scan(0, (c, _) => c + 1)
+                .Select(consumed =>
+                {
+                    totalConsumed = consumed;
+                    return consumed;
+                })
+                .ToMaterialized(Sink.Last<int>(), Keep.Both)
                 .Run(Materializer);
 
-            // Give it some time to handle message flow
-            await Task.Delay(TimeSpan.FromSeconds(20));
+            AwaitCondition(() => totalConsumed == totalMessages, TimeSpan.FromSeconds(30));
 
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
-            
-            var received = AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result);
-            received.Should().HaveCount(totalMessages);
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
         }
     }
 }
