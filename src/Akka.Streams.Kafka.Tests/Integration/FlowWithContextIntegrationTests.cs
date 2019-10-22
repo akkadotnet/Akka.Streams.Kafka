@@ -76,15 +76,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Run(Materializer);
 
             // Give it some time to handle message flow
-            await Task.Delay(TimeSpan.FromSeconds(10));
+            await Task.Delay(TimeSpan.FromSeconds(20));
 
-            var shutdown1 = control.DrainAndShutdown();
-            AwaitCondition(() => shutdown1.IsCompletedSuccessfully, TimeSpan.FromSeconds(20));
-            var shutdown2 = control2.Shutdown();
-            AwaitCondition(() => shutdown2.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
             
-            AwaitCondition(() => result.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
-            result.Result.Should().HaveCount(totalMessages);
+            var received = AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result);
+            received.Should().HaveCount(totalMessages);
         }
     }
 }

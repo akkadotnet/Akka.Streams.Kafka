@@ -97,14 +97,26 @@ namespace Akka.Streams.Kafka.Tests
         /// Asserts that task will finish successfully until specified timeout.
         /// Throws task exception if task failes
         /// </summary>
-        protected async Task AssertCompletesSuccessfullyWithin(TimeSpan timeout, Task task)
+        protected void AssertTaskCompletesWithin(TimeSpan timeout, Task task, bool assertIsSuccessful = true)
         {
-            var timeoutTask = Task.Delay(timeout);
-
-            await Task.WhenAny(timeoutTask, task);
+            AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
             
-            task.IsCompleted.Should().Be(true, $"task should complete within {timeout} timeout");
-            task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
+            if (assertIsSuccessful)
+                task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
+        }
+        
+        /// <summary>
+        /// Asserts that task will finish successfully until specified timeout.
+        /// Throws task exception if task failes
+        /// </summary>
+        protected TResult AssertTaskCompletesWithin<TResult>(TimeSpan timeout, Task<TResult> task, bool assertIsSuccessful = true)
+        {
+            AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
+            
+            if (assertIsSuccessful)
+                task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
+
+            return task.Result;
         }
 
         protected async Task GivenInitializedTopic(string topic)

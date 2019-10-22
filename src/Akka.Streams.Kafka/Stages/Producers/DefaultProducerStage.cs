@@ -90,10 +90,10 @@ namespace Akka.Streams.Kafka.Stages
                             {
                                 var result = new TaskCompletionSource<MultiResultPart<K, V>>();
                                 _awaitingConfirmation.IncrementAndGet();
-                                _producer.Produce(record, report =>
+                                _producer.Produce(record, BuildSendCallback(result, report =>
                                 {
                                     result.SetResult(new MultiResultPart<K, V>(report, record));
-                                });
+                                }));
                                 return result.Task;
                             });
                             PostSend(msg);
@@ -206,6 +206,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             if (IsClosed(_stage.In) && _awaitingConfirmation.Current == 0)
             {
+                Log.Debug("Completing publisher stage");
                 var completionTask = _completionState.Task;
 
                 if (completionTask.IsFaulted || completionTask.IsCanceled)
