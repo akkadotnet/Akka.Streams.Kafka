@@ -64,6 +64,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// 
         /// Batches offsets from context and commits them to Kafka.
         /// </summary>
+        /// <typeparam name="E">Incoming flow elements type</typeparam>
         [ApiMayChange]
         public static Sink<Tuple<E, ICommittableOffset>, Task> SinkWithOffsetContext<E>(CommitterSettings settings)
         {

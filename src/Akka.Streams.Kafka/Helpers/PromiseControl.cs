@@ -9,7 +9,7 @@ namespace Akka.Streams.Kafka.Helpers
     /// Used in source logic classes to provide <see cref="IControl"/> implementation.
     /// </summary>
     /// <typeparam name="TSourceOut"></typeparam>
-    internal class PromiseControl<TSourceOut> : IControl
+    internal abstract class PromiseControl<TSourceOut> : IControl
     {
         private readonly SourceShape<TSourceOut> _shape;
         private readonly Action<Outlet<TSourceOut>> _completeStageOutlet;
@@ -64,9 +64,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Performs source logic shutdown
         /// </summary>
-        public virtual void PerformShutdown()
-        {
-        }
+        public abstract void PerformShutdown();
 
         /// <summary>
         /// Executed on source logic stop
