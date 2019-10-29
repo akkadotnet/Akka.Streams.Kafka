@@ -1,3 +1,4 @@
+using Akka.Streams.Util;
 using Newtonsoft.Json;
 
 namespace Akka.Streams.Kafka.Extensions
@@ -11,5 +12,10 @@ namespace Akka.Streams.Kafka.Extensions
         {
             return JsonConvert.SerializeObject(obj);
         }
+        
+        /// <summary>
+        /// Wraps object to the option
+        /// </summary>
+        public static Option<T> AsOption<T>(this T obj) => new Option<T>(obj);
     }
 }
