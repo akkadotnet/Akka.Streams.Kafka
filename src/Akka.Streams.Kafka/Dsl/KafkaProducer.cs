@@ -90,9 +90,7 @@ namespace Akka.Streams.Kafka.Dsl
                     closeProducerOnStop: true))
                 .SelectAsync(settings.Parallelism, x => x);
 
-            return string.IsNullOrEmpty(settings.DispatcherId) 
-                ? flow
-                : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
+            return FlowWithDispatcher(settings, flow);
         }
 
         /// <summary>
@@ -133,9 +131,7 @@ namespace Akka.Streams.Kafka.Dsl
                     customProducerProvider: () => producer))
                 .SelectAsync(settings.Parallelism, x => x);
 
-            return string.IsNullOrEmpty(settings.DispatcherId) 
-                ? flow
-                : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
+            return FlowWithDispatcher(settings, flow);
         }
 
        
@@ -212,6 +208,49 @@ namespace Akka.Streams.Kafka.Dsl
             return FlexiFlow<K, V, C>(settings, producer).AsFlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed, IEnvelope<K, V, C>>(
                 collapseContext: (env, c) => env.WithPassThrough(c), 
                 extractContext: res => res.PassThrough);
+        }
+
+        /// <summary>
+        /// Publish records to Kafka topics and then continue the flow. The flow can only be used with a <see cref="KafkaConsumer.TransactionalSource{K,V}"/> that
+        /// emits a <see cref="TransactionalMessage{K,V}"/>. The flow requires a unique `transactional.id` across all app
+        /// instances.  The flow will override producer properties to enable Kafka exactly-once transactional support.
+        /// </summary>
+        public static Flow<IEnvelope<K, V, GroupTopicPartitionOffset>, IResults<K, V, GroupTopicPartitionOffset>, NotUsed> TransactionalFlow<K, V>(
+                ProducerSettings<K, V> setting,
+                string transactionalId)
+        {
+            if (string.IsNullOrEmpty(transactionalId))
+                throw new ArgumentException("You must define a Transactional id");
+
+            var transactionalSettings = setting
+                .WithProperty("enable.idempotence", "true")
+                .WithProperty("transactional.id", transactionalId)
+                .WithProperty("max.in.flight.requests.per.connection", "1");
+
+            var flow = Flow.FromGraph(new TransactionalProducerStage<K, V, GroupTopicPartitionOffset>(closeProducerOnStop: true, settings: transactionalSettings))
+                .SelectAsync(transactionalSettings.Parallelism, message => message);
+            
+            return FlowWithDispatcher(transactionalSettings, flow);
+        }
+
+        /// <summary>
+        /// Sink that is aware of the <see cref="TransactionalMessage{K,V}.PartitionOffset"/> from a <see cref="KafkaConsumer.TransactionalSource{K,V}"/>.
+        /// It will initialize, begin, produce, and commit the consumer offset as part of a transaction.
+        /// </summary>
+        public static Sink<IEnvelope<K, V, GroupTopicPartitionOffset>, Task> TransactionalSink<K, V>(
+            ProducerSettings<K, V> settings, 
+            string transactionalId)
+        {
+            return TransactionalFlow(settings, transactionalId).ToMaterialized(Sink.Ignore<IResults<K, V, GroupTopicPartitionOffset>>(), Keep.Right);
+        }
+
+        private static Flow<IEnvelope<K, V, TPassThrough>, IResults<K, V, TPassThrough>, NotUsed> FlowWithDispatcher<K, V, TPassThrough>(
+            ProducerSettings<K, V> settings,
+            Flow<IEnvelope<K, V, TPassThrough>, IResults<K, V, TPassThrough>, NotUsed> flow)
+        {
+            return string.IsNullOrEmpty(settings.DispatcherId) 
+                ? flow
+                : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
         }
     }
 }
