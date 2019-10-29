@@ -6,7 +6,7 @@ namespace Akka.Streams.Kafka.Messages
     /// <summary>
     /// Offset position for a groupId, topic, partition.
     /// </summary>
-    public sealed class GroupTopicPartitionOffset : IEquatable<GroupTopicPartitionOffset>
+    public class GroupTopicPartitionOffset : IEquatable<GroupTopicPartitionOffset>
     {
         /// <summary>
         /// GroupTopicPartitionOffset

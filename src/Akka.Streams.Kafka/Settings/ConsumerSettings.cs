@@ -53,6 +53,7 @@ namespace Akka.Streams.Kafka.Settings
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
                 waitClosePartition: config.GetTimeSpan("wait-close-partition", TimeSpan.FromSeconds(1)),
                 bufferSize: config.GetInt("buffer-size", 50),
+                drainingCheckInterval: config.GetTimeSpan("eos-draining-check-interval", TimeSpan.FromMilliseconds(30)),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 properties: ImmutableDictionary<string, string>.Empty);
         }
@@ -100,6 +101,10 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public TimeSpan CommitRefreshInterval { get; }
         /// <summary>
+        /// Check interval for TransactionalProducer when finishing transaction before shutting down consumer
+        /// </summary>
+        public TimeSpan DrainingCheckInterval { get; }
+        /// <summary>
         /// The stage will await outstanding offset commit requests before shutting down,
         /// but if that takes longer than this timeout it will stop forcefully.
         /// </summary>
@@ -121,7 +126,7 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, 
                                 TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout, 
                                 TimeSpan positionTimeout, TimeSpan commitTimeWarning, TimeSpan partitionHandlerWarning,
-                                TimeSpan waitClosePartition,
+                                TimeSpan waitClosePartition, TimeSpan drainingCheckInterval,
                                 int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
         {
             KeyDeserializer = keyDeserializer;
@@ -138,6 +143,7 @@ namespace Akka.Streams.Kafka.Settings
             DispatcherId = dispatcherId;
             Properties = properties;
             WaitClosePartition = waitClosePartition;
+            DrainingCheckInterval = drainingCheckInterval;
         }
 
         /// <summary>
@@ -215,6 +221,11 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => Copy(dispatcherId: dispatcherId);
         
         /// <summary>
+        /// Check interval for TransactionalProducer when finishing transaction before shutting down consumer
+        /// </summary>
+        public ConsumerSettings<TKey, TValue> WithDrainingCheckInterval(TimeSpan drainingCheckInterval) => Copy(drainingCheckInterval: drainingCheckInterval);
+        
+        /// <summary>
         /// Sets key deserializer
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithKeyDeserializer(IDeserializer<TKey> keyDeserializer) => Copy(keyDeserializer: keyDeserializer);
@@ -237,6 +248,7 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? pollTimeout = null,
             TimeSpan? commitTimeout = null,
             TimeSpan? partitionHandlerWarning = null,
+            TimeSpan? drainingCheckInterval = null,
             TimeSpan? commitTimeWarning = null,
             TimeSpan? commitRefreshInterval = null,
             TimeSpan? stopTimeout = null,
@@ -258,6 +270,7 @@ namespace Akka.Streams.Kafka.Settings
                 waitClosePartition: waitClosePartition ?? this.WaitClosePartition,
                 positionTimeout: positionTimeout ?? this.PositionTimeout,
                 bufferSize: bufferSize ?? this.BufferSize,
+                drainingCheckInterval: drainingCheckInterval ?? this.DrainingCheckInterval,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 properties: properties ?? this.Properties);
 

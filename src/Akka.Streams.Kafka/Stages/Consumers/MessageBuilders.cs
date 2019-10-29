@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Dispatch;
 using Akka.Streams.Kafka.Messages;
@@ -115,6 +117,54 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         {
             var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
             return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
+        }
+    }
+
+    /// <summary>
+    /// Base interface for transactional message builders
+    /// </summary>
+    internal interface ITransactionalMessageBuilderStage<K, V, TMsg> : IMessageBuilder<K, V, TMsg>
+    {
+        /// <summary>
+        /// Consumer's group Id
+        /// </summary>
+        string GroupId { get; }
+        /// <summary>
+        /// Committed marker for consumed offset
+        /// </summary>
+        ICommittedMarker CommittedMarker { get; }
+        /// <summary>
+        /// On message callback
+        /// </summary>
+        /// <param name="message"></param>
+        void OnMessage(ConsumeResult<K, V> message);
+    }
+
+    /// <summary>
+    /// Message builder used by <see cref="TransactionalSourceStage{K,V}"/>
+    /// </summary>
+    internal class TransactionalMessageBuilder<K, V> : IMessageBuilder<K, V, TransactionalMessage<K, V>>
+    {
+        private readonly ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>> _transactionalMessageBuilderStage;
+
+        public TransactionalMessageBuilder(ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>> transactionalMessageBuilderStage)
+        {
+            _transactionalMessageBuilderStage = transactionalMessageBuilderStage;
+        }
+
+        /// <inheritdoc />
+        public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
+        {
+            _transactionalMessageBuilderStage.OnMessage(record);
+            
+            var offset = new PartitionOffsetCommittedMarker(
+                _transactionalMessageBuilderStage.GroupId, 
+                record.Topic, 
+                record.Partition, 
+                record.Offset, 
+                _transactionalMessageBuilderStage.CommittedMarker);
+            
+            return new TransactionalMessage<K, V>(record, offset);
         }
     }
 }

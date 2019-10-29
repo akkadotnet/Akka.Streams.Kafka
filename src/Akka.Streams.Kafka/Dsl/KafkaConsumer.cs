@@ -142,6 +142,7 @@ namespace Akka.Streams.Kafka.Dsl
             return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription, metadataFromRecord));
         }
 
+        /// <summary>
         /// The <see cref="PlainPartitionedManualOffsetSource{K,V}"/> is similar to <see cref="PlainPartitionedSource{K,V}"/>
         /// but allows the use of an offset store outside of Kafka, while retaining the automatic partition assignment.
         /// When a topic-partition is assigned to a consumer, the <see cref="getOffsetsOnAssign"/>
@@ -162,6 +163,15 @@ namespace Akka.Streams.Kafka.Dsl
                 subscription, 
                 new Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>(getOffsetsOnAssign), 
                 onRevoke));
+        }
+
+        /// <summary>
+        /// Transactional source to setup a stream for Exactly Only Once (EoS) kafka message semantics.  To enable EoS it's
+        /// necessary to use the [[Transactional.sink]] or [[Transactional.flow]] (for passthrough).
+        /// </summary>
+        public static Source<TransactionalMessage<K, V>, IControl> TransactionalSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
+        {
+            return Source.FromGraph(new TransactionalSourceStage<K, V>(settings, subscription));
         }
     }
 }
