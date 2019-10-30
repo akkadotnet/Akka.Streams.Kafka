@@ -94,6 +94,16 @@ namespace Akka.Streams.Kafka.Helpers
         /// commits.
         /// </summary>
         public static DrainingControl<T> Create(Tuple<IControl, Task<T>> tuple) => new DrainingControl<T>(tuple.Item1, tuple.Item2);
+        
+        /// <summary>
+        /// Combine control and a stream completion signal materialized values into
+        /// one, so that the stream can be stopped in a controlled way without losing
+        /// commits.
+        /// </summary>
+        public static DrainingControl<NotUsed> Create(Tuple<IControl, Task> tuple)
+        {
+            return new DrainingControl<NotUsed>(tuple.Item1, tuple.Item2.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
+        }
     }
 
     /// <summary>
