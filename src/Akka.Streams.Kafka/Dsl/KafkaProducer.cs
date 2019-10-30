@@ -211,10 +211,13 @@ namespace Akka.Streams.Kafka.Dsl
         }
 
         /// <summary>
+        /// API IS FOR INTERNAL USAGE: see https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85
+        /// 
         /// Publish records to Kafka topics and then continue the flow. The flow can only be used with a <see cref="KafkaConsumer.TransactionalSource{K,V}"/> that
         /// emits a <see cref="TransactionalMessage{K,V}"/>. The flow requires a unique `transactional.id` across all app
         /// instances.  The flow will override producer properties to enable Kafka exactly-once transactional support.
         /// </summary>
+        [InternalApi]
         public static Flow<IEnvelope<K, V, GroupTopicPartitionOffset>, IResults<K, V, GroupTopicPartitionOffset>, NotUsed> TransactionalFlow<K, V>(
                 ProducerSettings<K, V> setting,
                 string transactionalId)
@@ -234,9 +237,12 @@ namespace Akka.Streams.Kafka.Dsl
         }
 
         /// <summary>
+        /// API IS FOR INTERNAL USAGE: see https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85
+        /// 
         /// Sink that is aware of the <see cref="TransactionalMessage{K,V}.PartitionOffset"/> from a <see cref="KafkaConsumer.TransactionalSource{K,V}"/>.
         /// It will initialize, begin, produce, and commit the consumer offset as part of a transaction.
         /// </summary>
+        [InternalApi]
         public static Sink<IEnvelope<K, V, GroupTopicPartitionOffset>, Task> TransactionalSink<K, V>(
             ProducerSettings<K, V> settings, 
             string transactionalId)
