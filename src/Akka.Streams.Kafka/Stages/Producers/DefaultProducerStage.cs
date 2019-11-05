@@ -139,6 +139,7 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             Producer = _stage.ProducerProvider(HandleProduceError);
+            Producer = _stage.ProducerProvider(HandleProduceError);
             Log.Debug($"Producer started: {Producer.Name}");
         }
 
