@@ -29,7 +29,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
     
 
-        private Tuple<IControl, TestSubscriber.Probe<string>> CreateProbe(ConsumerSettings<Null, string> consumerSettings, ISubscription sub)
+        private (IControl, TestSubscriber.Probe<string>) CreateProbe(ConsumerSettings<Null, string> consumerSettings, ISubscription sub)
         {
             return KafkaConsumer
                 .PlainSource(consumerSettings, sub)
