@@ -30,5 +30,13 @@ namespace Akka.Streams.Kafka.Extensions
         {
             return !collection.Any();
         }
+
+        /// <summary>
+        /// Converts collection to <see cref="IImmutableSet{T}"/>
+        /// </summary>
+        public static IImmutableSet<T> ToImmutableSet<T>(this IEnumerable<T> collection)
+        {
+            return collection.ToImmutableHashSet();
+        }
     }
 }
