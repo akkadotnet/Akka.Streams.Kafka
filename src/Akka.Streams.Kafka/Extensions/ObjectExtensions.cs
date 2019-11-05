@@ -1,4 +1,5 @@
 using Akka.Streams.Util;
+using Akka.Util;
 using Newtonsoft.Json;
 
 namespace Akka.Streams.Kafka.Extensions
