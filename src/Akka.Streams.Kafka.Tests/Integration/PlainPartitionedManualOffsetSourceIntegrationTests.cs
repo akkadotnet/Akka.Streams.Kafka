@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Akka.Streams.Util;
+using Akka.Util;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;

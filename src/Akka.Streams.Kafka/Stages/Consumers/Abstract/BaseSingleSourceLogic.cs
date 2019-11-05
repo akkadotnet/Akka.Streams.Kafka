@@ -105,7 +105,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
         }
 
-        private void MessageHandling(Tuple<IActorRef, object> args)
+        private void MessageHandling((IActorRef, object) args)
         {
             switch (args.Item2)
             {

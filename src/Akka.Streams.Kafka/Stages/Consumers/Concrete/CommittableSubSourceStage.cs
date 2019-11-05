@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Stage;
 using Akka.Streams.Util;
+using Akka.Util;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
