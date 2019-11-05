@@ -11,6 +11,7 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Util;
+using Akka.Util;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
@@ -42,7 +43,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         /// <inheritdoc />
-        protected override void MessageHandling(Tuple<IActorRef, object> args)
+        protected override void MessageHandling((IActorRef, object) args)
         {
             DrainHandling(args, notHandledArgs =>
             {
@@ -59,7 +60,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         /// <inheritdoc />
-        protected override void ShuttingDownReceive(Tuple<IActorRef, object> args)
+        protected override void ShuttingDownReceive((IActorRef, object) args)
         {
             DrainHandling(args, notHandledArgs =>
             {
@@ -80,7 +81,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             });
         }
 
-        private void DrainHandling(Tuple<IActorRef, object> arg, Action<Tuple<IActorRef, object>> defaultHandler)
+        private void DrainHandling((IActorRef, object) arg, Action<(IActorRef, object)> defaultHandler)
         {
             var (sender, msg) = arg;
             switch (msg)

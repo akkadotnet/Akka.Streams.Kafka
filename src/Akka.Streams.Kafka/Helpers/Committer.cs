@@ -43,10 +43,10 @@ namespace Akka.Streams.Kafka.Helpers
         [ApiMayChange]
         public static FlowWithContext<ICommittableOffset, E, ICommittableOffsetBatch, NotUsed, NotUsed> FlowWithOffsetContext<E>(CommitterSettings settings)
         {
-            var value = Akka.Streams.Dsl.Flow.Create<Tuple<E, ICommittableOffset>>()
+            var value = Akka.Streams.Dsl.Flow.Create<(E, ICommittableOffset)>()
                 .Select(m => m.Item2 as ICommittable)
                 .Via(BatchFlow(settings))
-                .Select(b => Tuple.Create(NotUsed.Instance, b));
+                .Select(b => (NotUsed.Instance, b));
 
             return FlowWithContext.From(value);
         }
@@ -66,11 +66,11 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         /// <typeparam name="E">Incoming flow elements type</typeparam>
         [ApiMayChange]
-        public static Sink<Tuple<E, ICommittableOffset>, Task> SinkWithOffsetContext<E>(CommitterSettings settings)
+        public static Sink<(E, ICommittableOffset), Task> SinkWithOffsetContext<E>(CommitterSettings settings)
         {
-            return Akka.Streams.Dsl.Flow.Create<Tuple<E, ICommittableOffset>>()
+            return Akka.Streams.Dsl.Flow.Create<(E, ICommittableOffset)>()
                 .Via(FlowWithOffsetContext<E>(settings))
-                .ToMaterialized(Streams.Dsl.Sink.Ignore<Tuple<NotUsed, ICommittableOffsetBatch>>(), Keep.Right);
+                .ToMaterialized(Streams.Dsl.Sink.Ignore<(NotUsed, ICommittableOffsetBatch)>(), Keep.Right);
         }
     }
 }

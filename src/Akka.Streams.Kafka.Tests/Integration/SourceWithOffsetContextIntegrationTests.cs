@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .SelectAsync(10, message => Task.FromResult(Done.Instance))
                 .Via(Committer.FlowWithOffsetContext<Done>(committerSettings))
                 .AsSource()
-                .ToMaterialized(this.SinkProbe<Tuple<NotUsed, ICommittableOffsetBatch>>(), Keep.Both)
+                .ToMaterialized(this.SinkProbe<(NotUsed, ICommittableOffsetBatch)>(), Keep.Both)
                 .Run(Materializer);
 
             probe.Request(10);

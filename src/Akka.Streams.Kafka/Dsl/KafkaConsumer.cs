@@ -12,6 +12,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 using Akka.Streams.Util;
+using Akka.Util;
 
 namespace Akka.Streams.Kafka.Dsl
 {

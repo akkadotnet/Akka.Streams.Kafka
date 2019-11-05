@@ -99,7 +99,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             return handler;
         }
 
-        protected virtual void ShuttingDownReceive(Tuple<IActorRef, object> args)
+        protected virtual void ShuttingDownReceive((IActorRef, object) args)
         {
             switch (args.Item2)
             {
