@@ -27,10 +27,10 @@ namespace Akka.Streams.Kafka.Extensions
             Func<TIn, TCtxIn, TIn2> collapseContext,
             Func<TOut, TCtxOut> extractContext)
         {
-            var flowWithTuples = Flow.Create<Tuple<TIn, TCtxIn>>()
+            var flowWithTuples = Flow.Create<(TIn, TCtxIn)>()
                 .Select(pair => collapseContext(pair.Item1, pair.Item2))
                 .ViaMaterialized(flow, Keep.Right)
-                .Select(e => Tuple.Create(e, extractContext(e)));
+                .Select(e => (e, extractContext(e)));
 
             return FlowWithContext.From(flowWithTuples);
         }
