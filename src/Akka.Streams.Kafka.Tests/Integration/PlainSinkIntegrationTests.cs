@@ -42,7 +42,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { TopicPartition = topicPartition1, Message = new Message<Null, string> { Value = elem } })
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition1, elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             var dateTimeStart = DateTime.UtcNow;
@@ -80,9 +80,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var probe = Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
-                .Via(KafkaProducer.PlainFlow(config))
-                .RunWith(this.SinkProbe<DeliveryReport<Null, string>>(), Materializer);
+                .Select(elem => new ProducerRecord<Null, string>(topic1, elem.ToString()))
+                .Select(record => new Message<Null, string, NotUsed>(record, NotUsed.Instance) as IEnvelope<Null, string, NotUsed>)
+                .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(config))
+                .RunWith(this.SinkProbe<IResults<Null, string, NotUsed>>(), Materializer);
 
             probe.ExpectSubscription();
             probe.OnError(new KafkaException(ErrorCode.Local_Transport));

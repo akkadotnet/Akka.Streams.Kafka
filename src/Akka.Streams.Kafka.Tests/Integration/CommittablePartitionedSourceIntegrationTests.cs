@@ -83,7 +83,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
                             return t.Result;
                         });
                 })
-                .MergeSubstreams().As<Source<int, IControl>>()
+                .MergeSubstreams()
+                .As<Source<int, IControl>>()
                 .Scan(0, (c, n) => c + n)
                 .ToMaterialized(Sink.Last<int>(), Keep.Both)
                 .MapMaterializedValue(tuple => DrainingControl<int>.Create(tuple.Item1, tuple.Item2))
