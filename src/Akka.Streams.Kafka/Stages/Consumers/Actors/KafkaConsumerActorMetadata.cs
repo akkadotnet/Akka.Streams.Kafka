@@ -140,6 +140,26 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
 
             /// <summary>
+            /// Revoked
+            /// </summary>
+            public class Revoked
+            {
+                /// <summary>
+                /// Revoked
+                /// </summary>
+                /// <param name="partitions">List of revoked partitions</param>
+                public Revoked(IImmutableSet<TopicPartition> partitions)
+                {
+                    Partitions = partitions;
+                }
+
+                /// <summary>
+                /// List of revoked partitions
+                /// </summary>
+                public IImmutableSet<TopicPartition> Partitions { get; }
+            }
+
+            /// <summary>
             /// Assign
             /// </summary>
             public class Assign

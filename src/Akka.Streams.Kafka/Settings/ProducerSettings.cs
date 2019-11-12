@@ -10,7 +10,7 @@ namespace Akka.Streams.Kafka.Settings
     public sealed class ProducerSettings<TKey, TValue>
     {
         public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, 
-                                string dispatcherId, TimeSpan flushTimeout,
+                                string dispatcherId, TimeSpan flushTimeout, TimeSpan eosCommitInterval,
                                 IImmutableDictionary<string, string> properties)
         {
             KeySerializer = keySerializer;
@@ -18,6 +18,7 @@ namespace Akka.Streams.Kafka.Settings
             Parallelism = parallelism;
             DispatcherId = dispatcherId;
             FlushTimeout = flushTimeout;
+            EosCommitInterval = eosCommitInterval;
             Properties = properties;
         }
 
@@ -26,6 +27,10 @@ namespace Akka.Streams.Kafka.Settings
         public int Parallelism { get; }
         public string DispatcherId { get; }
         public TimeSpan FlushTimeout { get; }
+        /// <summary>
+        /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
+        /// </summary>
+        public TimeSpan EosCommitInterval { get; }
         public IImmutableDictionary<string, string> Properties { get; }
 
         public ProducerSettings<TKey, TValue> WithBootstrapServers(string bootstrapServers) =>
@@ -33,6 +38,12 @@ namespace Akka.Streams.Kafka.Settings
 
         public ProducerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
+        
+        /// <summary>
+        /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
+        /// </summary>
+        public ProducerSettings<TKey, TValue> WithEosCommitInterval(TimeSpan eosCommitInterval) =>
+            Copy(eosCommitInterval: eosCommitInterval);
 
         public ProducerSettings<TKey, TValue> WithParallelism(int parallelism) =>
             Copy(parallelism: parallelism);
@@ -46,6 +57,7 @@ namespace Akka.Streams.Kafka.Settings
             int? parallelism = null,
             string dispatcherId = null,
             TimeSpan? flushTimeout = null,
+            TimeSpan? eosCommitInterval = null,
             IImmutableDictionary<string, string> properties = null) =>
             new ProducerSettings<TKey, TValue>(
                 keySerializer: keySerializer ?? this.KeySerializer,
@@ -53,6 +65,7 @@ namespace Akka.Streams.Kafka.Settings
                 parallelism: parallelism ?? this.Parallelism,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 flushTimeout: flushTimeout ?? this.FlushTimeout,
+                eosCommitInterval: eosCommitInterval ?? this.EosCommitInterval,
                 properties: properties ?? this.Properties);
 
         public static ProducerSettings<TKey, TValue> Create(ActorSystem system, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
@@ -73,6 +86,7 @@ namespace Akka.Streams.Kafka.Settings
                 parallelism: config.GetInt("parallelism", 100),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 flushTimeout: config.GetTimeSpan("flush-timeout", TimeSpan.FromSeconds(2)),
+                eosCommitInterval: config.GetTimeSpan("eos-commit-interval", TimeSpan.FromMilliseconds(100)),
                 properties: ImmutableDictionary<string, string>.Empty);
         }
 
