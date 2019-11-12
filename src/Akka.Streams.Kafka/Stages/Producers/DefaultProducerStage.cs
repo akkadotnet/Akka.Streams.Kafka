@@ -44,18 +44,19 @@ namespace Akka.Streams.Kafka.Stages
         }
     }
 
-    internal class DefaultProducerStageLogic<K, V, P, TIn, TOut> : GraphStageLogic, IProducerCompletionState
+    internal class DefaultProducerStageLogic<K, V, P, TIn, TOut> : TimerGraphStageLogic, IProducerCompletionState
         where TIn: IEnvelope<K, V, P>
         where TOut: IResults<K, V, P>
     {
-        private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
-        private IProducer<K, V> _producer;
-        private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
         private volatile bool _inIsClosed;
-        private readonly AtomicCounter _awaitingConfirmation = new AtomicCounter(0);
-        private Action _checkForCompletionCallback;
-        private Action<Exception> _failStageCallback;
+        private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
+        private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
+        private readonly Action _checkForCompletionCallback;
+        private readonly Action<Exception> _failStageCallback;
         private readonly Decider _decider;
+        
+        protected IProducer<K, V> Producer { get; private set; }
+        protected readonly AtomicCounter AwaitingConfirmation = new AtomicCounter(0);
         
         public DefaultProducerStageLogic(IProducerStage<K, V, P, TIn, TOut> stage, Attributes attributes) : base(stage.Shape)
         {
@@ -63,6 +64,9 @@ namespace Akka.Streams.Kafka.Stages
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            
+            _checkForCompletionCallback = GetAsyncCallback(CheckForCompletion);
+            _failStageCallback = GetAsyncCallback<Exception>(FailStage);
 
             SetHandler(_stage.In, 
                 onPush: () =>
@@ -74,8 +78,8 @@ namespace Akka.Streams.Kafka.Stages
                         case Message<K, V, P> message:
                         {
                             var result = new TaskCompletionSource<IResults<K, V, P>>();
-                            _awaitingConfirmation.IncrementAndGet();
-                            _producer.Produce(message.Record, BuildSendCallback(result, onSuccess: report =>
+                            AwaitingConfirmation.IncrementAndGet();
+                            Producer.Produce(message.Record, BuildSendCallback(result, onSuccess: report =>
                             {
                                 result.SetResult(new Result<K, V, P>(report, message));
                             }));
@@ -89,8 +93,8 @@ namespace Akka.Streams.Kafka.Stages
                             var tasks = multiMessage.Records.Select(record =>
                             {
                                 var result = new TaskCompletionSource<MultiResultPart<K, V>>();
-                                _awaitingConfirmation.IncrementAndGet();
-                                _producer.Produce(record, BuildSendCallback(result, report =>
+                                AwaitingConfirmation.IncrementAndGet();
+                                Producer.Produce(record, BuildSendCallback(result, report =>
                                 {
                                     result.SetResult(new MultiResultPart<K, V>(report, record));
                                 }));
@@ -134,11 +138,9 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            _producer = _stage.ProducerProvider(HandleProduceError);
-            Log.Debug($"Producer started: {_producer.Name}");
-
-            _checkForCompletionCallback = GetAsyncCallback(CheckForCompletion);
-            _failStageCallback = GetAsyncCallback<Exception>(FailStage);
+            Producer = _stage.ProducerProvider(HandleProduceError);
+            Producer = _stage.ProducerProvider(HandleProduceError);
+            Log.Debug($"Producer started: {Producer.Name}");
         }
 
         public override void PostStop()
@@ -150,10 +152,10 @@ namespace Akka.Streams.Kafka.Stages
                 try
                 {
                     // we do not have to check if producer was already closed in send-callback as `flush()` and `close()` are effectively no-ops in this case
-                    _producer.Flush(_stage.FlushTimeout);
+                    Producer.Flush(_stage.FlushTimeout);
                     // TODO: fix missing deferred close support: `producer.close(stage.closeTimeout.toMillis, TimeUnit.MILLISECONDS)` 
-                    _producer.Dispose();
-                    Log.Debug($"Producer closed: {_producer.Name}");
+                    Producer.Dispose();
+                    Log.Debug($"Producer closed: {Producer.Name}");
                 }
                 catch (Exception ex)
                 {
@@ -164,9 +166,9 @@ namespace Akka.Streams.Kafka.Stages
             base.PostStop();
         }
         
-        public void OnCompletionSuccess() => CompleteStage();
+        public virtual void OnCompletionSuccess() => CompleteStage();
 
-        public void OnCompletionFailure(Exception ex) => FailStage(ex);
+        public virtual void OnCompletionFailure(Exception ex) => FailStage(ex);
         
         protected virtual void PostSend(IEnvelope<K, V, P> msg) { }
 
@@ -187,7 +189,7 @@ namespace Akka.Streams.Kafka.Stages
                         case Directive.Stop:
                             if (_stage.CloseProducerOnStop)
                             {
-                                _producer.Dispose();
+                                Producer.Dispose();
                             }
                             _failStageCallback(exception);
                             break;
@@ -197,14 +199,14 @@ namespace Akka.Streams.Kafka.Stages
                     }
                 }
                 
-                if (_awaitingConfirmation.DecrementAndGet() == 0 && _inIsClosed)
+                if (AwaitingConfirmation.DecrementAndGet() == 0 && _inIsClosed)
                     _checkForCompletionCallback();
             };
         }
 
         private void CheckForCompletion()
         {
-            if (IsClosed(_stage.In) && _awaitingConfirmation.Current == 0)
+            if (IsClosed(_stage.In) && AwaitingConfirmation.Current == 0)
             {
                 Log.Debug("Completing publisher stage");
                 var completionTask = _completionState.Task;
@@ -234,5 +236,8 @@ namespace Akka.Streams.Kafka.Stages
                 FailStage(exception);
             }
         }
+
+        /// <inheritdoc />
+        protected override void OnTimer(object timerKey) { }
     }
 }
