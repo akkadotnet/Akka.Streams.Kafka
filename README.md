@@ -1,8 +1,8 @@
 # Akka Streams Kafka
 
-Akka Streams Kafka is an Akka Streams connector for Apache Kafka.
+Akka Streams Kafka is an Akka Streams connector for Apache Kafka. This is a port of Alpakka project (https://github.com/akka/alpakka).
 
-It is based on [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet) driver, and implements Sources, Sinks and Flows to handle kafka message streams.
+Library is based on [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet) driver, and implements Sources, Sinks and Flows to handle kafka message streams.
 All stages are build with Akka.Streams advantages in mind:
 - There is no constant kafka topics pooling: messages are consumed on demand, and with back-pressure support
 - There is no internal buffering: consumed messages are passed to the downstream in realtime, and producer stages publish messages to Kafka as soon as get them from upstream
@@ -393,6 +393,10 @@ var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, 
     // Pass message values down to the stream
     .Select(m => m.Value);
 ```
+
+### Transactional Producers and Consumers
+
+Are not implemented yet. Waiting for issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85 to be resolved.
 
 ## Local development
 
