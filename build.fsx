@@ -10,7 +10,7 @@ open Fake.DotNetCli
 open Fake.DocFxHelper
 
 // Information about the project for Nuget and Assembly info files
-let product = "Petabridge.Library"
+let product = "Akka.Streams.Kafka"
 let configuration = "Release"
 
 // Metadata used when signing packages and DLLs
@@ -26,7 +26,8 @@ let preReleaseVersionSuffix = "beta" + (if (not (buildNumber = "0")) then (build
 let versionSuffix = 
     match (getBuildParam "nugetprerelease") with
     | "dev" -> preReleaseVersionSuffix
-    | _ -> ""
+    | "" -> ""
+    | str -> str
 
 let releaseNotes =
     File.ReadLines "./RELEASE_NOTES.md"
