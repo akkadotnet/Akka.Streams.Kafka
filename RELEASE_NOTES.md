@@ -1,4 +1,4 @@
-#### 1.0.0-beta1 November 27 2019 ####
+#### 1.0.0 November 27 2019 ####
 **First beta release of Akka.Streams.Kafka**
 
 In this release, library was rewritten almost completely.
@@ -11,7 +11,3 @@ Transactional stages are partially implemented, but waiting for issue https://gi
 Among the others improvements, some critical issues were resolved, like
 - Get rid of internal buffering and scheduled pooling in Consumer stages (https://github.com/akkadotnet/Akka.Streams.Kafka/issues/35)
 - DrainControl class is implement, which allows to shutdown stages from outside (so does not require source to be finished to stop processing)
-
-
-#### 0.5.0 August 7 2019 #### 
-Early release version of Akka.Streams.Kafka. This library is going to be rewritten to comport with Kafka and Akka.NET best practices, but it's available for use now.
