@@ -322,7 +322,7 @@ var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptio
 The `CommitWithMetadataSource` makes it possible to add additional metadata (in the form of a string)
  when an offset is committed based on the record. This can be useful (for example) to store information about which
  node made the commit, what time the commit was made, the timestamp of the record etc.
- 
+
  ```c#
 string MetadataFromMessage<K, V>(ConsumeResult<K, V> message) => message.Offset.ToString();
 
