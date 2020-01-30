@@ -82,7 +82,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .ToMaterialized(Sink.Last<int>(), Keep.Both)
                 .Run(Materializer);
 
-            AwaitCondition(() => totalConsumed == totalMessages, TimeSpan.FromSeconds(30));
+            // One by one, wait while all `totalMessages` will be consumed
+            for (var i = 1; i < totalMessages; ++i)
+            {
+                var consumedExpect = i;
+                Log.Info($"Waiting for {consumedExpect} to be consumed...");
+                AwaitCondition(() => totalConsumed >= consumedExpect, TimeSpan.FromSeconds(30));
+                Log.Info($"Confirmed that {consumedExpect} messages are consumed");
+            }
 
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
