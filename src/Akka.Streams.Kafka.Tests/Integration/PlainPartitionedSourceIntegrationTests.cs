@@ -30,6 +30,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
             var totalMessages = 100;
+            var receivedMessages = new AtomicCounter(0); 
 
             var consumerSettings = CreateConsumerSettings<string>(group);
 
@@ -41,7 +42,11 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     Log.Info($"Sub-source for {topicPartition}");
                     var sourceMessages = await source
                         .Scan(0, (i, message) => i + 1)
-                        .Select(i => LogReceivedMessages(topicPartition, i))
+                        .Select(i =>
+                        {
+                            receivedMessages.IncrementAndGet();
+                            return LogReceivedMessages(topicPartition, i);
+                        })
                         .RunWith(Sink.Last<long>(), Materializer);
 
                     Log.Info($"{topicPartition}: Received {sourceMessages} messages in total");
@@ -56,8 +61,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
-            // Give it some time to consume all messages
-            await Task.Delay(5000);
+            for (var i = 0; i < totalMessages; ++i)
+                await AwaitConditionAsync(() => receivedMessages.Current > i, TimeSpan.FromSeconds(10));
+
+            await Task.Delay(1000); // Wait for message handling finished after all messages received
 
             var shutdown = control.DrainAndShutdown();
             AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
