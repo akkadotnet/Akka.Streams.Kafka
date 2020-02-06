@@ -26,6 +26,6 @@ Among the others improvements, some critical issues were resolved, like
     <AkkaVersion>1.4.0-beta4</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>16.4.0</TestSdkVersion>
+    <TestSdkVersion>16.5.0</TestSdkVersion>
   </PropertyGroup>
 </Project>
