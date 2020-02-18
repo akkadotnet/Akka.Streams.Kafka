@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Copyright>Copyright © 2015-2019 .NET Foundation</Copyright>
+    <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
     <VersionPrefix>1.0.0</VersionPrefix>
     <PackageReleaseNotes>First beta release of Akka.Streams.Kafka**
