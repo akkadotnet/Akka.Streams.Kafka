@@ -63,7 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Keeps commit senders that need a reply once stashed commits are made.
         /// </summary>
-        private IImmutableList<IActorRef> _rebalanceCommitSenders = new ImmutableArray<IActorRef>();
+        private IImmutableList<IActorRef> _rebalanceCommitSenders = ImmutableArray<IActorRef>.Empty;
 
         /// <summary>
         /// KafkaConsumerActor
