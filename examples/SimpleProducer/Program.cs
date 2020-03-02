@@ -11,7 +11,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using Config = Akka.Configuration.Config;
+using Config = Hocon.Config;
 
 namespace SimpleProducer
 {

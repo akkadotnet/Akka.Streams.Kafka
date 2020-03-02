@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using Akka.Actor;
 using Confluent.Kafka;
-using Config = Akka.Configuration.Config;
+using Config = Hocon.Config;
 
 namespace Akka.Streams.Kafka.Settings
 {

@@ -17,7 +17,7 @@ using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
-using Config = Akka.Configuration.Config;
+using Config = Hocon.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
