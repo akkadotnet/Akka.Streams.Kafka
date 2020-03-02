@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
     <VersionPrefix>1.0.0</VersionPrefix>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

@@ -22,5 +22,8 @@ This release builds upon the work of the 1.0.0-beta1 released last year, but wit
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>16.5.0</TestSdkVersion>
+    <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
+    <NetFrameworkTestVersion>net461</NetFrameworkTestVersion>
+    <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
   </PropertyGroup>
 </Project>
