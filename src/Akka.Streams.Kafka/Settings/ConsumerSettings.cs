@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using Akka.Actor;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Confluent.Kafka;
-using Config = Akka.Configuration.Config;
+using Config = Hocon.Config;
 
 namespace Akka.Streams.Kafka.Settings
 {
