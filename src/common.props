@@ -3,10 +3,8 @@
     <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
     <VersionPrefix>1.0.0</VersionPrefix>
-    <PackageReleaseNotes>Second beta release of Akka.Streams.Kafka**
-This release builds upon the work of the 1.0.0-beta1 released last year, but with some improvements and changes:
-- Updated to use Akka.NET v1.4.0-beta4;
-- [Bugfix: InvalidOperationException](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/103)</PackageReleaseNotes>
+    <PackageReleaseNotes>Stable release candidate of Akka.Streams.Kafka**
+Updated to use Akka.NET v1.4.1-rc1 and offers stable API access to Akka.Streams.Kafka.</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
