@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Threading;
 using Akka.Actor;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Confluent.Kafka;
@@ -48,7 +49,7 @@ namespace Akka.Streams.Kafka.Settings
                 partitionHandlerWarning: config.GetTimeSpan("partition-handler-warning", TimeSpan.FromSeconds(5)),
                 commitTimeWarning: config.GetTimeSpan("commit-time-warning", TimeSpan.FromSeconds(1)),
                 commitTimeout: config.GetTimeSpan("commit-timeout", TimeSpan.FromSeconds(15)),
-                commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", TimeSpan.Zero, allowInfinite: true),
+                commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", Timeout.InfiniteTimeSpan, allowInfinite: true),
                 stopTimeout: config.GetTimeSpan("stop-timeout", TimeSpan.FromSeconds(30)),
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
                 waitClosePartition: config.GetTimeSpan("wait-close-partition", TimeSpan.FromSeconds(1)),
@@ -201,7 +202,7 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithCommitRefreshInterval(TimeSpan commitRefreshInterval)
         {
-            return Copy(commitRefreshInterval: commitRefreshInterval == TimeSpan.Zero ? TimeSpan.MaxValue : commitRefreshInterval);
+            return Copy(commitRefreshInterval: commitRefreshInterval == TimeSpan.Zero ? Timeout.InfiniteTimeSpan : commitRefreshInterval);
         }
         
         /// <summary>

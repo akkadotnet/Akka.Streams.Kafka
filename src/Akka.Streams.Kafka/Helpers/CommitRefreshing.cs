@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Confluent.Kafka;
 
@@ -26,7 +27,7 @@ namespace Akka.Streams.Kafka.Helpers
     {
         public static ICommitRefreshing<K, V> Create<K, V>(TimeSpan commitRefreshInterval)
         {
-            if (commitRefreshInterval == TimeSpan.MaxValue)
+            if (commitRefreshInterval == Timeout.InfiniteTimeSpan)
                 return new NoOp<K, V>();
             else
                 return new Impl<K, V>(commitRefreshInterval);
