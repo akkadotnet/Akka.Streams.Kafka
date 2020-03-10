@@ -5,7 +5,6 @@ using System.Threading;
 using Akka.Actor;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Confluent.Kafka;
-using Config = Hocon.Config;
 
 namespace Akka.Streams.Kafka.Settings
 {
@@ -37,7 +36,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="valueDeserializer">Value deserializer</param>
         /// <returns>Consumer settings</returns>
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
-        public static ConsumerSettings<TKey, TValue> Create(Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
+        public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
 

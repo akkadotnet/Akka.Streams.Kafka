@@ -12,7 +12,7 @@ using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Xunit;
 using Xunit.Abstractions;
-using Config = Hocon.Config;
+using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
