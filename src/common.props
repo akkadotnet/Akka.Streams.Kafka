@@ -4,7 +4,8 @@
     <Authors>Akka</Authors>
     <VersionPrefix>1.0.0</VersionPrefix>
     <PackageReleaseNotes>Stable release candidate of Akka.Streams.Kafka**
-Updated to use Akka.NET v1.4.1-rc1 and offers stable API access to Akka.Streams.Kafka.</PackageReleaseNotes>
+Updated to use Akka.NET v1.4.1-rc2 and offers stable API access to Akka.Streams.Kafka.
+[Bugfix: Fixes for batch committer flow and commit refreshing](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/112)</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
