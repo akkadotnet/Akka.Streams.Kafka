@@ -104,7 +104,7 @@ namespace Akka.Streams.Kafka.Helpers
                 _requestedOffsets = _requestedOffsets.SetItems(requestedOffsetsToAdd);
                 
                 var committedOffsetsToAdd = assignedOffsets
-                    .Where(offset => !_requestedOffsets.ContainsKey(offset.TopicPartition))
+                    .Where(offset => !_committedOffsets.ContainsKey(offset.TopicPartition))
                     .ToImmutableDictionary(offset => offset.TopicPartition, offset => offset.Offset);
                 _requestedOffsets = _committedOffsets.SetItems(committedOffsetsToAdd);
                 
