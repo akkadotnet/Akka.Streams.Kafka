@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using Akka.Actor;
 using Confluent.Kafka;
-using Config = Hocon.Config;
 
 namespace Akka.Streams.Kafka.Settings
 {
@@ -76,7 +75,7 @@ namespace Akka.Streams.Kafka.Settings
             return Create(config, keySerializer, valueSerializer);
         }
 
-        public static ProducerSettings<TKey, TValue> Create(Config config, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
+        public static ProducerSettings<TKey, TValue> Create(Akka.Configuration.Config config, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET producer was not provided");
 

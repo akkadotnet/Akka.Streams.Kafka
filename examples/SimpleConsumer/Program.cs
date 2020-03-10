@@ -6,7 +6,7 @@ using Akka.Streams;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using Config = Hocon.Config;
+using Config = Akka.Configuration.Config;
 
 namespace SimpleConsumer
 {
