@@ -76,7 +76,6 @@ namespace Akka.Streams.Kafka.Messages
             {
                 case ICommittableOffset committableOffset:
                     return UpdateWithOffset(committableOffset);
-                    break;
                 case ICommittableOffsetBatch committableOffsetBatch:
                     return UpdateWithBatch(committableOffsetBatch);
                 default:
@@ -143,7 +142,7 @@ namespace Akka.Streams.Kafka.Messages
             }
             else
             {
-                Committers.SetItem(partitionOffset.GroupId, committer);
+                newCommitters = Committers.SetItem(partitionOffset.GroupId, committer);
             }
             
             return new CommittableOffsetBatch(newOffsets, newCommitters, BatchSize + 1);

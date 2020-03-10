@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Confluent.Kafka;
 
@@ -25,7 +27,7 @@ namespace Akka.Streams.Kafka.Helpers
     {
         public static ICommitRefreshing<K, V> Create<K, V>(TimeSpan commitRefreshInterval)
         {
-            if (commitRefreshInterval == TimeSpan.MaxValue)
+            if (commitRefreshInterval == Timeout.InfiniteTimeSpan)
                 return new NoOp<K, V>();
             else
                 return new Impl<K, V>(commitRefreshInterval);
@@ -46,8 +48,8 @@ namespace Akka.Streams.Kafka.Helpers
         public class Impl<K, V> : ICommitRefreshing<K, V>
         {
             private readonly TimeSpan _commitRefreshInterval;
-            private IImmutableSet<TopicPartitionOffset> _requestedOffsets = ImmutableHashSet<TopicPartitionOffset>.Empty;
-            private IImmutableSet<TopicPartitionOffset> _committedOffsets = ImmutableHashSet<TopicPartitionOffset>.Empty;
+            private IImmutableDictionary<TopicPartition, Offset> _requestedOffsets = ImmutableDictionary<TopicPartition, Offset>.Empty;
+            private IImmutableDictionary<TopicPartition, Offset> _committedOffsets = ImmutableDictionary<TopicPartition, Offset>.Empty;
             private IImmutableDictionary<TopicPartition, DateTime> _refreshDeadlines = ImmutableDictionary<TopicPartition, DateTime>.Empty;
 
             public Impl(TimeSpan commitRefreshInterval)
@@ -55,15 +57,17 @@ namespace Akka.Streams.Kafka.Helpers
                 _commitRefreshInterval = commitRefreshInterval;
             }
             
-            public void Add(IImmutableSet<TopicPartitionOffset> offsets) => _requestedOffsets = _requestedOffsets.Union(offsets);
+            public void Add(IImmutableSet<TopicPartitionOffset> offsets) => _requestedOffsets = 
+                _requestedOffsets.SetItems(offsets.ToImmutableDictionary(tpo => tpo.TopicPartition, tpo => tpo.Offset));
 
-            public void Committed(IImmutableSet<TopicPartitionOffset> offsets) => _committedOffsets = _committedOffsets.Union(offsets);
+            public void Committed(IImmutableSet<TopicPartitionOffset> offsets) => _committedOffsets = 
+                _committedOffsets.SetItems(offsets.ToImmutableDictionary(tpo => tpo.TopicPartition, tpo => tpo.Offset));
 
             public void Revoke(IImmutableSet<TopicPartition> revokedTopicPartitions)
             {
-                _requestedOffsets = _requestedOffsets.Where(tp => revokedTopicPartitions.Contains(tp.TopicPartition)).ToImmutableHashSet();
-                _committedOffsets = _committedOffsets.Where(tp => revokedTopicPartitions.Contains(tp.TopicPartition)).ToImmutableHashSet();
-                _refreshDeadlines.RemoveRange(revokedTopicPartitions);
+                _requestedOffsets = _requestedOffsets.RemoveRange(revokedTopicPartitions);
+                _committedOffsets = _committedOffsets.RemoveRange(revokedTopicPartitions);
+                _refreshDeadlines = _refreshDeadlines.RemoveRange(revokedTopicPartitions);
             }
 
             public IImmutableSet<TopicPartitionOffset> RefreshOffsets
@@ -76,8 +80,9 @@ namespace Akka.Streams.Kafka.Helpers
 
                     if (overdueTopicPartitions.Any())
                     {
-                        return _committedOffsets.Where(topicPartitionOffset => overdueTopicPartitions.Contains(topicPartitionOffset.TopicPartition) && 
-                                                                               _requestedOffsets.Contains(topicPartitionOffset)).ToImmutableHashSet();
+                        return _committedOffsets.Where(tpo => overdueTopicPartitions.Contains(tpo.Key) && _requestedOffsets.Contains(tpo))
+                                                .Select(tpo => new TopicPartitionOffset(tpo.Key, tpo.Value))
+                                                .ToImmutableHashSet();
                     }
                     else
                     {
@@ -93,11 +98,15 @@ namespace Akka.Streams.Kafka.Helpers
 
             public void AssignedPositions(IImmutableSet<TopicPartition> assignedPartitions, IImmutableSet<TopicPartitionOffset> assignedOffsets)
             {
-                var requestedOffsetsToAdd = assignedOffsets.Where(offset => !_requestedOffsets.Contains(offset));
-                _requestedOffsets = _requestedOffsets.Union(requestedOffsetsToAdd);
+                var requestedOffsetsToAdd = assignedOffsets
+                    .Where(offset => !_requestedOffsets.ContainsKey(offset.TopicPartition))
+                    .ToImmutableDictionary(offset => offset.TopicPartition, offset => offset.Offset);
+                _requestedOffsets = _requestedOffsets.SetItems(requestedOffsetsToAdd);
                 
-                var committedOffsetsToAdd = assignedOffsets.Where(offset => !_committedOffsets.Contains(offset));
-                _requestedOffsets = _committedOffsets.Union(committedOffsetsToAdd);
+                var committedOffsetsToAdd = assignedOffsets
+                    .Where(offset => !_committedOffsets.ContainsKey(offset.TopicPartition))
+                    .ToImmutableDictionary(offset => offset.TopicPartition, offset => offset.Offset);
+                _requestedOffsets = _committedOffsets.SetItems(committedOffsetsToAdd);
                 
                 UpdateRefreshDeadlines(assignedPartitions);
             }
