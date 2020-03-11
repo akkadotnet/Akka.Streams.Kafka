@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using Akka;
 using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
+using Config = Akka.Configuration.Config;
 
 namespace SimpleProducer
 {
@@ -24,20 +27,21 @@ namespace SimpleProducer
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
 
-            var producerSettings = ProducerSettings<Null, string>.Create(system, null, new StringSerializer(Encoding.UTF8))
+            var producerSettings = ProducerSettings<Null, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092");
-
+            
             Source
                 .Cycle(() => Enumerable.Range(1, 100).GetEnumerator())
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = "akka100", Message = new Message<Null, string> { Value = elem }})
-                .Via(KafkaProducer.PlainFlow(producerSettings))
-                .Select(record =>
+                .Select(elem => ProducerMessage.Single(new ProducerRecord<Null, string>("akka100", elem)))
+                .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(producerSettings))
+                .Select(result =>
                 {
-                    Console.WriteLine($"Producer: {record.Topic}/{record.Partition} {record.Offset}: {record.Value}");
-                    return record;
+                    var response = result as Result<Null, string, NotUsed>;
+                    Console.WriteLine($"Producer: {response.Metadata.Topic}/{response.Metadata.Partition} {response.Metadata.Offset}: {response.Metadata.Value}");
+                    return result;
                 })
-                .RunWith(Sink.Ignore<DeliveryReport<Null, string>>(), materializer);
+                .RunWith(Sink.Ignore<IResults<Null, string, NotUsed>>(), materializer);
 
             // TODO: producer as a Commitable Sink
 

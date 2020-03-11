@@ -2,7 +2,7 @@ version: '2'
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:4.0.0
+    image: confluentinc/cp-zookeeper:5.3.0
     ports:
      - 32181:32181
     environment:
@@ -13,13 +13,14 @@ services:
       - "localhost: 127.0.0.1"
 
   kafka:
-    image: confluentinc/cp-kafka:4.0.0
+    image: confluentinc/cp-kafka:5.3.0
     ports:
      - 29092:29092
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
+      KAFKA_NUM_PARTITIONS: 3
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"

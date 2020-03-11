@@ -24,6 +24,11 @@ namespace Akka.Streams.Kafka.Settings
             return false;
         }
 
+        public static bool IsLocalValueSerializationError(Error error)
+        {
+            return error.Code == ErrorCode.Local_ValueSerialization || error.Code == ErrorCode.Local_ValueDeserialization;
+        }
+
         public static bool IsLocalErrorRetriable(Error error)
         {
             switch (error.Code)

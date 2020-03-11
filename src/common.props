@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Copyright>Copyright © 2015-2019 .NET Foundation</Copyright>
+    <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
-    <VersionPrefix>0.5.0</VersionPrefix>
-    <PackageReleaseNotes>Early release version of Akka.Streams.Kafka. This library is going to be rewritten to comport with Kafka and Akka.NET best practices, but it's available for use now.</PackageReleaseNotes>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <PackageReleaseNotes>Stable release of Akka.Streams.Kafka**
+Updated to use Akka.NET v1.4.1.</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
@@ -15,9 +16,12 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <AkkaVersion>1.3.14</AkkaVersion>
+    <AkkaVersion>1.4.1</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>15.9.0</TestSdkVersion>
+    <TestSdkVersion>16.5.0</TestSdkVersion>
+    <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
+    <NetFrameworkTestVersion>net461</NetFrameworkTestVersion>
+    <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
   </PropertyGroup>
 </Project>

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Collections.Immutable;
+using System.Threading.Tasks;
 using Akka.Streams.Kafka.Dsl;
 using Confluent.Kafka;
 
@@ -10,62 +11,19 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     public sealed class CommittableMessage<K, V>
     {
-        public CommittableMessage(ConsumerRecord<K, V> record, CommitableOffset commitableOffset)
+        public CommittableMessage(ConsumeResult<K, V> record, ICommittableOffset commitableOffset)
         {
             Record = record;
             CommitableOffset = commitableOffset;
         }
 
-        public ConsumerRecord<K, V> Record { get; }
-
-        public CommitableOffset CommitableOffset { get; }
-    }
-
-    /// <summary>
-    /// Included in <see cref="CommittableMessage{K,V}"/>. Makes it possible to
-    /// commit an offset or aggregate several offsets before committing.
-    /// Note that the offset position that is committed to Kafka will automatically
-    /// be one more than the `offset` of the message, because the committed offset
-    /// should be the next message your application will consume,
-    /// i.e. lastProcessedMessageOffset + 1.
-    /// </summary>
-    public class CommitableOffset
-    {
-        private readonly Func<CommittedOffsets> _task;
-
-        public CommitableOffset(Func<CommittedOffsets> task, PartitionOffset offset)
-        {
-            _task = task;
-            Offset = offset;
-        }
-
-        public PartitionOffset Offset { get; }
-
-        public CommittedOffsets Commit()
-        {
-            return _task();
-        }
-    }
-
-    /// <summary>
-    /// Offset position for a groupId, topic, partition.
-    /// </summary>
-    public class PartitionOffset
-    {
-        public PartitionOffset(string groupId, string topic, int partition, Offset offset)
-        {
-            GroupId = groupId;
-            Topic = topic;
-            Partition = partition;
-            Offset = offset;
-        }
-
-        public string GroupId { get; }
-
-        public string Topic { get; }
-
-        public int Partition { get; }
-
-        public Offset Offset { get; }
+        /// <summary>
+        /// The consumed record data
+        /// </summary>
+        public ConsumeResult<K, V> Record { get; }
+        /// <summary>
+        /// Consumer offset that can be commited
+        /// </summary>
+        public ICommittableOffset CommitableOffset { get; }
     }
 }

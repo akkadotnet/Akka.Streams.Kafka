@@ -6,81 +6,44 @@ using System.Threading.Tasks;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
-    public class PlainSinkIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public class PlainSinkIntegrationTests : KafkaIntegrationTests
     {
-        private const string KafkaUrl = "localhost:29092";
-        private const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
-        private readonly ActorMaterializer _materializer;
-
-        private string Uuid { get; } = Guid.NewGuid().ToString();
-
-        private string CreateTopic(int number) => $"topic-{number}-{Uuid}";
-        private string CreateGroup(int number) => $"group-{number}-{Uuid}";
-
-        public PlainSinkIntegrationTests(ITestOutputHelper output) 
-            : base(ConfigurationFactory
-                .FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"), null, output)
+        public PlainSinkIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
+            : base(null, output, fixture)
         {
-            _materializer = Sys.Materializer();
         }
 
-        private async Task GivenInitializedTopic(string topic)
-        {
-            using (var producer = ProducerSettings.CreateKafkaProducer())
-            {
-                await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
-            }
-        }
-
-        private ProducerSettings<Null, string> ProducerSettings =>
-            ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
-                .WithBootstrapServers(KafkaUrl);
-
-        private ConsumerSettings<Null, string> CreateConsumerSettings(string group)
-        {
-            return ConsumerSettings<Null, string>.Create(Sys, null, new StringDeserializer(Encoding.UTF8))
-                .WithBootstrapServers(KafkaUrl)
-                .WithProperty("auto.offset.reset", "earliest")
-                .WithGroupId(group);
-        }
-
-        [Fact(Skip = "Needs IMPL")]
+        [Fact]
         public async Task PlainSink_should_publish_100_elements_to_Kafka_producer()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
+            var topicPartition1 = new TopicPartition(topic1, 0);
 
-            await GivenInitializedTopic(topic1);
+            await GivenInitializedTopic(topicPartition1);
 
-            var consumerSettings = CreateConsumerSettings(group1);
+            var consumerSettings = CreateConsumerSettings<string>(group1);
             var consumer = consumerSettings.CreateKafkaConsumer();
-            consumer.Assign(new List<TopicPartition> { new TopicPartition(topic1, 0) });
+            consumer.Assign(new List<TopicPartition> { topicPartition1 });
 
             var task = new TaskCompletionSource<NotUsed>();
             int messagesReceived = 0;
 
-            consumer.OnRecord += (sender, message) =>
-            {
-                messagesReceived++;
-                if (messagesReceived == 100)
-                    task.SetResult(NotUsed.Instance);
-            };
-
             await Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
-                .RunWith(KafkaProducer.PlainSink(ProducerSettings), _materializer);
+                .Select(elem => new ProducerRecord<Null, string>(topicPartition1, elem.ToString()))
+                .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
             var dateTimeStart = DateTime.UtcNow;
 
@@ -91,28 +54,36 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             while (!task.Task.IsCompleted && CheckTimeout(TimeSpan.FromMinutes(1)))
             {
-                consumer.Poll(TimeSpan.FromSeconds(1));
+                try
+                {
+                    consumer.Consume(TimeSpan.FromSeconds(1));
+                    messagesReceived++;
+                    if (messagesReceived == 100)
+                        task.SetResult(NotUsed.Instance);
+                }
+                catch (ConsumeException) { /* Just try again */ }
             }
 
             messagesReceived.Should().Be(100);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public async Task PlainSink_should_fail_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
 
             await GivenInitializedTopic(topic1);
 
-            var config = ProducerSettings<Null, string>.Create(Sys, null, new StringSerializer(Encoding.UTF8))
+            var config = ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers("localhost:10092");
 
             var probe = Source
                 .From(Enumerable.Range(1, 100))
                 .Select(c => c.ToString())
-                .Select(elem => new MessageAndMeta<Null, string> { Topic = topic1, Message = new Message<Null, string> { Value = elem } })
-                .Via(KafkaProducer.PlainFlow(config))
-                .RunWith(this.SinkProbe<DeliveryReport<Null, string>>(), _materializer);
+                .Select(elem => new ProducerRecord<Null, string>(topic1, elem.ToString()))
+                .Select(record => new Message<Null, string, NotUsed>(record, NotUsed.Instance) as IEnvelope<Null, string, NotUsed>)
+                .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(config))
+                .RunWith(this.SinkProbe<IResults<Null, string, NotUsed>>(), Materializer);
 
             probe.ExpectSubscription();
             probe.OnError(new KafkaException(ErrorCode.Local_Transport));
