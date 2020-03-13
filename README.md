@@ -291,7 +291,7 @@ It is recommended to batch the commits for better throughput, with the trade-off
 
 ### PlainPartitionedSource
 
-The `PlainPartitionedSource` is a way to track automatic partition assignment from kafka.
+The `PlainPartitionedSource` is a way to track automatic partition assignment from Kafka.
 When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding source of `ConsumerRecord`s.
 When a topic-partition is revoked, the corresponding source completes.
 
@@ -415,10 +415,10 @@ When set, all logs will be written to `logs` subfolder near to your test assembl
 public readonly string LogPath = $"logs\\{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid():N}.txt";
 ```
 
-### Tests: kafka container reuse
+### Tests: Kafka container reuse
 
-By default, tests are configured to be friendly to CI - that is, before starting tests docker kafka images will be downloaded (if not yet exist) and containers started, and after all tests finish full cleanup will be performed (except the fact that downloaded docker images will not be removed).
+By default, tests are configured to be friendly to CI - that is, before starting tests docker Kafka images will be downloaded (if not yet exist) and containers started, and after all tests finish full cleanup will be performed (except the fact that downloaded docker images will not be removed).
 
 While this might be useful when running tests locally, there are situations when you would like to save startup/shutdown tests time by using some pre-existing container, that will be used for all test runs and will not be stopped/started each time.
 
-To achieve that, set `AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE` environment variable on your local machine to any value. This will force using existing kafka container, listening on port `29092` . Use `docker-compose up` console command in the root of project folder to get this container up and running.
+To achieve that, set `AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE` environment variable on your local machine to any value. This will force using existing Kafka container, listening on port `29092` . Use `docker-compose up` console command in the root of project folder to get this container up and running.
