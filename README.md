@@ -1,13 +1,13 @@
 # Akka Streams Kafka
 
-Akka Streams Kafka is an Akka Streams connector for Apache Kafka. This is a port of Alpakka project (https://github.com/akka/alpakka).
+Akka Streams Kafka is an Akka Streams connector for Apache Kafka. This is a port of the Alpakka Kafka project (https://github.com/akka/alpakka-kafka).
 
-Library is based on [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet) driver, and implements Sources, Sinks and Flows to handle kafka message streams.
+Library is based on [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet) driver, and implements Sources, Sinks and Flows to handle Kafka message streams.
 All stages are build with Akka.Streams advantages in mind:
-- There is no constant kafka topics pooling: messages are consumed on demand, and with back-pressure support
+- There is no constant Kafka topics pooling: messages are consumed on demand, and with back-pressure support
 - There is no internal buffering: consumed messages are passed to the downstream in realtime, and producer stages publish messages to Kafka as soon as get them from upstream
 - Each stage can make use of it's own `IConsumer` or `IProducer` instance, or can share them (can be used for optimization)
-- All kafka failures can be handled with usual stream error handling strategies
+- All Kafka failures can be handled with usual stream error handling strategies
 
 ## Builds
 [![Build status](https://ci.appveyor.com/api/projects/status/0glh2fi8uic17vl4/branch/dev?svg=true)](https://ci.appveyor.com/project/akkadotnet-contrib/akka-streams-kafka/branch/dev)
@@ -257,7 +257,7 @@ KafkaConsumer.PlainSource(consumerSettings, subscription)
 
 ### PlainExternalSource
 
-Special source that can use an external `KafkaConsumerActpr`. This is useful when you have
+Special source that can use an external `KafkaConsumerActor`. This is useful when you have
 a lot of manually assigned topic-partitions and want to keep only one kafka consumer.
 
 
@@ -276,12 +276,13 @@ If you need to store offsets in anything other than Kafka, `PlainSource` should 
 This is useful when “at-least once delivery” is desired, as each message will likely be delivered one time but in failure cases could be duplicated:
 
 ```C#
-KafkaConsumer.CommitableSource(consumerSettings, Subscriptions.Topics("topic1"))
-    .SelectAsync(1, elem =>
+KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics("topic1"))
+    .SelectAsync(1, async elem => 
     {
-        return elem.CommitableOffset.Commit();
+        await elem.CommitableOffset.Commit();
+        return Done.Instance;
     })
-    .RunWith(Sink.Ignore<CommittedOffsets>(), _materializer);
+    .RunWith(Sink.Ignore<Done>(), _materializer);
 ```
 The above example uses separate `SelectAsync` stages for processing and committing. This guarantees that for parallelism higher than 1 we will keep correct ordering of messages sent for commit.
 
@@ -290,7 +291,7 @@ It is recommended to batch the commits for better throughput, with the trade-off
 
 ### PlainPartitionedSource
 
-The `plainPartitionedSource` is a way to track automatic partition assignment from kafka.
+The `PlainPartitionedSource` is a way to track automatic partition assignment from kafka.
 When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding source of `ConsumerRecord`s.
 When a topic-partition is revoked, the corresponding source completes.
 
