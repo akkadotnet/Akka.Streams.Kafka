@@ -16,7 +16,7 @@ Updated to use Akka.NET v1.4.1.</PackageReleaseNotes>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <AkkaVersion>1.4.4</AkkaVersion>
+    <AkkaVersion>1.4.7</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>16.6.0</TestSdkVersion>
