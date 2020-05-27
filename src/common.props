@@ -19,7 +19,7 @@ Updated to use Akka.NET v1.4.1.</PackageReleaseNotes>
     <AkkaVersion>1.4.7</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>16.6.0</TestSdkVersion>
+    <TestSdkVersion>16.6.1</TestSdkVersion>
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     <NetFrameworkTestVersion>net461</NetFrameworkTestVersion>
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
