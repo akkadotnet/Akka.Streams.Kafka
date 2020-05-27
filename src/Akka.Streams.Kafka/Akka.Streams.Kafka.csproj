@@ -4,7 +4,6 @@
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
     <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
-    <VersionPrefix>1.0.0</VersionPrefix>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
