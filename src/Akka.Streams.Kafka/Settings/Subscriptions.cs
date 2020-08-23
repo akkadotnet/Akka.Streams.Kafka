@@ -80,7 +80,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler);
+            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler); 
             return this;
         }
     }
