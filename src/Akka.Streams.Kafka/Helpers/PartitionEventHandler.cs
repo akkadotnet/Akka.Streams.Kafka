@@ -130,47 +130,4 @@ namespace Akka.Streams.Kafka.Helpers
             }
         }
     }
-
-    /// <summary>
-    /// Creates new handler with chaining of other two handlers
-    /// </summary>
-    /// <typeparam name="K"></typeparam>
-    /// <typeparam name="V"></typeparam>
-    internal class PartitionAssignedHandlersChain<K, V> : IPartitionEventHandler<K, V>
-    {
-        private readonly IPartitionEventHandler<K, V> _handler1;
-        private readonly IPartitionEventHandler<K, V> _handler2;
-
-        /// <summary>
-        /// PartitionAssignedHandlersChain
-        /// </summary>
-        /// <param name="handler1">First handler in chain</param>
-        /// <param name="handler2">Second handler in chain</param>
-        public PartitionAssignedHandlersChain(IPartitionEventHandler<K, V> handler1, IPartitionEventHandler<K, V> handler2)
-        {
-            _handler1 = handler1;
-            _handler2 = handler2;
-        }
-
-        /// <inheritdoc />
-        public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, RestrictedConsumer<K, V> consumer)
-        {
-            _handler1.OnRevoke(revokedTopicPartitions, consumer);
-            _handler2.OnRevoke(revokedTopicPartitions, consumer);
-        }
-
-        /// <inheritdoc />
-        public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, RestrictedConsumer<K, V> consumer)
-        {
-            _handler1.OnAssign(assignedTopicPartitions, consumer);
-            _handler2.OnAssign(assignedTopicPartitions, consumer);
-        }
-
-        /// <inheritdoc />
-        public void OnStop(IImmutableSet<TopicPartition> topicPartitions, RestrictedConsumer<K, V> consumer)
-        {
-            _handler1.OnStop(topicPartitions, consumer);
-            _handler2.OnStop(topicPartitions, consumer);
-        }
-    }
 }

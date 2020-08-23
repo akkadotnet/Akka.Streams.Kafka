@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Util;
+using Akka.Util;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
