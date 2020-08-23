@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Stores delegates for external handling of partition events
         /// </summary>
-        private readonly IPartitionEventHandler<K,V> _partitionEventHandler;
+        private readonly IPartitionEventHandler _partitionEventHandler;
         
         private ICancelable _poolCancellation;
         private Internal.Poll<K, V> _pollMessage;
@@ -71,7 +71,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> partitionEventHandler)
+        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler)
         {
             _owner = owner;
             _settings = settings;
@@ -495,13 +495,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </remarks>
         class RebalanceListener<K, V> : RebalanceListenerBase
         {
-            private readonly IPartitionEventHandler<K,V> _partitionEventHandler;
+            private readonly IPartitionEventHandler _partitionEventHandler;
             private readonly KafkaConsumerActor<K, V> _actor;
 
             private readonly RestrictedConsumer<K, V> _restrictedConsumer;
             private readonly TimeSpan _warningDuration;
 
-            public RebalanceListener(IPartitionEventHandler<K,V> partitionEventHandler, KafkaConsumerActor<K, V> actor)
+            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<K, V> actor)
             {
                 _partitionEventHandler = partitionEventHandler;
                 _actor = actor;
