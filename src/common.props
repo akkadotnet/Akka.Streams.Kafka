@@ -2,10 +2,8 @@
   <PropertyGroup>
     <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
-    <VersionPrefix>1.0.1</VersionPrefix>
-    <PackageReleaseNotes>Maintenance Release for Akka.Streams.Kafka 1.0**
-Updated to use Akka.NET v1.4.7
-Upgraded Confluent driver to latest.</PackageReleaseNotes>
+    <VersionPrefix>1.1.0</VersionPrefix>
+    <PackageReleaseNotes>_Placeholder for nightlies_</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
