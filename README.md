@@ -399,6 +399,44 @@ var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, 
 
 Are not implemented yet. Waiting for issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85 to be resolved.
 
+### Partition Events handling
+
+Sometimes you may need to add custom handling for partition events, like assigning partition to consumer. To do that, you will need:
+
+1. To write custom implementation of `IPartitionEventHandler` interface:
+```c#
+class CustomEventsHandler : IPartitionEventHandler
+{
+	/// <inheritdoc />
+	public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+	{
+		// Your code here
+	}
+
+	/// <inheritdoc />
+	public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
+	{
+		// Your code here
+	}
+
+	/// <inheritdoc />
+	public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
+	{
+		// Your code here
+	}
+}
+```
+
+Here `IRestrictedConsumer` is an object providing access to some limited API of internal consumer kafka client.
+
+2. Use `WithPartitionEventsHandler` of `Topic` / `TopicPartition` subscriptions, like this:
+```c#
+var customHandler = new CustomEventsHandler();
+KafkaConsumer.PlainSource(settings, Subscriptions.Topics(yourTopic).WithPartitionEventsHandler(customHandler));
+```
+
+> Note: Your handler callbacks will be invoked in the same thread where kafka consumer is handling all events and getting messages, so be careful when using it.
+>
 ## Local development
 
 There are some helpers to simplify local development
