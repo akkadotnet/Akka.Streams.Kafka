@@ -318,9 +318,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     var pauseThese = currentAssignment.Except(resumeThese).ToList();
                     PausePartitions(pauseThese);
                     ResumePartitions(resumeThese);
-                    
+
                     ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
                 }
+            }
+            // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
+            catch (ConsumeException ex) when (ex.Message.Contains("Broker: Unknown topic or partition") && _settings.AutoCreateTopicsEnabled)
+            {
+                // Trying to consume from not existing topics/partitions - assume that there are not messages to consume
             }
             catch (ConsumeException ex)
             {

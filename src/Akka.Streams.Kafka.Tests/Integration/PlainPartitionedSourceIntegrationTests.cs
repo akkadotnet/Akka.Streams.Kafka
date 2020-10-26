@@ -155,6 +155,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
+            
+            await ProduceStrings(topic, new int[] { 0 }, ProducerSettings); // Produce "0" string
 
             var settings = CreateConsumerSettings<int>(group).WithValueDeserializer(Deserializers.Int32);
             
