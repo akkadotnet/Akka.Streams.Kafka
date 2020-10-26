@@ -90,6 +90,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var partitionsAssigned = false;
             var revoked = Option<IImmutableSet<TopicPartition>>.None;
             
+            // Create topic to allow consumer assignment
+            await ProduceStrings(topic, new []{ 0 }, ProducerSettings);
+            
             var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, Subscriptions.Topics(topic),
                 assignedPartitions =>
                 {
