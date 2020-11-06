@@ -26,18 +26,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// Gets actor props
         /// </summary>
         public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) => 
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new EmptyPartitionEventHandler<K,V>())).WithDispatcher(settings.DispatcherId);
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new PartitionEventHandlers.Empty())).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
+        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler<K,V> handler) => 
+        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
             Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>

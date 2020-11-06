@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -13,6 +14,7 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Tests.Logging;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -175,6 +177,61 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.Request(elementsCount);
             probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
             probe.Cancel();
+        }
+
+        [Fact]
+        public async Task Custom_partition_event_handling_Should_work()
+        {
+            int elementsCount = 100;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+            var topicPartition1 = new TopicPartition(topic1, 0);
+
+            await GivenInitializedTopic(topicPartition1);
+
+            await ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
+
+            var consumerSettings = CreateConsumerSettings<string>(group1);
+
+            var customHandler = new CustomEventsHandler();
+            var (control, probe) = CreateProbe(consumerSettings, Subscriptions.Topics(topic1).WithPartitionEventsHandler(customHandler));
+
+            probe.Request(elementsCount);
+            foreach (var i in Enumerable.Range(1, elementsCount).Select(c => c.ToString()))
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10));
+
+            var shutdown = control.Shutdown();
+            await AwaitConditionAsync(() => shutdown.IsCompleted);
+
+            customHandler.AssignmentEventsCounter.Current.Should().BeGreaterThan(0);
+            customHandler.StopEventsCounter.Current.Should().BeGreaterThan(0);
+        }
+
+        class CustomEventsHandler : IPartitionEventHandler
+        {
+            public AtomicCounter AssignmentEventsCounter = new AtomicCounter(0);
+            public AtomicCounter RevokeEventsCounter = new AtomicCounter(0);
+            public AtomicCounter StopEventsCounter = new AtomicCounter(0);
+
+
+            /// <inheritdoc />
+            public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
+                IRestrictedConsumer consumer)
+            {
+                RevokeEventsCounter.IncrementAndGet();
+            }
+
+            /// <inheritdoc />
+            public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                AssignmentEventsCounter.IncrementAndGet();
+            }
+
+            /// <inheritdoc />
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
+            {
+                StopEventsCounter.IncrementAndGet();
+            }
         }
     }
 }

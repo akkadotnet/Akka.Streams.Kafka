@@ -55,6 +55,7 @@ namespace Akka.Streams.Kafka.Settings
                 bufferSize: config.GetInt("buffer-size", 50),
                 drainingCheckInterval: config.GetTimeSpan("eos-draining-check-interval", TimeSpan.FromMilliseconds(30)),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
+                autoCreateTopicsEnabled: config.GetBoolean("allow.auto.create.topics", true),
                 properties: ImmutableDictionary<string, string>.Empty);
         }
 
@@ -119,6 +120,16 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public string DispatcherId { get; }
         /// <summary>
+        /// Allow automatic topic creation on the broker when subscribing to or assigning a topic.
+        /// </summary>
+        /// <remarks>
+        /// See more here: https://kafka.apache.org/documentation/#allow.auto.create.topics
+        /// Additionally, due to https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366 ,
+        /// when set to `true` and topic is not created by Confluent driver, consuming error will be ignored
+        /// (like if no message to consume)
+        /// </remarks>
+        public bool AutoCreateTopicsEnabled { get; }
+        /// <summary>
         /// Configuration properties
         /// </summary>
         public IImmutableDictionary<string, string> Properties { get; }
@@ -126,7 +137,7 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, 
                                 TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout, 
                                 TimeSpan positionTimeout, TimeSpan commitTimeWarning, TimeSpan partitionHandlerWarning,
-                                TimeSpan waitClosePartition, TimeSpan drainingCheckInterval,
+                                TimeSpan waitClosePartition, TimeSpan drainingCheckInterval, bool autoCreateTopicsEnabled,
                                 int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
         {
             KeyDeserializer = keyDeserializer;
@@ -144,6 +155,7 @@ namespace Akka.Streams.Kafka.Settings
             Properties = properties;
             WaitClosePartition = waitClosePartition;
             DrainingCheckInterval = drainingCheckInterval;
+            AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
         }
 
         /// <summary>
@@ -194,6 +206,13 @@ namespace Akka.Streams.Kafka.Settings
         /// Time to wait for pending requests when a partition is closed.
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithWaitClosePartition(TimeSpan waitClosePartition) => Copy(waitClosePartition: waitClosePartition);
+        /// <summary>
+        /// Allows topic auto-creation when constumer is subscribing or assigning to the topic.
+        /// </summary>
+        /// <remarks>
+        /// When set, and still getting error from broker, consumer will assume that no message was produced yet
+        /// </remarks>
+        public ConsumerSettings<TKey, TValue> WithAutoCreateTopicsEnabled(bool autoCreateTopicsEnabled) => Copy(autoCreateTopicsEnabled: autoCreateTopicsEnabled);
         
         /// <summary>
         /// If set to a finite duration, the consumer will re-send the last committed offsets periodically for all assigned partitions.
@@ -254,6 +273,7 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? stopTimeout = null,
             TimeSpan? positionTimeout = null,
             TimeSpan? waitClosePartition = null,
+            bool? autoCreateTopicsEnabled = null,
             int? bufferSize = null,
             string dispatcherId = null,
             IImmutableDictionary<string, string> properties = null) =>
@@ -272,6 +292,7 @@ namespace Akka.Streams.Kafka.Settings
                 bufferSize: bufferSize ?? this.BufferSize,
                 drainingCheckInterval: drainingCheckInterval ?? this.DrainingCheckInterval,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
+                autoCreateTopicsEnabled: autoCreateTopicsEnabled ?? this.AutoCreateTopicsEnabled,
                 properties: properties ?? this.Properties);
 
         /// <summary>

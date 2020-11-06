@@ -133,7 +133,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             if (!(Materializer is ActorMaterializer actorMaterializer))
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
-            var eventHandler = new AsyncCallbacksPartitionEventHandler<K, V>(_partitionAssignedCallback, _partitionRevokedCallback);
+            var eventHandler = new PartitionEventHandlers.AsyncCallbacks(_partitionAssignedCallback, _partitionRevokedCallback);
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
             ConsumerActor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 

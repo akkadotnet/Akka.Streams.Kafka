@@ -1,11 +1,26 @@
 using System.Collections.Immutable;
+using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Util;
+using Akka.Util;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
 {
     public interface ISubscription { }
     public interface IManualSubscription : ISubscription { }
-    public interface IAutoSubscription : ISubscription { }
+
+    public interface IAutoSubscription : ISubscription
+    {
+        /// <summary>
+        /// Partition events handler
+        /// </summary>
+        Option<IPartitionEventHandler> PartitionEventsHandler { get; }
+        
+        /// <summary>
+        /// Allows to specify custom partition events handler. See more at <see cref="IPartitionEventHandler"/>
+        /// </summary>
+        IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler);
+    }
 
     /// <summary>
     /// TopicSubscription
@@ -25,6 +40,16 @@ namespace Akka.Streams.Kafka.Settings
         /// List of topics to subscribe
         /// </summary>
         public IImmutableSet<string> Topics { get; }
+
+        /// <inheritdoc />
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
+
+        /// <inheritdoc />
+        public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
+        {
+            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler);
+            return this;
+        }
     }
     
     /// <summary>
@@ -48,6 +73,16 @@ namespace Akka.Streams.Kafka.Settings
         /// Topic pattern (regular expression to be matched)
         /// </summary>
         public string TopicPattern { get; }
+
+        /// <inheritdoc />
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
+
+        /// <inheritdoc />
+        public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
+        {
+            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler); 
+            return this;
+        }
     }
 
     /// <summary>
