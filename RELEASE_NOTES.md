@@ -1,4 +1,4 @@
-#### 1.1.1 November 6 2020 ####
+#### 1.1.0 November 6 2020 ####
 
 * Upgraded to [Akka.NET v1.4.11](https://github.com/akkadotnet/akka.net/releases/tag/1.4.11)
 * [Upgrade to Confluent.Kafka 1.5.2 and AutoCreateTopicsEnabled setting](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/157)
