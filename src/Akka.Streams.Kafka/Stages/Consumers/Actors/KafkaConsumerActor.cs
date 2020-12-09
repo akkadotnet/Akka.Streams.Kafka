@@ -200,6 +200,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             catch (Exception ex)
             {
                 _owner?.Tell(new Status.Failure(ex));
+                throw;
             }
         }
 
