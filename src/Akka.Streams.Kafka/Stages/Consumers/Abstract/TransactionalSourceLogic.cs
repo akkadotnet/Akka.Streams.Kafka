@@ -140,9 +140,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         /// <inheritdoc />
-        protected override IPartitionEventHandler<K, V> AddToPartitionAssignmentHandler(IPartitionEventHandler<K, V> handler)
+        protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
         {
-            var blockingRevokedCall = new AsyncCallbacksPartitionEventHandler<K, V>(
+            var blockingRevokedCall = new PartitionEventHandlers.AsyncCallbacks(
                 partitionAssignedCallback: _ => { },
                 partitionRevokedCallback: revokedTopicPartitions =>
                 {
@@ -158,7 +158,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     }
                 });
             
-            return new PartitionAssignedHandlersChain<K, V>(handler, blockingRevokedCall);
+            return new PartitionEventHandlers.Chain(handler, blockingRevokedCall);
         }
 
         private bool WaitForDraining(IImmutableSet<TopicPartition> partitions)
