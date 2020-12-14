@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using Akka.Actor;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
@@ -37,7 +38,18 @@ namespace Akka.Streams.Kafka.Settings
 
         public ProducerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
-        
+
+        public ProducerSettings<TKey, TValue> WithProperties(IDictionary<string, string> properties)
+        {
+            var builder = ImmutableDictionary.CreateBuilder<string, string>();
+            builder.AddRange(Properties);
+            foreach (var kvp in properties)
+            {
+                builder.AddOrSet(kvp.Key, kvp.Value);
+            }
+            return Copy(properties: builder.ToImmutable());
+        }
+
         /// <summary>
         /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
         /// </summary>

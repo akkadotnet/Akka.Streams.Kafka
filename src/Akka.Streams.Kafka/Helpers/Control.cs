@@ -104,6 +104,12 @@ namespace Akka.Streams.Kafka.Helpers
         {
             return new DrainingControl<NotUsed>(tuple.Item1, tuple.Item2.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
         }
+
+        public static DrainingControl<NotUsed> Create(IControl control, Task streamCompletion)
+        {
+            return new DrainingControl<NotUsed>(control, streamCompletion.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
+        }
+
     }
 
     /// <summary>

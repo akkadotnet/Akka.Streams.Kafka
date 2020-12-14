@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Threading;
 using Akka.Actor;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
@@ -181,6 +182,17 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
+
+        public ConsumerSettings<TKey, TValue> WithProperties(IDictionary<string, string> properties)
+        {
+            var builder = ImmutableDictionary.CreateBuilder<string, string>();
+            builder.AddRange(Properties);
+            foreach (var kvp in properties)
+            {
+                builder.AddOrSet(kvp.Key, kvp.Value);
+            }
+            return Copy(properties: builder.ToImmutable());
+        }
 
         /// <summary>
         /// Set the interval from one scheduled poll to the next.
