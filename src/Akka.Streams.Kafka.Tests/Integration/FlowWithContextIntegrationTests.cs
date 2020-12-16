@@ -87,7 +87,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
             {
                 var consumedExpect = i;
                 Log.Info($"Waiting for {consumedExpect} to be consumed...");
-                AwaitCondition(() => totalConsumed >= consumedExpect, TimeSpan.FromSeconds(30));
+                try
+                {
+                    await AwaitConditionAsync(() => totalConsumed >= consumedExpect, TimeSpan.FromSeconds(30));
+                }
+                finally
+                {
+                    Log.Info($"Finished waiting for {consumedExpect} messages. Total: {totalConsumed}");
+                }
                 Log.Info($"Confirmed that {consumedExpect} messages are consumed");
             }
 
