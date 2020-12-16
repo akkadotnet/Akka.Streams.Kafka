@@ -2,8 +2,10 @@
   <PropertyGroup>
     <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
-    <VersionPrefix>1.1.0</VersionPrefix>
-    <PackageReleaseNotes>_Placeholder for nightlies_</PackageReleaseNotes>
+    <VersionPrefix>1.1.1</VersionPrefix>
+    <PackageReleaseNotes>Upgraded to [Akka.NET v1.4.13](https://github.com/akkadotnet/akka.net/releases/tag/1.4.13)
+Upgrade to Confluent.Kafka 1.5.3
+[Make Akka.Streams.Kafka client compatible with Azure Event Hub Kafka API](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/167)</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
