@@ -17,7 +17,7 @@ Upgrade to Confluent.Kafka 1.5.3
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
-    <AkkaVersion>1.4.13</AkkaVersion>
+    <AkkaVersion>1.4.15</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>16.8.3</TestSdkVersion>
