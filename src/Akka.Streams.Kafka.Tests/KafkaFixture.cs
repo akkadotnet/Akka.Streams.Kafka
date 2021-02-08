@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Tests
         }
         
         public int KafkaPort { get; private set; }
-        public string KafkaServer => $"localhost:{KafkaPort}";
+        public string KafkaServer => $"127.0.0.1:{KafkaPort}";
 
         public async Task InitializeAsync()
         {
