@@ -210,7 +210,21 @@ namespace Akka.Streams.Kafka.Tests
 
         private async Task EnsureImageExists(string imageName, string imageTag)
         {
-            var existingImages = await _client.Images.ListImagesAsync(new ImagesListParameters { MatchName = $"{imageName}:{imageTag}" });
+            var existingImages = await _client.Images.ListImagesAsync(
+                new ImagesListParameters
+                {
+                    Filters = new Dictionary<string, IDictionary<string, bool>>
+                    {
+                        {
+                            "reference",
+                            new Dictionary<string, bool>
+                            {
+                                {$"{imageName}:{imageTag}", true}
+                            }
+                        }
+                    }
+                });
+
             if (existingImages.Count == 0)
             {
                 await _client.Images.CreateImageAsync(
