@@ -87,7 +87,8 @@ namespace Akka.Streams.Kafka.Tests
                 ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://localhost:{KafkaPort}",
                 ["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] = "true",
                 ["KAFKA_DELETE_TOPIC_ENABLE"] = "true",
-                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1"
+                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1",
+                ["KAFKA_OPTS"] = "-Djava.net.preferIPv4Stack=True"
             });
 
             // Setting up network for containers to communicate
