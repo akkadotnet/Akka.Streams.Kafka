@@ -44,7 +44,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Request(totalMessages);
             var messages = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
-            messages.Should().BeEquivalentTo(Enumerable.Range(1, totalMessages).Select(m => m.ToString()));
+            messages.Should().BeEquivalentTo(Enumerable.Range(1, totalMessages).Select(m => m.ToString()), opt => opt.WithoutStrictOrdering());
             
             probe.Cancel();
         }

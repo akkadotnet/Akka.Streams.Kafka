@@ -40,6 +40,16 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var totalConsumed = 0;
             
             await ProduceStrings(topic1, Enumerable.Range(1, totalMessages), producerSettings);
+            
+            var (control2, result) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
+                .Scan(0, (c, _) => c + 1)
+                .Select(consumed =>
+                {
+                    totalConsumed = consumed;
+                    return consumed;
+                })
+                .ToMaterialized(Sink.Last<int>(), Keep.Both)
+                .Run(Materializer);
 
             var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics(topic1))
                 .Select(record =>
@@ -70,16 +80,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Log("Produced messages", r => $"Committing {r.Item2.Offset.Topic}:{r.Item2.Offset.Partition}[{r.Item2.Offset.Offset}]")
                 .ToMaterialized(Committer.SinkWithOffsetContext<IResults<string, string, ICommittableOffset>>(committerSettings), Keep.Both)
                 .MapMaterializedValue(tuple => DrainingControl<NotUsed>.Create(tuple.Item1, tuple.Item2))
-                .Run(Materializer);
-            
-            var (control2, result) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
-                .Scan(0, (c, _) => c + 1)
-                .Select(consumed =>
-                {
-                    totalConsumed = consumed;
-                    return consumed;
-                })
-                .ToMaterialized(Sink.Last<int>(), Keep.Both)
                 .Run(Materializer);
 
             // One by one, wait while all `totalMessages` will be consumed
