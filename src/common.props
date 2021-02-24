@@ -20,7 +20,7 @@ Upgrade to Confluent.Kafka 1.5.3
     <AkkaVersion>1.4.16</AkkaVersion>
     <XunitVersion>2.4.1</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>16.8.3</TestSdkVersion>
+    <TestSdkVersion>16.9.1</TestSdkVersion>
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     <NetFrameworkTestVersion>net461</NetFrameworkTestVersion>
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
