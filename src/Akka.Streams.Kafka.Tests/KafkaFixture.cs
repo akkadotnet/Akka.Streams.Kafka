@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Tests
         }
         
         public int KafkaPort { get; private set; }
-        public string KafkaServer => $"localhost:{KafkaPort}";
+        public string KafkaServer => $"127.0.0.1:{KafkaPort}";
 
         public async Task InitializeAsync()
         {
@@ -84,10 +84,12 @@ namespace Akka.Streams.Kafka.Tests
                 ["KAFKA_BROKER_ID"] = "1",
                 ["KAFKA_NUM_PARTITIONS"] = "3",
                 ["KAFKA_ZOOKEEPER_CONNECT"] = $"{_zookeeperContainerName}:{zookeeperPort}", // referencing zookeeper container directly in common docker network
-                ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://localhost:{KafkaPort}",
+                ["KAFKA_LISTENERS"] = $"PLAINTEXT://:{KafkaPort}",
+                ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://127.0.0.1:{KafkaPort}",
                 ["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] = "true",
                 ["KAFKA_DELETE_TOPIC_ENABLE"] = "true",
-                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1"
+                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1",
+                ["KAFKA_OPTS"] = "-Djava.net.preferIPv4Stack=True"
             });
 
             // Setting up network for containers to communicate
@@ -210,7 +212,21 @@ namespace Akka.Streams.Kafka.Tests
 
         private async Task EnsureImageExists(string imageName, string imageTag)
         {
-            var existingImages = await _client.Images.ListImagesAsync(new ImagesListParameters { MatchName = $"{imageName}:{imageTag}" });
+            var existingImages = await _client.Images.ListImagesAsync(
+                new ImagesListParameters
+                {
+                    Filters = new Dictionary<string, IDictionary<string, bool>>
+                    {
+                        {
+                            "reference",
+                            new Dictionary<string, bool>
+                            {
+                                {$"{imageName}:{imageTag}", true}
+                            }
+                        }
+                    }
+                });
+
             if (existingImages.Count == 0)
             {
                 await _client.Images.CreateImageAsync(

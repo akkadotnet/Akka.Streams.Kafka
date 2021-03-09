@@ -40,37 +40,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var totalConsumed = 0;
             
             await ProduceStrings(topic1, Enumerable.Range(1, totalMessages), producerSettings);
-
-            var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics(topic1))
-                .Select(record =>
-                {
-                    IEnvelope<string, string, NotUsed> output;
-                    if (Duplicate(record.Value))
-                    {
-                        output = ProducerMessage.Multi(new[]
-                        {
-                            new ProducerRecord<string, string>(topic2, record.Key, record.Value),
-                            new ProducerRecord<string, string>(topic3, record.Key, record.Value)
-                        }.ToImmutableSet());
-                    }
-                    else if (Ignore(record.Value))
-                    {
-                        output = ProducerMessage.PassThrough<string, string>();
-                    }
-                    else
-                    {
-                        output = ProducerMessage.Single(new ProducerRecord<string, string>(topic4, record.Key, record.Value));
-                    }
-
-                    Log.Debug($"Giving message of type {output.GetType().Name}");
-                    return output;
-                })
-                .Via(KafkaProducer.FlowWithContext<string, string, ICommittableOffset>(producerSettings))
-                .AsSource()
-                .Log("Produced messages", r => $"Committing {r.Item2.Offset.Topic}:{r.Item2.Offset.Partition}[{r.Item2.Offset.Offset}]")
-                .ToMaterialized(Committer.SinkWithOffsetContext<IResults<string, string, ICommittableOffset>>(committerSettings), Keep.Both)
-                .MapMaterializedValue(tuple => DrainingControl<NotUsed>.Create(tuple.Item1, tuple.Item2.ContinueWith(t => NotUsed.Instance)))
-                .Run(Materializer);
             
             var (control2, result) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
                 .Scan(0, (c, _) => c + 1)
@@ -80,6 +49,37 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     return consumed;
                 })
                 .ToMaterialized(Sink.Last<int>(), Keep.Both)
+                .Run(Materializer);
+
+            var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics(topic1))
+                .Select(record =>
+                {
+                    IEnvelope<string, string, NotUsed> output;
+                    if (Duplicate(record.Message.Value))
+                    {
+                        output = ProducerMessage.Multi(new[]
+                        {
+                            new ProducerRecord<string, string>(topic2, record.Message.Key, record.Message.Value),
+                            new ProducerRecord<string, string>(topic3, record.Message.Key, record.Message.Value)
+                        }.ToImmutableSet());
+                    }
+                    else if (Ignore(record.Message.Value))
+                    {
+                        output = ProducerMessage.PassThrough<string, string>();
+                    }
+                    else
+                    {
+                        output = ProducerMessage.Single(new ProducerRecord<string, string>(topic4, record.Message.Key, record.Message.Value));
+                    }
+
+                    Log.Debug($"Giving message of type {output.GetType().Name}");
+                    return output;
+                })
+                .Via(KafkaProducer.FlowWithContext<string, string, ICommittableOffset>(producerSettings))
+                .AsSource()
+                .Log("Produced messages", r => $"Committing {r.Item2.Offset.Topic}:{r.Item2.Offset.Partition}[{r.Item2.Offset.Offset}]")
+                .ToMaterialized(Committer.SinkWithOffsetContext<IResults<string, string, ICommittableOffset>>(committerSettings), Keep.Both)
+                .MapMaterializedValue(tuple => DrainingControl<NotUsed>.Create(tuple.Item1, tuple.Item2))
                 .Run(Materializer);
 
             // One by one, wait while all `totalMessages` will be consumed
