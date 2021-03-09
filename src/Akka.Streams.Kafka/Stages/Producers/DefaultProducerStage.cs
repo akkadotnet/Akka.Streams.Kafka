@@ -139,7 +139,6 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             Producer = _stage.ProducerProvider(HandleProduceError);
-            Producer = _stage.ProducerProvider(HandleProduceError);
             Log.Debug($"Producer started: {Producer.Name}");
         }
 
@@ -233,7 +232,18 @@ namespace Akka.Streams.Kafka.Stages
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
                 var exception = new KafkaException(error);
-                FailStage(exception);
+                switch (_decider(exception))
+                {
+                    case Directive.Stop:
+                        if (_stage.CloseProducerOnStop)
+                        {
+                            producer.Dispose();
+                        }
+                        _failStageCallback(exception);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 

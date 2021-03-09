@@ -31,7 +31,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var totalMessages = 100;
             var consumerSettings = CreateConsumerSettings<string>(group);
 
-            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
+            var allMessages = Enumerable.Range(1, totalMessages).ToList();
+
+            await ProduceStrings(topic, allMessages, ProducerSettings);
             
             var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
                 consumerSettings, 
@@ -43,9 +45,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(totalMessages);
-            var messages = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
-            messages.Should().BeEquivalentTo(Enumerable.Range(1, totalMessages).Select(m => m.ToString()), opt => opt.WithoutStrictOrdering());
-            
+            probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
             probe.Cancel();
         }
         
