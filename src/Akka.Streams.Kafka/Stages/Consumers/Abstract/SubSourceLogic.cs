@@ -155,7 +155,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public override void PostStop()
         {
-            ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
             
             Control.OnShutdown();
             
@@ -326,7 +326,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 }
             });
             
-            Materializer.ScheduleOnce(_settings.StopTimeout, () => ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop()));
+            Materializer.ScheduleOnce(_settings.StopTimeout, () => ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance));
         }
 
         /// <summary>

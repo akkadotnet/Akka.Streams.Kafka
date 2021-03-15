@@ -136,7 +136,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// <inheritdoc />
         protected override void StopConsumerActor()
         {
-            SourceActor.Ref.Tell(new Drain(_inFlightRecords.Assigned, ConsumerActor.AsOption(), new KafkaConsumerActorMetadata.Internal.Stop()), SourceActor.Ref);
+            SourceActor.Ref.Tell(new Drain(_inFlightRecords.Assigned, ConsumerActor.AsOption(), KafkaConsumerActorMetadata.Internal.Stop.Instance), SourceActor.Ref);
         }
 
         /// <inheritdoc />
@@ -154,7 +154,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     else
                     {
                         SourceActor.Ref.Tell(new Status.Failure(new Exception("Timeout while drailing")));
-                        ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop());
+                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
                     }
                 });
             

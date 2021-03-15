@@ -244,11 +244,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public string TopicPattern { get; }
             }
-            
+
             /// <summary>
             /// Stops consuming actor
             /// </summary>
-            public class Stop{ }
+            public class Stop
+            {
+                public static readonly Stop Instance = new Stop();
+
+                private Stop() { }
+            }
 
             /// <summary>
             /// Seek
