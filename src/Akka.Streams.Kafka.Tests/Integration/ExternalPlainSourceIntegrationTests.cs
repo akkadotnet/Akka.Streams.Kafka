@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully && control2.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
-            consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
+            consumer.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, ActorRefs.NoSender);
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => control1.IsShutdown.IsCompleted && control2.IsShutdown.IsCompleted && control3.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
-            consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
+            consumer.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, ActorRefs.NoSender);
         }
 
         [Fact]
@@ -143,7 +143,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully && control2.IsShutdown.IsCompletedSuccessfully);
             
             // Cleanup
-            consumer.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), ActorRefs.NoSender);
+            consumer.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, ActorRefs.NoSender);
         }
     }
 }
