@@ -279,14 +279,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
             finally
             {
-                try
-                {
-                    _consumer.Close();
-                }
-                catch (Exception)
-                {
-                    /* no-op */
-                }
+                // Make sure that the consumer is unassigned from the partition AND closed before we dispose
+                try { _consumer.Unassign(); }
+                catch (Exception) { /* no-op */ }
+
+                try { _consumer.Close(); }
+                catch (Exception) { /* no-op */ }
 
                 _adminClient.Dispose();
                 _consumer.Dispose();
