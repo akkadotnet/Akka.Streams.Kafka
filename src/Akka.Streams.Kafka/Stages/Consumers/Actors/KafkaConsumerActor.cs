@@ -259,24 +259,38 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         protected override void PostStop()
         {
-            if (_settings.ConnectionCheckerSettings.Enabled)
-            {
-                _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
-            }
-
-            // reply to outstanding requests is important if the actor is restarted
-            foreach (var (actorRef, request) in _requests.ToTuples())
-            {
-                var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, ImmutableList<ConsumeResult<K, V>>.Empty);
-                actorRef.Tell(emptyMessages);
-            }
-            
-            _partitionAssignmentHandler.PostStop();
-            
-            _adminClient.Dispose();
-            _consumer.Dispose();
-            
             base.PostStop();
+            try
+            {
+                if (_settings.ConnectionCheckerSettings.Enabled)
+                {
+                    _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
+                }
+
+                // reply to outstanding requests is important if the actor is restarted
+                foreach (var (actorRef, request) in _requests.ToTuples())
+                {
+                    var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId,
+                        ImmutableList<ConsumeResult<K, V>>.Empty);
+                    actorRef.Tell(emptyMessages);
+                }
+
+                _partitionAssignmentHandler.PostStop();
+            }
+            finally
+            {
+                try
+                {
+                    _consumer.Close();
+                }
+                catch (Exception)
+                {
+                    /* no-op */
+                }
+
+                _adminClient.Dispose();
+                _consumer.Dispose();
+            }
         }
 
         private void HandleSubscription(KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscriptionRequest)
