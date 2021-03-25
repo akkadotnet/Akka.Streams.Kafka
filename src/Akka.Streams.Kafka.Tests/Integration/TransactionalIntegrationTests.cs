@@ -22,7 +22,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
         }
 
-        [Fact(Skip = "Missing producer transactions support, see https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85")]
+        [Fact]
         public async Task Transactional_source_with_sink_Should_work()
         {
             var settings = CreateConsumerSettings<string>(CreateGroup(1));
