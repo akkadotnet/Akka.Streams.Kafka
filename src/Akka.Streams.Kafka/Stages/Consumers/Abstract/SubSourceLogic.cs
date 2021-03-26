@@ -146,7 +146,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             SourceActor.Watch(ConsumerActor);
             
-            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance);
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance, SourceActor.Ref);
 
             switch (_subscription)
             {

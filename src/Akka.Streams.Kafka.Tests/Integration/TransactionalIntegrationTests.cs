@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -25,39 +26,39 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task Transactional_source_with_sink_Should_work()
         {
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
+            var consumerSettings = CreateConsumerSettings<string>(CreateGroup(1));
             var sourceTopic = CreateTopic(1);
             var targetTopic = CreateTopic(2);
             var transactionalId = Guid.NewGuid().ToString();
             const int totalMessages = 10;
-            
-            var control = KafkaConsumer.TransactionalSource(settings, Subscriptions.Topics(sourceTopic))
-                .Via(Business<TransactionalMessage<Null, string>>())
+
+            await ProduceStrings(sourceTopic, Enumerable.Range(1, totalMessages), ProducerSettings);
+
+            var control = KafkaConsumer.TransactionalSource(consumerSettings, Subscriptions.Topics(sourceTopic))
                 .Select(message =>
                 {
                     return ProducerMessage.Single(
-                        new ProducerRecord<Null, string>(targetTopic, message.Record.Key, message.Record.Value),
+                        new ProducerRecord<Null, string>(targetTopic, message.Record.Message.Key, message.Record.Message.Value),
                         passThrough: message.PartitionOffset);
                 })
                 .ToMaterialized(KafkaProducer.TransactionalSink(ProducerSettings, transactionalId), Keep.Both)
                 .MapMaterializedValue(DrainingControl<NotUsed>.Create)
                 .Run(Materializer);
 
-            var consumer = ConsumeStrings(targetTopic, totalMessages);
+            var consumer = ConsumeStrings(targetTopic, totalMessages, CreateConsumerSettings<Null, string>(CreateGroup(2)));
 
-            await ProduceStrings(sourceTopic, Enumerable.Range(1, totalMessages), ProducerSettings);
-
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), consumer.IsShutdown);
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), control.DrainAndShutdown());
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(30), consumer.IsShutdown);
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(30), control.DrainAndShutdown());
 
             consumer.DrainAndShutdown().Result.Should().HaveCount(totalMessages);
         }
 
-        private Flow<T, T, NotUsed> Business<T>() => Flow.Create<T>();
-
-        private DrainingControl<IImmutableList<ConsumeResult<Null, string>>> ConsumeStrings(string topic, int count)
+        private DrainingControl<IImmutableList<ConsumeResult<Null, string>>> ConsumeStrings(
+            string topic, 
+            int count, 
+            ConsumerSettings<Null, string> settings)
         {
-            return KafkaConsumer.PlainSource(CreateConsumerSettings<string>(CreateGroup(1)), Subscriptions.Topics(topic))
+            return KafkaConsumer.PlainSource(settings, Subscriptions.Topics(topic))
                 .Take(count)
                 .ToMaterialized(Sink.Seq<ConsumeResult<Null, string>>(), Keep.Both)
                 .MapMaterializedValue(DrainingControl<IImmutableList<ConsumeResult<Null, string>>>.Create)

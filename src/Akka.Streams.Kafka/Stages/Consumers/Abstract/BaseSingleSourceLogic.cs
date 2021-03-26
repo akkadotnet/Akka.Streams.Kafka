@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SourceActor.Watch(ConsumerActor);
             
             // get consumer metadata before consuming messages
-            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance);
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance, SourceActor.Ref);
             
             ConfigureSubscription();
         }
@@ -158,7 +158,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             {
                 if (_buffer.TryDequeue(out var message))
                 {
-                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message, ConsumerGroupMetadata));
+                    var result = _messageBuilder.CreateMessage(message, ConsumerGroupMetadata);
+                    Push(_shape.Outlet, result);
                     Pump();
                 }
                 else if (!_requested && TopicPartitions.Any())

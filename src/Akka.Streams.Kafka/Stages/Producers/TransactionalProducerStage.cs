@@ -161,13 +161,8 @@ namespace Akka.Streams.Kafka.Stages
             Log.Debug("Committing transaction for consumer group '{0}' with offsets: {1}", groupId, batch.Offsets);
             var offsetMap = batch.OffsetMap().Select(pair => new TopicPartitionOffset(pair.Key, pair.Value.Offset));
             
-            // TODO: Add producer work with transactions
-            /* scala code:
-             producer.sendOffsetsToTransaction(offsetMap.asJava, group)
-             producer.commitTransaction()
-             */
             Producer.SendOffsetsToTransaction(offsetMap, batch.ConsumerGroupMetadata, _settings.MaxBlock);
-            Producer.CommitTransaction();
+            Producer.CommitTransaction(_settings.MaxBlock);
             
             Log.Debug("Committed transaction for consumer group '{0}' with offsets: {1}", groupId, batch.Offsets);
             _batchOffsets = new EmptyTransactionBatch();
