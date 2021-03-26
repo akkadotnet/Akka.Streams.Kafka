@@ -43,7 +43,7 @@ namespace Akka.Streams.Kafka.Stages
         /// <inheritdoc />
         protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
         {
-            return new TransactionalProducerStageLogic<K, V, TPassThrough>(this, inheritedAttributes, _settings.EosCommitInterval);
+            return new TransactionalProducerStageLogic<K, V, TPassThrough>(this, inheritedAttributes, _settings);
         }
     }
     
