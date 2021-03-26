@@ -166,7 +166,7 @@ namespace Akka.Streams.Kafka.Stages
              producer.sendOffsetsToTransaction(offsetMap.asJava, group)
              producer.commitTransaction()
              */
-            Producer.SendOffsetsToTransaction(offsetMap, groupId, _settings.MaxBlock);
+            Producer.SendOffsetsToTransaction(offsetMap, batch.ConsumerGroupMetadata, _settings.MaxBlock);
             Producer.CommitTransaction();
             
             Log.Debug("Committed transaction for consumer group '{0}' with offsets: {1}", groupId, batch.Offsets);
@@ -219,25 +219,24 @@ namespace Akka.Streams.Kafka.Stages
 
         private class NonemptyTransactionBatch : ITransactionBatch
         {
-            private readonly PartitionOffsetCommittedMarker _head;
-            private readonly IImmutableDictionary<GroupTopicPartition, Offset> _tail;
 
             private readonly ICommittedMarker _committedMarker;
             
             public IImmutableDictionary<GroupTopicPartition, Offset> Offsets { get; }
             public string GroupId { get; }
+            public IConsumerGroupMetadata ConsumerGroupMetadata { get; }
 
             public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset> tail = null)
             {
-                _head = head;
-                _tail = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
+                var tail1 = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
 
                 _committedMarker = head.CommittedMarker;
                 GroupId = head.GroupId;
+                ConsumerGroupMetadata = head.ConsumerGroupMetadata;
 
-                var previousHighest = _tail.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
+                var previousHighest = tail1.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
                 var highestOffset = new Offset(Math.Max(head.Offset, previousHighest));
-                Offsets = _tail.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
+                Offsets = tail1.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
             }
             
             /// <inheritdoc />

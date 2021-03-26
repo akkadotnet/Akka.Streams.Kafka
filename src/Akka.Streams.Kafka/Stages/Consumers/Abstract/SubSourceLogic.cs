@@ -62,6 +62,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         private IImmutableSet<TopicPartition> _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
         
+        public IConsumerGroupMetadata ConsumerGroupMetadata { get; private set; }
 
         protected StageActor SourceActor { get; private set; }
         public IActorRef ConsumerActor { get; private set; }
@@ -107,6 +108,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             {
                 switch (args.Item2)
                 {
+                    case KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadata metadata:
+                        ConsumerGroupMetadata = metadata.Metadata;
+                        break;
+                    
                     case Status.Failure failure:
                         var exception = failure.Cause;
                         switch (_decider(failure.Cause))
@@ -140,6 +145,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                                                               $"kafka-consumer-{_actorNumber}");
             
             SourceActor.Watch(ConsumerActor);
+            
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance);
 
             switch (_subscription)
             {
@@ -285,8 +292,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _pendingPartitions = _pendingPartitions.Remove(topicPartition);
                 _partitionsInStartup = _partitionsInStartup.Add(topicPartition);
                 
-                var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(topicPartition, ConsumerActor, _subsourceStartedCallback, 
-                                                                              _subsourceCancelledCallback, _messageBuilder, _decider, _actorNumber);
+                var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(
+                    topicPartition, ConsumerActor, ConsumerGroupMetadata, 
+                    _subsourceStartedCallback, _subsourceCancelledCallback, 
+                    _messageBuilder, _decider, _actorNumber);
+                
                 var subsource = Source.FromGraph(subSourceStage);
                 
                 Push(_shape.Outlet, (topicPartition, subsource));
@@ -359,6 +369,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             private readonly TopicPartition _topicPartition;
             private readonly IActorRef _consumerActor;
             private readonly Action<(TopicPartition, IControl)> _subSourceStartedCallback;
+            private readonly IConsumerGroupMetadata _consumerGroupMetadata;
             private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subSourceCancelledCallback;
             private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
             private readonly int _actorNumber;
@@ -367,16 +378,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public Outlet<TMsg> Out { get; }
             public override SourceShape<TMsg> Shape { get; }
 
-            public SubSourceStreamStage(TopicPartition topicPartition, IActorRef consumerActor,
-                                  Action<(TopicPartition, IControl)> subSourceStartedCallback,
-                                  Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback,
-                                  IMessageBuilder<K, V, TMsg> messageBuilder,
-                                  Decider decider,
-                                  int actorNumber)
+            public SubSourceStreamStage(
+                TopicPartition topicPartition, 
+                IActorRef consumerActor,
+                IConsumerGroupMetadata consumerGroupMetadata,
+                Action<(TopicPartition, IControl)> subSourceStartedCallback,
+                Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback,
+                IMessageBuilder<K, V, TMsg> messageBuilder,
+                Decider decider,
+                int actorNumber)
             {
                 _topicPartition = topicPartition;
                 _consumerActor = consumerActor;
                 _subSourceStartedCallback = subSourceStartedCallback;
+                _consumerGroupMetadata = consumerGroupMetadata;
                 _subSourceCancelledCallback = subSourceCancelledCallback;
                 _messageBuilder = messageBuilder;
                 _decider = decider;
@@ -388,8 +403,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
             {
-                return new SubSourceStreamStageLogic(Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, _decider,
-                                               _subSourceStartedCallback, _subSourceCancelledCallback);
+                return new SubSourceStreamStageLogic(
+                    Shape, _topicPartition, _consumerActor, _actorNumber, _messageBuilder, _decider, 
+                    _consumerGroupMetadata, _subSourceStartedCallback, _subSourceCancelledCallback);
             }
             
             private class SubSourceStreamStageLogic : GraphStageLogic
@@ -404,12 +420,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 private bool _requested = false;
                 private StageActor _subSourceActor;
                 private readonly Decider _decider;
+                private readonly IConsumerGroupMetadata _consumerGroupMetadata;
                 private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
 
                 public PromiseControl<TMsg> Control { get; }
                 
                 public SubSourceStreamStageLogic(SourceShape<TMsg> shape, TopicPartition topicPartition, IActorRef consumerActor,
                                            int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder, Decider decider,
+                                           IConsumerGroupMetadata consumerGroupMetadata,
                                            Action<(TopicPartition, IControl)> subSourceStartedCallback,
                                            Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback) 
                     : base(shape)
@@ -420,6 +438,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     _actorNumber = actorNumber;
                     _messageBuilder = messageBuilder;
                     _decider = decider;
+                    _consumerGroupMetadata = consumerGroupMetadata;
                     _subSourceStartedCallback = subSourceStartedCallback;
                     _requestMessages = new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
                     
@@ -493,7 +512,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     {
                         if (_buffer.TryDequeue(out var message))
                         {
-                            Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                            Push(_shape.Outlet, _messageBuilder.CreateMessage(message, _consumerGroupMetadata));
                             Pump();
                         }
                         else if (!_requested)

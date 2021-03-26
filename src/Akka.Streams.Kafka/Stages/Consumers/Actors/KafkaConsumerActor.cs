@@ -142,6 +142,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     HandleSubscription(subscribe);
                     return true;
                 
+                case KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest metadataRequest:
+                    Sender.Tell(new KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadata(_consumer.ConsumerGroupMetadata));
+                    return true;
+                
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
