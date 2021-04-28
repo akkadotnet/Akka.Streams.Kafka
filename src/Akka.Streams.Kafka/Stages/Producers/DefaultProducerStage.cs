@@ -188,6 +188,7 @@ namespace Akka.Streams.Kafka.Stages
                         case Directive.Stop:
                             if (_stage.CloseProducerOnStop)
                             {
+                                // TODO: address the missing Producer.Close() in the future
                                 Producer.Dispose();
                             }
                             _failStageCallback(exception);
@@ -237,6 +238,7 @@ namespace Akka.Streams.Kafka.Stages
                     case Directive.Stop:
                         if (_stage.CloseProducerOnStop)
                         {
+                            // TODO: address the missing Producer.Close() in the future.
                             producer.Dispose();
                         }
                         _failStageCallback(exception);

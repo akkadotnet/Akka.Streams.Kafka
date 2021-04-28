@@ -259,24 +259,36 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         protected override void PostStop()
         {
-            if (_settings.ConnectionCheckerSettings.Enabled)
-            {
-                _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
-            }
-
-            // reply to outstanding requests is important if the actor is restarted
-            foreach (var (actorRef, request) in _requests.ToTuples())
-            {
-                var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, ImmutableList<ConsumeResult<K, V>>.Empty);
-                actorRef.Tell(emptyMessages);
-            }
-            
-            _partitionAssignmentHandler.PostStop();
-            
-            _adminClient.Dispose();
-            _consumer.Dispose();
-            
             base.PostStop();
+            try
+            {
+                if (_settings.ConnectionCheckerSettings.Enabled)
+                {
+                    _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
+                }
+
+                // reply to outstanding requests is important if the actor is restarted
+                foreach (var (actorRef, request) in _requests.ToTuples())
+                {
+                    var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId,
+                        ImmutableList<ConsumeResult<K, V>>.Empty);
+                    actorRef.Tell(emptyMessages);
+                }
+
+                _partitionAssignmentHandler.PostStop();
+            }
+            finally
+            {
+                // Make sure that the consumer is unassigned from the partition AND closed before we dispose
+                try { _consumer.Unassign(); }
+                catch (Exception) { /* no-op */ }
+
+                try { _consumer.Close(); }
+                catch (Exception) { /* no-op */ }
+
+                _adminClient.Dispose();
+                _consumer.Dispose();
+            }
         }
 
         private void HandleSubscription(KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscriptionRequest)
@@ -539,17 +551,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _resumedPartitions = _resumedPartitions.Union(partitionsToResume);
         }
 
-        class Internal
+        static class Internal
         {
-            public class Poll<k, V>
+            public class Poll<TPollKey, TPollValue> 
+                where TPollKey : K
+                where TPollValue : V
             {
-                public Poll(KafkaConsumerActor<K, V> target, bool periodic)
+                public Poll(KafkaConsumerActor<TPollKey, TPollValue> target, bool periodic)
                 {
                     Target = target;
                     Periodic = periodic;
                 }
 
-                public KafkaConsumerActor<K, V> Target { get; }
+                public KafkaConsumerActor<TPollKey, TPollValue> Target { get; }
                 public bool Periodic { get; }
             }
         }
@@ -570,21 +584,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <remarks>
         /// TODO: Refactor this class to not use actor's private fields
         /// </remarks>
-        class RebalanceListener<K, V> : RebalanceListenerBase
+        class RebalanceListener<TRebalanceKey, TRebalanceValue> : RebalanceListenerBase
+            where TRebalanceKey : K
+            where TRebalanceValue : V
         {
             private readonly IPartitionEventHandler _partitionEventHandler;
-            private readonly KafkaConsumerActor<K, V> _actor;
+            private readonly KafkaConsumerActor<TRebalanceKey, TRebalanceValue> _actor;
 
-            private readonly RestrictedConsumer<K, V> _restrictedConsumer;
+            private readonly RestrictedConsumer<TRebalanceKey, TRebalanceValue> _restrictedConsumer;
             private readonly TimeSpan _warningDuration;
 
-            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<K, V> actor)
+            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<TRebalanceKey, TRebalanceValue> actor)
             {
                 _partitionEventHandler = partitionEventHandler;
                 _actor = actor;
 
                 var restrictedConsumerTimeoutMs = Math.Round(actor._settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
-                _restrictedConsumer = new RestrictedConsumer<K, V>(actor._consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
+                _restrictedConsumer = new RestrictedConsumer<TRebalanceKey, TRebalanceValue>(actor._consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
                 _warningDuration = actor._settings.PartitionHandlerWarning;
             }
 
