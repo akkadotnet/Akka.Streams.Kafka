@@ -24,7 +24,7 @@ Upgrade to Confluent.Kafka 1.5.3
     
     <!-- Nuget package versions -->
     <AkkaVersion>1.4.20</AkkaVersion>
-    <KafkaVersion>1.6.3</KafkaVersion>
+    <KafkaVersion>1.7.0</KafkaVersion>
 
     <!-- Unit test Nuget package versions -->
     <XunitVersion>2.4.1</XunitVersion>
