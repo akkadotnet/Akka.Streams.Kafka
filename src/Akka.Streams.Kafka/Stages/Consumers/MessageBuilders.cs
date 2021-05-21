@@ -17,10 +17,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// Creates downstream message
         /// </summary>
         /// <remarks>
-        /// We pass consumer here, because there is no way to get consumer instance from
-        /// some global configuration, like Alpakka does getting consumer actor ref
+        /// We pass consumer group metadata here, because Confluent driver requires it instead of GroupId
         /// </remarks>
-        TMessage CreateMessage(ConsumeResult<K, V> record);
+        TMessage CreateMessage(ConsumeResult<K, V> record, IConsumerGroupMetadata consumerGroupMetadata);
     }
     
     /// <summary>
@@ -28,7 +27,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// </summary>
     public class PlainMessageBuilder<K, V> : IMessageBuilder<K, V, ConsumeResult<K, V>>
     {
-        public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record) => record;
+        public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumerGroupMetadata consumerGroupMetadata) => record;
     }
     
     /// <summary>
@@ -50,7 +49,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public abstract string MetadataFromRecord(ConsumeResult<K, V> record);
 
         /// <inheritdoc />
-        public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
+        public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumerGroupMetadata consumerGroupMetadata)
         {
             var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
             return new CommittableMessage<K, V>(record, new CommittableOffset(Committer, offset, MetadataFromRecord(record)));
@@ -113,7 +112,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         }
 
         /// <inheritdoc />
-        public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
+        public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(
+            ConsumeResult<K, V> record, 
+            IConsumerGroupMetadata consumerGroupMetadata)
         {
             var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
             return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
@@ -134,6 +135,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// </summary>
         ICommittedMarker CommittedMarker { get; }
         /// <summary>
+        /// Consumer group metadata
+        /// </summary>
+        IConsumerGroupMetadata ConsumerGroupMetadata { get; }
+        /// <summary>
         /// On message callback
         /// </summary>
         /// <param name="message"></param>
@@ -153,7 +158,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         }
 
         /// <inheritdoc />
-        public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
+        public TransactionalMessage<K, V> CreateMessage(
+            ConsumeResult<K, V> record, 
+            IConsumerGroupMetadata consumerGroupMetadata)
         {
             _transactionalMessageBuilderStage.OnMessage(record);
             
@@ -162,7 +169,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                 record.Topic, 
                 record.Partition, 
                 record.Offset, 
-                _transactionalMessageBuilderStage.CommittedMarker);
+                _transactionalMessageBuilderStage.CommittedMarker,
+                consumerGroupMetadata);
             
             return new TransactionalMessage<K, V>(record, offset);
         }

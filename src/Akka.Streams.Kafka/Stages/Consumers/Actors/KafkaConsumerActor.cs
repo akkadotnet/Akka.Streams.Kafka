@@ -142,6 +142,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     HandleSubscription(subscribe);
                     return true;
                 
+                case KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest metadataRequest:
+                    Sender.Tell(new KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadata(_consumer.ConsumerGroupMetadata));
+                    return true;
+                
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
@@ -237,7 +241,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)),
+                    consumeErrorHandler: (c, e) => 
+                        ProcessError(new KafkaException(e)),
                     partitionAssignedHandler: (c, tp) =>
                         _partitionAssignmentHandler.OnPartitionsAssigned(tp.ToImmutableHashSet()),
                     partitionRevokedHandler: (c, tp) =>

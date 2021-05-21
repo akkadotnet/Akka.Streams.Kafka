@@ -119,7 +119,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         /// <inheritdoc />
-        public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record) => _messageBuilder.CreateMessage(record);
+        public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record, IConsumerGroupMetadata consumerGroupMetadata) 
+            => _messageBuilder.CreateMessage(record, ConsumerGroupMetadata);
 
         /// <inheritdoc />
         public string GroupId => _settings.GroupId;

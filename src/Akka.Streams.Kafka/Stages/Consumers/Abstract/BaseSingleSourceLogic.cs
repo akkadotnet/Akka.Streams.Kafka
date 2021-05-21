@@ -35,6 +35,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
+        public IConsumerGroupMetadata ConsumerGroupMetadata { get; private set; }
 
         protected StageActor SourceActor { get; private set; }
         internal IActorRef ConsumerActor { get; private set; }
@@ -65,6 +66,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SourceActor = GetStageActor(MessageHandling);
             ConsumerActor = CreateConsumerActor();
             SourceActor.Watch(ConsumerActor);
+            
+            // get consumer metadata before consuming messages
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadataRequest.Instance, SourceActor.Ref);
             
             ConfigureSubscription();
         }
@@ -109,6 +113,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             switch (args.Item2)
             {
+                case KafkaConsumerActorMetadata.Internal.ConsumerGroupMetadata metadata:
+                    ConsumerGroupMetadata = metadata.Metadata;
+                    break;
+                
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
@@ -150,7 +158,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             {
                 if (_buffer.TryDequeue(out var message))
                 {
-                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                    var result = _messageBuilder.CreateMessage(message, ConsumerGroupMetadata);
+                    Push(_shape.Outlet, result);
                     Pump();
                 }
                 else if (!_requested && TopicPartitions.Any())

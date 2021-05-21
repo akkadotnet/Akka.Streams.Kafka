@@ -9,9 +9,15 @@ namespace Akka.Streams.Kafka.Settings
 {
     public sealed class ProducerSettings<TKey, TValue>
     {
-        public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, 
-                                string dispatcherId, TimeSpan flushTimeout, TimeSpan eosCommitInterval,
-                                IImmutableDictionary<string, string> properties)
+        public ProducerSettings(
+            ISerializer<TKey> keySerializer, 
+            ISerializer<TValue> valueSerializer, 
+            int parallelism, 
+            string dispatcherId, 
+            TimeSpan flushTimeout, 
+            TimeSpan eosCommitInterval, 
+            TimeSpan maxBlock, 
+            IImmutableDictionary<string, string> properties)
         {
             KeySerializer = keySerializer;
             ValueSerializer = valueSerializer;
@@ -19,6 +25,7 @@ namespace Akka.Streams.Kafka.Settings
             DispatcherId = dispatcherId;
             FlushTimeout = flushTimeout;
             EosCommitInterval = eosCommitInterval;
+            MaxBlock = maxBlock;
             Properties = properties;
         }
 
@@ -26,6 +33,11 @@ namespace Akka.Streams.Kafka.Settings
         public ISerializer<TValue> ValueSerializer { get; }
         public int Parallelism { get; }
         public string DispatcherId { get; }
+        /// <summary>
+        /// Configures how long producer methods can block.
+        /// See also: https://docs.confluent.io/platform/current/installation/configuration/producer-configs.html#producerconfigs_max.block.ms
+        /// </summary>
+        public TimeSpan MaxBlock { get; }
         public TimeSpan FlushTimeout { get; }
         /// <summary>
         /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
@@ -69,6 +81,7 @@ namespace Akka.Streams.Kafka.Settings
             string dispatcherId = null,
             TimeSpan? flushTimeout = null,
             TimeSpan? eosCommitInterval = null,
+            TimeSpan? maxBlock = null,
             IImmutableDictionary<string, string> properties = null) =>
             new ProducerSettings<TKey, TValue>(
                 keySerializer: keySerializer ?? this.KeySerializer,
@@ -77,6 +90,7 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 flushTimeout: flushTimeout ?? this.FlushTimeout,
                 eosCommitInterval: eosCommitInterval ?? this.EosCommitInterval,
+                maxBlock: maxBlock ?? this.MaxBlock,
                 properties: properties ?? this.Properties);
 
         public static ProducerSettings<TKey, TValue> Create(ActorSystem system, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
@@ -98,6 +112,7 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 flushTimeout: config.GetTimeSpan("flush-timeout", TimeSpan.FromSeconds(2)),
                 eosCommitInterval: config.GetTimeSpan("eos-commit-interval", TimeSpan.FromMilliseconds(100)),
+                maxBlock: config.GetTimeSpan("max.block.ms", TimeSpan.FromSeconds(60)),
                 properties: ImmutableDictionary<string, string>.Empty);
         }
 

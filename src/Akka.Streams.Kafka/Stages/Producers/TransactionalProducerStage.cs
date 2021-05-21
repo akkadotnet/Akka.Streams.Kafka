@@ -43,7 +43,7 @@ namespace Akka.Streams.Kafka.Stages
         /// <inheritdoc />
         protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
         {
-            return new TransactionalProducerStageLogic<K, V, TPassThrough>(this, inheritedAttributes, _settings.EosCommitInterval);
+            return new TransactionalProducerStageLogic<K, V, TPassThrough>(this, inheritedAttributes, _settings);
         }
     }
     
@@ -52,7 +52,7 @@ namespace Akka.Streams.Kafka.Stages
         private const string CommitSchedulerKey = "commit";
         
         private readonly TransactionalProducerStage<K, V, TPassThrough> _stage;
-        private readonly TimeSpan _commitInterval;
+        private readonly ProducerSettings<K, V> _settings;
         private readonly Decider _decider;
         
         private readonly TimeSpan _messageDrainInterval = TimeSpan.FromMilliseconds(10);
@@ -63,16 +63,16 @@ namespace Akka.Streams.Kafka.Stages
         public TransactionalProducerStageLogic(
                 TransactionalProducerStage<K, V, TPassThrough> stage, 
                 Attributes attributes,
-                TimeSpan commitInterval) 
+                ProducerSettings<K, V> settings) 
             : base(stage, attributes)
         {
             _stage = stage;
-            _commitInterval = commitInterval;
+            _settings = settings;
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
-            _onInternalCommitCallback = GetAsyncCallback(() => ScheduleOnce(CommitSchedulerKey, commitInterval));
+            _onInternalCommitCallback = GetAsyncCallback(() => ScheduleOnce(CommitSchedulerKey, _settings.EosCommitInterval));
         }
 
         public override void PreStart()
@@ -82,7 +82,7 @@ namespace Akka.Streams.Kafka.Stages
             InitTransactions();
             BeginTransaction();
             ResumeDemand(tryToPull: false);
-            ScheduleOnce(CommitSchedulerKey, _commitInterval);
+            ScheduleOnce(CommitSchedulerKey, _settings.EosCommitInterval);
         }
 
         private void ResumeDemand(bool tryToPull = true)
@@ -128,7 +128,7 @@ namespace Akka.Streams.Kafka.Stages
             }
             else
             {
-                ScheduleOnce(CommitSchedulerKey, _commitInterval);
+                ScheduleOnce(CommitSchedulerKey, _settings.EosCommitInterval);
             }
         }
 
@@ -159,13 +159,11 @@ namespace Akka.Streams.Kafka.Stages
         {
             var groupId = batch.GroupId;
             Log.Debug("Committing transaction for consumer group '{0}' with offsets: {1}", groupId, batch.Offsets);
-            var offsetMap = batch.OffsetMap();
+            var offsetMap = batch.OffsetMap().Select(pair => new TopicPartitionOffset(pair.Key, pair.Value.Offset));
             
-            // TODO: Add producer work with transactions
-            /* scala code:
-             producer.sendOffsetsToTransaction(offsetMap.asJava, group)
-             producer.commitTransaction()
-             */
+            Producer.SendOffsetsToTransaction(offsetMap, batch.ConsumerGroupMetadata, _settings.MaxBlock);
+            Producer.CommitTransaction(_settings.MaxBlock);
+            
             Log.Debug("Committed transaction for consumer group '{0}' with offsets: {1}", groupId, batch.Offsets);
             _batchOffsets = new EmptyTransactionBatch();
             batch.InternalCommit().ContinueWith(t =>
@@ -183,22 +181,19 @@ namespace Akka.Streams.Kafka.Stages
         private void InitTransactions()
         {
             Log.Debug("Iinitializing transactions");
-            // TODO: Add producer work with transactions
-            // producer.initTransactions()
+            Producer.InitTransactions(_settings.MaxBlock);
         }
 
         private void BeginTransaction()
         {
             Log.Debug("Beginning new transaction");
-            // TODO: Add producer work with transactions
-            // producer.beginTransaction()
+            Producer.BeginTransaction();
         }
 
         private void AbortTransaction()
         {
             Log.Debug("Aborting transaction");
-            // TODO: Add producer work with transactions
-            // producer.abortTransaction()
+            Producer.AbortTransaction(_settings.MaxBlock);
         }
         
 
@@ -219,25 +214,24 @@ namespace Akka.Streams.Kafka.Stages
 
         private class NonemptyTransactionBatch : ITransactionBatch
         {
-            private readonly PartitionOffsetCommittedMarker _head;
-            private readonly IImmutableDictionary<GroupTopicPartition, Offset> _tail;
 
             private readonly ICommittedMarker _committedMarker;
             
             public IImmutableDictionary<GroupTopicPartition, Offset> Offsets { get; }
             public string GroupId { get; }
+            public IConsumerGroupMetadata ConsumerGroupMetadata { get; }
 
             public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset> tail = null)
             {
-                _head = head;
-                _tail = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
+                var tail1 = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
 
                 _committedMarker = head.CommittedMarker;
                 GroupId = head.GroupId;
+                ConsumerGroupMetadata = head.ConsumerGroupMetadata;
 
-                var previousHighest = _tail.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
+                var previousHighest = tail1.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
                 var highestOffset = new Offset(Math.Max(head.Offset, previousHighest));
-                Offsets = _tail.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
+                Offsets = tail1.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
             }
             
             /// <inheritdoc />

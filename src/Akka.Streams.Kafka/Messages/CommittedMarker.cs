@@ -30,17 +30,33 @@ namespace Akka.Streams.Kafka.Messages
         /// Committed marker
         /// </summary>
         public ICommittedMarker CommittedMarker { get; }
+        /// <summary>
+        /// Consumer group metadata
+        /// </summary>
+        public IConsumerGroupMetadata ConsumerGroupMetadata { get; }
 
-        public PartitionOffsetCommittedMarker(string groupId, string topic, int partition, Offset offset, ICommittedMarker committedMarker) 
+        public PartitionOffsetCommittedMarker(
+            string groupId, 
+            string topic, 
+            int partition, 
+            Offset offset, 
+            ICommittedMarker committedMarker, 
+            IConsumerGroupMetadata consumerGroupMetadata) 
             : base(groupId, topic, partition, offset)
         {
             CommittedMarker = committedMarker;
+            ConsumerGroupMetadata = consumerGroupMetadata;
         }
 
-        public PartitionOffsetCommittedMarker(GroupTopicPartition groupTopicPartition, Offset offset, ICommittedMarker committedMarker) 
+        public PartitionOffsetCommittedMarker(
+            GroupTopicPartition groupTopicPartition, 
+            Offset offset, 
+            ICommittedMarker committedMarker, 
+            IConsumerGroupMetadata consumerGroupMetadata) 
             : base(groupTopicPartition, offset)
         {
             CommittedMarker = committedMarker;
+            ConsumerGroupMetadata = consumerGroupMetadata;
         }
     }
 }
