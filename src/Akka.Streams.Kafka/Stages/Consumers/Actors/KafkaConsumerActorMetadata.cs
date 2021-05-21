@@ -21,19 +21,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         /// <returns></returns>
         public static int NextNumber() => Interlocked.Increment(ref _number);
-
+        
         /// <summary>
         /// Gets actor props
         /// </summary>
         public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) =>
             Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new PartitionEventHandlers.Empty(), new StatisticsHandlers.Empty())).WithDispatcher(settings.DispatcherId);
-
+        
         /// <summary>
         /// Gets actor props
         /// </summary>
         internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
             Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
-
+        
         /// <summary>
         /// Gets actor props
         /// </summary>
@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 /// <param name="requestId">Request Id</param>
                 /// <param name="messagesList">List of consumed messages</param>
-                public Messages(int requestId, ImmutableList<ConsumeResult<K, V>> messagesList)
+                 public Messages(int requestId, ImmutableList<ConsumeResult<K, V>> messagesList)
                 {
                     RequestId = requestId;
                     MessagesList = messagesList;
@@ -179,7 +179,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public IImmutableSet<TopicPartition> TopicPartitions { get; }
             }
-
+            
             /// <summary>
             /// AssignWithOffset
             /// </summary>
@@ -199,7 +199,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public IImmutableSet<TopicPartitionOffset> TopicPartitionOffsets { get; }
             }
-
+            
             /// <summary>
             /// Marker interface for subscription requests
             /// </summary>
@@ -245,11 +245,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public string TopicPattern { get; }
             }
-
+            
             /// <summary>
             /// Stops consuming actor
             /// </summary>
-            public class Stop { }
+            public class Stop{ }
 
             /// <summary>
             /// Seek

@@ -42,7 +42,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Stores all incoming requests from consuming kafka stages
         /// </summary>
-        private IImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages> _requests
+        private IImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages> _requests 
             = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
         /// <summary>
         /// Stores stage actors, requesting for more messages
@@ -114,7 +114,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                     return true;
                 }
-                
+                    
                 case KafkaConsumerActorMetadata.Internal.Commit commit when _rebalanceInProgress:
                     _rebalanceCommitStash = _rebalanceCommitStash.Union(commit.Offsets);
                     _rebalanceCommitSenders = _rebalanceCommitSenders.Add(Sender);
@@ -189,7 +189,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return false;
             }
         }
-        
+       
         protected override void PreStart()
         {
             base.PreStart();
@@ -238,7 +238,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _consumer.Subscribe(subscribePattern.TopicPattern);
                 else
                     throw new NotSupportedException($"Unsupported subscription type: {subscriptionRequest.GetType()}");
-
+                
                 ScheduleFirstPoolTask();
             }
             catch (Exception ex)
@@ -286,9 +286,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _log.Debug($"Refreshing comitted offsets: {refreshOffsets.JoinToString(", ")}");
                     Commit(refreshOffsets, msg => Context.System.DeadLetters.Tell(msg));
                 }
-
+                
                 Poll();
-
+                
                 if (poll.Periodic)
                     SchedulePoolTask();
                 else
@@ -346,7 +346,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
                 Context.Stop(Self);
             }
-            
+             
             CheckRebalanceState(initialRebalanceInProcess);
 
             if (_stopInProgress)
@@ -364,7 +364,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var fetchedTopicPartition = consumedMessage.TopicPartition;
             if (!partitionsToFetch.Contains(fetchedTopicPartition))
             {
-                throw new ArgumentException($"Unexpected records polled. Expected one of {partitionsToFetch.JoinToString(", ")}," +
+                throw  new ArgumentException($"Unexpected records polled. Expected one of {partitionsToFetch.JoinToString(", ")}," +
                                              $"but consumed result is {consumedMessage.ToJson()}, consumer assignment: {_consumer.Assignment.ToJson()}");
             }
 
@@ -419,13 +419,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _commitRefreshing.UpdateRefreshDeadlines(commitMap.Select(tp => tp.TopicPartition).ToImmutableHashSet());
 
                 var watch = Stopwatch.StartNew();
-
+                
                 _consumer.Commit(commitMap);
                 
                 watch.Stop();
                 if (watch.Elapsed >= _settings.CommitTimeWarning)
                     _log.Warning($"Kafka commit took longer than `commit-time-warning`: {watch.ElapsedMilliseconds} ms");
-                
+
                 Self.Tell(new KafkaConsumerActorMetadata.Internal.Committed(commitMap));
                 sendReply(Akka.Done.Instance);
             }
