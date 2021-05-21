@@ -203,7 +203,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _consumer = _settings.CreateKafkaConsumer(consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)),
                                                           partitionAssignedHandler: (c, tp) => _partitionAssignmentHandler.OnPartitionsAssigned(tp.ToImmutableHashSet()),
                                                           partitionRevokedHandler: (c, tp) => _partitionAssignmentHandler.OnPartitionsRevoked(tp.ToImmutableHashSet()),
-                                                          statisticHandler: (c, json) => _statisticsHandler.OnStatistics(json));
+                                                          statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
             }
             catch (Exception ex)
             {
