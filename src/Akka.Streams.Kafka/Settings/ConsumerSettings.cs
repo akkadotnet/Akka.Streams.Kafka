@@ -39,8 +39,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
         public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
         {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
+            if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
 
             return new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer,
@@ -136,8 +135,8 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public IImmutableDictionary<string, string> Properties { get; }
 
-        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval,
-                                TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout,
+        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, 
+                                TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout, 
                                 TimeSpan positionTimeout, TimeSpan commitTimeWarning, TimeSpan partitionHandlerWarning,
                                 TimeSpan waitClosePartition, TimeSpan drainingCheckInterval, bool autoCreateTopicsEnabled,
                                 int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
@@ -226,7 +225,7 @@ namespace Akka.Streams.Kafka.Settings
         /// When set, and still getting error from broker, consumer will assume that no message was produced yet
         /// </remarks>
         public ConsumerSettings<TKey, TValue> WithAutoCreateTopicsEnabled(bool autoCreateTopicsEnabled) => Copy(autoCreateTopicsEnabled: autoCreateTopicsEnabled);
-
+        
         /// <summary>
         /// If set to a finite duration, the consumer will re-send the last committed offsets periodically for all assigned partitions.
         /// Set it to TimeSpan.Zero to switch it off
@@ -235,13 +234,13 @@ namespace Akka.Streams.Kafka.Settings
         {
             return Copy(commitRefreshInterval: commitRefreshInterval == TimeSpan.Zero ? Timeout.InfiniteTimeSpan : commitRefreshInterval);
         }
-
+        
         /// <summary>
         /// The stage will await outstanding offset commit requests before shutting down,
         /// but if that takes longer than this timeout it will stop forcefully.
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithStopTimeout(TimeSpan stopTimeout) => Copy(stopTimeout: stopTimeout);
-
+        
         /// <summary>
         ///  Limits the blocking on Kafka consumer position calls.
         /// </summary>
@@ -251,23 +250,23 @@ namespace Akka.Streams.Kafka.Settings
         /// Fully qualified config path which holds the dispatcher configuration to be used by the consuming actor. Some blocking may occur.
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => Copy(dispatcherId: dispatcherId);
-
+        
         /// <summary>
         /// Check interval for TransactionalProducer when finishing transaction before shutting down consumer
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithDrainingCheckInterval(TimeSpan drainingCheckInterval) => Copy(drainingCheckInterval: drainingCheckInterval);
-
+        
         /// <summary>
         /// Sets key deserializer
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithKeyDeserializer(IDeserializer<TKey> keyDeserializer) => Copy(keyDeserializer: keyDeserializer);
-
+        
         /// <summary>
         /// Sets value deserializer
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithValueDeserializer(IDeserializer<TValue> valueDeserializer) => Copy(valueDeserializer: valueDeserializer);
-
-
+        
+        
         /// <summary>
         /// Assigned consumer group Id, or null
         /// </summary>

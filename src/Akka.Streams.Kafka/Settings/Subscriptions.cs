@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Settings
         /// Partition events handler
         /// </summary>
         Option<IPartitionEventHandler> PartitionEventsHandler { get; }
-
+        
         /// <summary>
         /// Allows to specify custom partition events handler. See more at <see cref="IPartitionEventHandler"/>
         /// </summary>
@@ -83,7 +83,7 @@ namespace Akka.Streams.Kafka.Settings
             return this;
         }
     }
-
+    
     /// <summary>
     /// TopicSubscriptionPattern
     /// </summary>
@@ -122,7 +122,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler);
+            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler); 
             return this;
         }
     }
@@ -204,7 +204,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="topics">Topics to subscribe</param>
         public static IAutoSubscription Topics(params string[] topics) =>
             new TopicSubscription(topics.ToImmutableHashSet());
-
+        
         /// <summary>
         /// Generates <see cref="TopicSubscriptionPattern"/>
         /// </summary>
