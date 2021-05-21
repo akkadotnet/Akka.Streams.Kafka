@@ -25,9 +25,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private readonly int _actorNumber = KafkaConsumerActorMetadata.NextNumber();
 
-        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
-                                      ISubscription subscription, Attributes attributes, 
-                                      Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings,
+                                      ISubscription subscription, Attributes attributes,
+                                      Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory)
             : base(shape, attributes, messageBuilderFactory)
         {
             _shape = shape;
@@ -67,14 +67,24 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
                 : internalHandler;
 
+            IStatisticsHandler statisticsHandler = new StatisticsHandlers.Empty();
+            if (_subscription is IAutoSubscription autoSubscriptionForStatisticsHandler && autoSubscriptionForStatisticsHandler.StatisticsHandler.HasValue)
+            {
+                statisticsHandler = autoSubscriptionForStatisticsHandler.StatisticsHandler.Value;
+            }
+            else if (_subscription is IManualSubscription manualSubscriptionForStatisticsHandler && manualSubscriptionForStatisticsHandler.StatisticsHandler.HasValue)
+            {
+                statisticsHandler = manualSubscriptionForStatisticsHandler.StatisticsHandler.Value;
+            }
+
             // This allows to override partition events handling by subclasses
             eventHandler = AddToPartitionAssignmentHandler(eventHandler);
-            
+
             if (!(Materializer is ActorMaterializer actorMaterializer))
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
-            
+
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler, statisticsHandler),
                                                           $"kafka-consumer-{_actorNumber}");
             return actor;
         }
@@ -89,10 +99,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected override void PerformShutdown()
         {
             SetKeepGoing(true);
-            
+
             if (!IsClosed(_shape.Outlet))
                 Complete(_shape.Outlet);
-            
+
             SourceActor.Become(ShuttingDownReceive);
             StopConsumerActor();
         }
@@ -133,7 +143,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Log.Debug($"Partitions were assigned: {string.Join(", ", TopicPartitions)}");
             RequestMessages();
         }
-        
+
         private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
         {
             TopicPartitions = TopicPartitions.Clear();
