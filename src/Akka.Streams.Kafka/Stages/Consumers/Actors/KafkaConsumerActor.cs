@@ -286,9 +286,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _log.Debug($"Refreshing comitted offsets: {refreshOffsets.JoinToString(", ")}");
                     Commit(refreshOffsets, msg => Context.System.DeadLetters.Tell(msg));
                 }
-                
+               
                 Poll();
-                
+               
                 if (poll.Periodic)
                     SchedulePoolTask();
                 else

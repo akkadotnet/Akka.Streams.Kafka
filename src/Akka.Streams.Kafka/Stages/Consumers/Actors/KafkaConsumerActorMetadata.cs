@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 /// <param name="requestId">Request Id</param>
                 /// <param name="messagesList">List of consumed messages</param>
-                 public Messages(int requestId, ImmutableList<ConsumeResult<K, V>> messagesList)
+               public Messages(int requestId, ImmutableList<ConsumeResult<K, V>> messagesList)
                 {
                     RequestId = requestId;
                     MessagesList = messagesList;
@@ -225,7 +225,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public IImmutableSet<string> Topics { get; }
             }
-
+            
             /// <summary>
             /// SubscribePattern
             /// </summary>
