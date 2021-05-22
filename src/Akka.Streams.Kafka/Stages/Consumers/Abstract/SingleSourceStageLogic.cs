@@ -67,15 +67,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
                 : internalHandler;
 
-            IStatisticsHandler statisticsHandler = new StatisticsHandlers.Empty();
-            if (_subscription is IAutoSubscription autoSubscriptionForStatisticsHandler && autoSubscriptionForStatisticsHandler.StatisticsHandler.HasValue)
-            {
-                statisticsHandler = autoSubscriptionForStatisticsHandler.StatisticsHandler.Value;
-            }
-            else if (_subscription is IManualSubscription manualSubscriptionForStatisticsHandler && manualSubscriptionForStatisticsHandler.StatisticsHandler.HasValue)
-            {
-                statisticsHandler = manualSubscriptionForStatisticsHandler.StatisticsHandler.Value;
-            }
+            IStatisticsHandler statisticsHandler = _subscription.StatisticsHandler.HasValue
+                ? _subscription.StatisticsHandler.Value
+                : new StatisticsHandlers.Empty();
 
             // This allows to override partition events handling by subclasses
             eventHandler = AddToPartitionAssignmentHandler(eventHandler);
