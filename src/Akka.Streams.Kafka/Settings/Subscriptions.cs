@@ -6,9 +6,7 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
 {
-    public interface ISubscription { }
-
-    public interface IManualSubscription : ISubscription
+    public interface ISubscription 
     {
         /// <summary>
         /// Statistics handler
@@ -18,21 +16,13 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Allows to specify custom statistics handler. See more at <see cref="IStatisticsHandler"/>
         /// </summary>
-        IManualSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler);
+        ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler);
     }
+
+    public interface IManualSubscription : ISubscription { }
 
     public interface IAutoSubscription : ISubscription
     {
-        /// <summary>
-        /// Statistics handler
-        /// </summary>
-        Option<IStatisticsHandler> StatisticsHandler { get; }
-
-        /// <summary>
-        /// Allows to specify custom statistics handler. See more at <see cref="IStatisticsHandler"/>
-        /// </summary>
-        IAutoSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler);
-
         /// <summary>
         /// Partition events handler
         /// </summary>
@@ -67,7 +57,7 @@ namespace Akka.Streams.Kafka.Settings
         public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
 
         /// <inheritdoc />
-        public IAutoSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
+        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
             StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
             return this;
@@ -110,7 +100,7 @@ namespace Akka.Streams.Kafka.Settings
         public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
 
         /// <inheritdoc />
-        public IAutoSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
+        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
             StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
             return this;
@@ -153,7 +143,7 @@ namespace Akka.Streams.Kafka.Settings
         public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
 
         /// <inheritdoc />
-        public IManualSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
+        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
             StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
             return this;
@@ -186,7 +176,7 @@ namespace Akka.Streams.Kafka.Settings
         public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
 
         /// <inheritdoc />
-        public IManualSubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
+        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
             StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
             return this;
