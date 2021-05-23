@@ -312,14 +312,16 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null)
-        { 
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
+        {
             return new Confluent.Kafka.ConsumerBuilder<TKey, TValue>(this.Properties)
                 .SetKeyDeserializer(this.KeyDeserializer)
                 .SetValueDeserializer(this.ValueDeserializer)
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
+                .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
                 .Build();
         }
     }
