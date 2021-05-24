@@ -67,10 +67,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
                 : internalHandler;
 
-            IStatisticsHandler statisticsHandler = _subscription.StatisticsHandler.HasValue
-                ? _subscription.StatisticsHandler.Value
-                : new StatisticsHandlers.Empty();
-
             // This allows to override partition events handling by subclasses
             eventHandler = AddToPartitionAssignmentHandler(eventHandler);
             
@@ -78,7 +74,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler, statisticsHandler),
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 
                                                           $"kafka-consumer-{_actorNumber}");
             return actor;
         }

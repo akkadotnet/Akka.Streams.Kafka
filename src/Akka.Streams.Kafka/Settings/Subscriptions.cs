@@ -6,19 +6,7 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
 {
-    public interface ISubscription 
-    {
-        /// <summary>
-        /// Statistics handler
-        /// </summary>
-        Option<IStatisticsHandler> StatisticsHandler { get; }
-
-        /// <summary>
-        /// Allows to specify custom statistics handler. See more at <see cref="IStatisticsHandler"/>
-        /// </summary>
-        ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler);
-    }
-
+    public interface ISubscription { }
     public interface IManualSubscription : ISubscription { }
 
     public interface IAutoSubscription : ISubscription
@@ -54,16 +42,6 @@ namespace Akka.Streams.Kafka.Settings
         public IImmutableSet<string> Topics { get; }
 
         /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
-        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
-        {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
-            return this;
-        }
-
-        /// <inheritdoc />
         public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
 
         /// <inheritdoc />
@@ -97,16 +75,6 @@ namespace Akka.Streams.Kafka.Settings
         public string TopicPattern { get; }
 
         /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
-        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
-        {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
-            return this;
-        }
-
-        /// <inheritdoc />
         public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
 
         /// <inheritdoc />
@@ -138,16 +106,6 @@ namespace Akka.Streams.Kafka.Settings
         /// Topic partitions to subscribe
         /// </summary>
         public IImmutableSet<TopicPartition> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
-        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
-        {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
-            return this;
-        }
     }
 
     /// <summary>
@@ -171,16 +129,6 @@ namespace Akka.Streams.Kafka.Settings
         /// List of topic paritions with offsets to subscribe
         /// </summary>
         public IImmutableSet<TopicPartitionOffset> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
-        public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
-        {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
-            return this;
-        }
     }
 
     /// <summary>
