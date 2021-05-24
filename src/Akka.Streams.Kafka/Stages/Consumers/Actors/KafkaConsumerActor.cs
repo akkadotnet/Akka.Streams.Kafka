@@ -29,6 +29,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private readonly IActorRef _owner;
         private ConsumerSettings<K, V> _settings;
         /// <summary>
+        /// Stores delegates for external handling of statistics
+        /// </summary>
+        private readonly IStatisticsHandler _statisticsHandler;
+
+        /// <summary>
         /// Stores delegates for external handling of partition events
         /// </summary>
         private readonly IPartitionEventHandler _partitionEventHandler;
@@ -86,11 +91,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
+        /// <param name="statisticsHandler">Statistics handler</param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler)
+        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;
             _settings = settings;
+            _statisticsHandler = statisticsHandler;
             _partitionEventHandler = partitionEventHandler;
             
             _pollMessage = new Internal.Poll<K, V>(this, periodic: true);
@@ -215,7 +222,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 var callbackHandler = new RebalanceListener<K, V>(_partitionEventHandler, this);
                 _partitionAssignmentHandler = callbackHandler;
-                
+
                 ApplySettings(_settings);
             }
             catch (Exception ex)
@@ -241,7 +248,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     partitionAssignedHandler: (c, tp) =>
                         _partitionAssignmentHandler.OnPartitionsAssigned(tp.ToImmutableHashSet()),
                     partitionRevokedHandler: (c, tp) =>
-                        _partitionAssignmentHandler.OnPartitionsRevoked(tp.ToImmutableHashSet()));
+                        _partitionAssignmentHandler.OnPartitionsRevoked(tp.ToImmutableHashSet()),
+                    statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 _adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build();
 
