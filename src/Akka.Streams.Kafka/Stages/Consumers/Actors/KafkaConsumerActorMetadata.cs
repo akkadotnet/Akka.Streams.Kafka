@@ -25,21 +25,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) => 
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new PartitionEventHandlers.Empty())).WithDispatcher(settings.DispatcherId);
+        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new PartitionEventHandlers.Empty(), new StatisticsHandlers.Empty())).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler)).WithDispatcher(settings.DispatcherId);
+        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler handler) => 
-            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler)).WithDispatcher(settings.DispatcherId);
-        
+        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
+
+
         /// <summary>
         /// Contains <see cref="KafkaConsumerActor{K,V}"/>  message definitions.
         /// Generally this should not be used from outside of the library.
@@ -244,11 +245,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 /// </summary>
                 public string TopicPattern { get; }
             }
-            
+
             /// <summary>
             /// Stops consuming actor
             /// </summary>
-            public class Stop{ }
+            public class Stop
+            {
+                public static readonly Stop Instance = new Stop();
+
+                private Stop() { }
+            }
 
             /// <summary>
             /// Seek

@@ -5,11 +5,14 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
 using Akka.Actor;
+using Akka.Dispatch.SysMsg;
 using Akka.Event;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using Newtonsoft.Json;
@@ -24,7 +27,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
     internal class KafkaConsumerActor<K, V> : ActorBase
     {
         private readonly IActorRef _owner;
-        private readonly ConsumerSettings<K, V> _settings;
+        private ConsumerSettings<K, V> _settings;
+        /// <summary>
+        /// Stores delegates for external handling of statistics
+        /// </summary>
+        private readonly IStatisticsHandler _statisticsHandler;
+
         /// <summary>
         /// Stores delegates for external handling of partition events
         /// </summary>
@@ -33,7 +41,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private ICancelable _poolCancellation;
         private Internal.Poll<K, V> _pollMessage;
         private Internal.Poll<K, V> _delayedPollMessage;
-        
+
+        private TimeSpan _pollTimeout;
+        /// <summary>
+        /// Limits the blocking on offsetForTimes
+        /// </summary>
+        private TimeSpan _offsetForTimesTimeout;
+
+        /// <summary>
+        /// Limits the blocking on position in [[RebalanceListenerImpl]]
+        /// </summary>
+        private TimeSpan _positionTimeout;
+
         /// <summary>
         /// Stores all incoming requests from consuming kafka stages
         /// </summary>
@@ -45,6 +64,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing;
         private IConsumer<K, V> _consumer;
+        private IAdminClient _adminClient;
+        private IActorRef _connectionCheckerActor;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
         private bool _delayedPoolInFlight = false;
@@ -70,17 +91,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
+        /// <param name="statisticsHandler">Statistics handler</param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler)
+        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;
             _settings = settings;
+            _statisticsHandler = statisticsHandler;
             _partitionEventHandler = partitionEventHandler;
             
             _pollMessage = new Internal.Poll<K, V>(this, periodic: true);
             _delayedPollMessage = new Internal.Poll<K, V>(this, periodic: false);
             _log = Context.GetLogger();
-            _commitRefreshing = CommitRefreshing.Create<K, V>(_settings.CommitRefreshInterval);
         }
 
         protected override bool Receive(object message)
@@ -168,14 +190,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _commitRefreshing.Committed(committed.Offsets);
                     return true;
                 
-                case KafkaConsumerActorMetadata.Internal.Stop stop:
+                case KafkaConsumerActorMetadata.Internal.Stop _:
                     _log.Debug($"Received Stop from {Sender}, stopping");
                     Context.Stop(Self);
                     return true;
                 
+                case KafkaConnectionFailed kcf:
+                    ProcessError(kcf);
+                    Self.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
+                    return true;
+
                 case Terminated terminated:
                     _requests = _requests.Remove(terminated.ActorRef);
                     _requestors = _requestors.Remove(terminated.ActorRef);
+                    return true;
+
+                case Metadata.IRequest req:
+                    Sender.Tell(HandleMetadataRequest(req));
                     return true;
                 
                 default:
@@ -191,11 +222,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 var callbackHandler = new RebalanceListener<K, V>(_partitionEventHandler, this);
                 _partitionAssignmentHandler = callbackHandler;
-                
-                _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
-                _consumer = _settings.CreateKafkaConsumer(consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)), 
-                                                          partitionAssignedHandler: (c, tp) => _partitionAssignmentHandler.OnPartitionsAssigned(tp.ToImmutableHashSet()), 
-                                                          partitionRevokedHandler: (c, tp) => _partitionAssignmentHandler.OnPartitionsRevoked(tp.ToImmutableHashSet()));
+
+                ApplySettings(_settings);
             }
             catch (Exception ex)
             {
@@ -204,20 +232,71 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
+        private void ApplySettings(ConsumerSettings<K, V> updatedSettings)
+        {
+            _settings = updatedSettings;
+            _pollTimeout = _settings.PollTimeout;
+            _positionTimeout = _settings.PositionTimeout;
+            _commitRefreshing = CommitRefreshing.Create<K, V>(_settings.CommitRefreshInterval);
+            try
+            {
+                if (_log.IsDebugEnabled)
+                    _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
+
+                _consumer = _settings.CreateKafkaConsumer(
+                    consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)),
+                    partitionAssignedHandler: (c, tp) =>
+                        _partitionAssignmentHandler.OnPartitionsAssigned(tp.ToImmutableHashSet()),
+                    partitionRevokedHandler: (c, tp) =>
+                        _partitionAssignmentHandler.OnPartitionsRevoked(tp.ToImmutableHashSet()),
+                    statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
+
+                _adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build();
+
+                if (_settings.ConnectionCheckerSettings.Enabled)
+                {
+                    _connectionCheckerActor = Context.ActorOf(ConnectionChecker.Props(_settings.ConnectionCheckerSettings));
+                }
+            }
+            catch (Exception e)
+            {
+                ProcessError(e);
+                throw;
+            }
+        }
+
         protected override void PostStop()
         {
-            // reply to outstanding requests is important if the actor is restarted
-            foreach (var (actorRef, request) in _requests.ToTuples())
-            {
-                var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, ImmutableList<ConsumeResult<K, V>>.Empty);
-                actorRef.Tell(emptyMessages);
-            }
-            
-            _partitionAssignmentHandler.PostStop();
-            
-            _consumer.Dispose();
-            
             base.PostStop();
+            try
+            {
+                if (_settings.ConnectionCheckerSettings.Enabled)
+                {
+                    _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
+                }
+
+                // reply to outstanding requests is important if the actor is restarted
+                foreach (var (actorRef, request) in _requests.ToTuples())
+                {
+                    var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId,
+                        ImmutableList<ConsumeResult<K, V>>.Empty);
+                    actorRef.Tell(emptyMessages);
+                }
+
+                _partitionAssignmentHandler.PostStop();
+            }
+            finally
+            {
+                // Make sure that the consumer is unassigned from the partition AND closed before we dispose
+                try { _consumer.Unassign(); }
+                catch (Exception) { /* no-op */ }
+
+                try { _consumer.Close(); }
+                catch (Exception) { /* no-op */ }
+
+                _adminClient.Dispose();
+                _consumer.Dispose();
+            }
         }
 
         private void HandleSubscription(KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscriptionRequest)
@@ -236,6 +315,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             catch (Exception ex)
             {
                 ProcessError(ex);
+            }
+        }
+
+        private Metadata.IResponse HandleMetadataRequest(Metadata.IRequest req)
+        {
+            switch (req)
+            {
+                case Metadata.ListTopics _:
+                    return new Metadata.Topics(Try<List<TopicMetadata>>
+                        .From(() => _adminClient.GetMetadata(_settings.MetadataRequestTimeout).Topics));
+                default:
+                    throw new InvalidOperationException($"Unknown metadata request: {req}");
             }
         }
 
@@ -468,17 +559,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _resumedPartitions = _resumedPartitions.Union(partitionsToResume);
         }
 
-        class Internal
+        static class Internal
         {
-            public class Poll<k, V>
+            public class Poll<TPollKey, TPollValue> 
+                where TPollKey : K
+                where TPollValue : V
             {
-                public Poll(KafkaConsumerActor<K, V> target, bool periodic)
+                public Poll(KafkaConsumerActor<TPollKey, TPollValue> target, bool periodic)
                 {
                     Target = target;
                     Periodic = periodic;
                 }
 
-                public KafkaConsumerActor<K, V> Target { get; }
+                public KafkaConsumerActor<TPollKey, TPollValue> Target { get; }
                 public bool Periodic { get; }
             }
         }
@@ -499,21 +592,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <remarks>
         /// TODO: Refactor this class to not use actor's private fields
         /// </remarks>
-        class RebalanceListener<K, V> : RebalanceListenerBase
+        class RebalanceListener<TRebalanceKey, TRebalanceValue> : RebalanceListenerBase
+            where TRebalanceKey : K
+            where TRebalanceValue : V
         {
             private readonly IPartitionEventHandler _partitionEventHandler;
-            private readonly KafkaConsumerActor<K, V> _actor;
+            private readonly KafkaConsumerActor<TRebalanceKey, TRebalanceValue> _actor;
 
-            private readonly RestrictedConsumer<K, V> _restrictedConsumer;
+            private readonly RestrictedConsumer<TRebalanceKey, TRebalanceValue> _restrictedConsumer;
             private readonly TimeSpan _warningDuration;
 
-            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<K, V> actor)
+            public RebalanceListener(IPartitionEventHandler partitionEventHandler, KafkaConsumerActor<TRebalanceKey, TRebalanceValue> actor)
             {
                 _partitionEventHandler = partitionEventHandler;
                 _actor = actor;
 
                 var restrictedConsumerTimeoutMs = Math.Round(actor._settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
-                _restrictedConsumer = new RestrictedConsumer<K, V>(actor._consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
+                _restrictedConsumer = new RestrictedConsumer<TRebalanceKey, TRebalanceValue>(actor._consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
                 _warningDuration = actor._settings.PartitionHandlerWarning;
             }
 

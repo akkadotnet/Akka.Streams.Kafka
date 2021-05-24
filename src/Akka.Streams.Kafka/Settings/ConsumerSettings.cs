@@ -3,12 +3,18 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
 using Akka.Actor;
+using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Settings
 {
+    public static class ConsumerSettings
+    {
+        internal const string ConfigPath = "akka.kafka.consumer";
+    }
+
     /// <summary>
     /// Consumer settings
     /// </summary>
@@ -39,6 +45,8 @@ namespace Akka.Streams.Kafka.Settings
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
         public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
         {
+            var properties = config.GetConfig("kafka-clients").ParseKafkaClientsProperties();
+
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
 
             return new ConsumerSettings<TKey, TValue>(
@@ -54,10 +62,12 @@ namespace Akka.Streams.Kafka.Settings
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
                 waitClosePartition: config.GetTimeSpan("wait-close-partition", TimeSpan.FromSeconds(1)),
                 bufferSize: config.GetInt("buffer-size", 50),
+                metadataRequestTimeout: config.GetTimeSpan("metadata-request-timeout", TimeSpan.FromSeconds(5)),
                 drainingCheckInterval: config.GetTimeSpan("eos-draining-check-interval", TimeSpan.FromMilliseconds(30)),
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 autoCreateTopicsEnabled: config.GetBoolean("allow.auto.create.topics", true),
-                properties: ImmutableDictionary<string, string>.Empty);
+                properties: properties,
+                connectionCheckerSettings: ConnectionCheckerSettings.Create(config.GetConfig(ConnectionCheckerSettings.ConfigPath)));
         }
 
         /// <summary>
@@ -135,11 +145,28 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public IImmutableDictionary<string, string> Properties { get; }
 
-        public ConsumerSettings(IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer, TimeSpan pollInterval, 
-                                TimeSpan pollTimeout, TimeSpan commitTimeout, TimeSpan commitRefreshInterval, TimeSpan stopTimeout, 
-                                TimeSpan positionTimeout, TimeSpan commitTimeWarning, TimeSpan partitionHandlerWarning,
-                                TimeSpan waitClosePartition, TimeSpan drainingCheckInterval, bool autoCreateTopicsEnabled,
-                                int bufferSize, string dispatcherId, IImmutableDictionary<string, string> properties)
+        public TimeSpan MetadataRequestTimeout { get; }
+
+        public ConnectionCheckerSettings ConnectionCheckerSettings { get; }
+
+        public ConsumerSettings(
+            IDeserializer<TKey> keyDeserializer, 
+            IDeserializer<TValue> valueDeserializer, 
+            TimeSpan pollInterval, 
+            TimeSpan pollTimeout, 
+            TimeSpan commitTimeout, 
+            TimeSpan commitRefreshInterval, 
+            TimeSpan stopTimeout, 
+            TimeSpan positionTimeout, 
+            TimeSpan commitTimeWarning, 
+            TimeSpan partitionHandlerWarning,
+            TimeSpan waitClosePartition, 
+            TimeSpan metadataRequestTimeout,
+            TimeSpan drainingCheckInterval, 
+            bool autoCreateTopicsEnabled,
+            int bufferSize, string dispatcherId, 
+            IImmutableDictionary<string, string> properties,
+            ConnectionCheckerSettings connectionCheckerSettings)
         {
             KeyDeserializer = keyDeserializer;
             ValueDeserializer = valueDeserializer;
@@ -155,9 +182,13 @@ namespace Akka.Streams.Kafka.Settings
             DispatcherId = dispatcherId;
             Properties = properties;
             WaitClosePartition = waitClosePartition;
+            MetadataRequestTimeout = metadataRequestTimeout;
             DrainingCheckInterval = drainingCheckInterval;
             AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
+            ConnectionCheckerSettings = connectionCheckerSettings;
         }
+
+        public string GetProperty(string key) => Properties.GetValueOrDefault(key, null);
 
         /// <summary>
         /// Sets kafka server IPs
@@ -279,6 +310,7 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? pollTimeout = null,
             TimeSpan? commitTimeout = null,
             TimeSpan? partitionHandlerWarning = null,
+            TimeSpan? metadataRequestTimeout = null,
             TimeSpan? drainingCheckInterval = null,
             TimeSpan? commitTimeWarning = null,
             TimeSpan? commitRefreshInterval = null,
@@ -288,7 +320,8 @@ namespace Akka.Streams.Kafka.Settings
             bool? autoCreateTopicsEnabled = null,
             int? bufferSize = null,
             string dispatcherId = null,
-            IImmutableDictionary<string, string> properties = null) =>
+            IImmutableDictionary<string, string> properties = null,
+            ConnectionCheckerSettings connectionCheckerSettings = null) =>
             new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer ?? this.KeyDeserializer,
                 valueDeserializer: valueDeserializer ?? this.ValueDeserializer,
@@ -302,24 +335,28 @@ namespace Akka.Streams.Kafka.Settings
                 waitClosePartition: waitClosePartition ?? this.WaitClosePartition,
                 positionTimeout: positionTimeout ?? this.PositionTimeout,
                 bufferSize: bufferSize ?? this.BufferSize,
+                metadataRequestTimeout: metadataRequestTimeout ?? this.MetadataRequestTimeout,
                 drainingCheckInterval: drainingCheckInterval ?? this.DrainingCheckInterval,
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 autoCreateTopicsEnabled: autoCreateTopicsEnabled ?? this.AutoCreateTopicsEnabled,
-                properties: properties ?? this.Properties);
+                properties: properties ?? this.Properties,
+                connectionCheckerSettings: connectionCheckerSettings ?? this.ConnectionCheckerSettings);
 
         /// <summary>
         /// Creates new kafka consumer, using event handlers provided
         /// </summary>
         public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null)
-        { 
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
+        {
             return new Confluent.Kafka.ConsumerBuilder<TKey, TValue>(this.Properties)
                 .SetKeyDeserializer(this.KeyDeserializer)
                 .SetValueDeserializer(this.ValueDeserializer)
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
+                .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
                 .Build();
         }
     }

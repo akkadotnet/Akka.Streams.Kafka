@@ -67,6 +67,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
                 : internalHandler;
 
+            IStatisticsHandler statisticsHandler = _subscription.StatisticsHandler.HasValue
+                ? _subscription.StatisticsHandler.Value
+                : new StatisticsHandlers.Empty();
+
             // This allows to override partition events handling by subclasses
             eventHandler = AddToPartitionAssignmentHandler(eventHandler);
             
@@ -74,14 +78,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler), 
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler, statisticsHandler),
                                                           $"kafka-consumer-{_actorNumber}");
             return actor;
         }
 
         public override void PostStop()
         {
-            ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
+            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
 
             base.PostStop();
         }
@@ -123,7 +127,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             Materializer.ScheduleOnce(_settings.StopTimeout, () =>
             {
-                ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Stop(), SourceActor.Ref);
+                ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
             });
         }
 

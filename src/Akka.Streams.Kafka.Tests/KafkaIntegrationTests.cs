@@ -150,10 +150,8 @@ namespace Akka.Streams.Kafka.Tests
 
         private static Config Default()
         {
-            var defaultSettings =
-                ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf");
-            
-            var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
+            //var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
+            var config = ConfigurationFactory.ParseString("akka{}");
 
             if (TestsConfiguration.UseFileLogging)
             {
@@ -161,7 +159,7 @@ namespace Akka.Streams.Kafka.Tests
                     ConfigurationFactory.ParseString("akka.loggers = [\"Akka.Streams.Kafka.Tests.Logging.SimpleFileLoggerActor, Akka.Streams.Kafka.Tests\"]"));
             }
             
-            return config.WithFallback(defaultSettings);
+            return config.WithFallback(KafkaExtensions.DefaultSettings);
         }
     }
 }
