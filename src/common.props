@@ -23,7 +23,7 @@ Upgrade to Confluent.Kafka 1.5.3
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     
     <!-- Nuget package versions -->
-    <AkkaVersion>1.4.20</AkkaVersion>
+    <AkkaVersion>1.4.21</AkkaVersion>
     <KafkaVersion>1.7.0</KafkaVersion>
 
     <!-- Unit test Nuget package versions -->
