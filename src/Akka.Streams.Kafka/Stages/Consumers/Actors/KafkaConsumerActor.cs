@@ -391,28 +391,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             try
             {
-                if (_requests.IsEmpty())
-                {
-                    // no outstanding requests so we don't expect any messages back, but we should anyway
-                    // drive the KafkaConsumer by polling to handle partition events etc.
-                    PausePartitions(currentAssignment);
-                    var message = _consumer.Consume(TimeSpan.FromMilliseconds(1));
-                    if (message != null)
-                    {
-                        throw new IllegalActorStateException($"Got unexpected Kafka message: {message.ToJson()}");
-                    }
-                }
-                else
-                {
-                    // resume partitions to fetch
-                    IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
-                    var pauseThese = currentAssignment.Except(resumeThese).ToList();
-                    PausePartitions(pauseThese);
-                    ResumePartitions(resumeThese);
+                // resume partitions to fetch
+                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
+                var pauseThese = currentAssignment.Except(resumeThese).ToList();
+                PausePartitions(pauseThese);
+                ResumePartitions(resumeThese);
 
-                    ProcessResult(partitionsToFetch, _consumer.Consume(_settings.PollTimeout));
-                }
+                ConsumeResult<K, V> consumed; 
+                var pooled = new List<ConsumeResult<K, V>>();
+                var deadline = _settings.PollTimeout.TotalMilliseconds;
+                var watch = Stopwatch.StartNew();
+                do
+                {
+                    consumed = _consumer.Consume(_settings.PollTimeout);
+                    if(consumed != null)
+                        pooled.Add(consumed);
+                } while (consumed != null && watch.ElapsedMilliseconds < deadline);
+                
+                ProcessResult(partitionsToFetch, pooled);
             }
             // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
             catch (ConsumeException ex) when (ex.Message.Contains("Broker: Unknown topic or partition") && _settings.AutoCreateTopicsEnabled)
@@ -439,27 +436,33 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, ConsumeResult<K,V> consumedMessage)
+        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            if (consumedMessage == null)
+            if(rawResult.IsEmpty())
                 return;
 
-            var fetchedTopicPartition = consumedMessage.TopicPartition;
-            if (!partitionsToFetch.Contains(fetchedTopicPartition))
-            {
-                throw  new ArgumentException($"Unexpected records polled. Expected one of {partitionsToFetch.JoinToString(", ")}," +
-                                             $"but consumed result is {consumedMessage.ToJson()}, consumer assignment: {_consumer.Assignment.ToJson()}");
-            }
+            var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
+            if (!fetchedTps.Except(partitionsToFetch).IsEmpty())
+                throw new ArgumentException(
+                    $"Unexpected records polled. Expected: [{string.Join(", ", partitionsToFetch.Select(p => p.ToString()))}], " +
+                    $"result: [{string.Join(", ", fetchedTps.Select(p => p.ToString()))}], " +
+                    $"consumer assignment: [{string.Join(", ", _consumer.Assignment.Select(p => p.ToString()))}]");
 
+            //send messages to actors
             foreach (var (stageActorRef, request) in _requests.ToTuples())
             {
-                // If requestor is interested in consumed topic, send him consumed result
-                if (request.Topics.Contains(consumedMessage.TopicPartition))
+                var messages = new List<ConsumeResult<K, V>>();
+                foreach (var message in rawResult)
                 {
-                    var messages = ImmutableList<ConsumeResult<K, V>>.Empty.Add(consumedMessage);
-                    stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages));
-                    _requests = _requests.Remove(stageActorRef);
+                    // If requestor is interested in consumed topic, send him consumed result
+                    if (request.Topics.Contains(message.TopicPartition))
+                    {
+                        messages.Add(message);
+                    }
                 }
+                if(!messages.IsEmpty())
+                    stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages.ToImmutableList()));
+                _requests = _requests.Remove(stageActorRef);
             }
         }
         
