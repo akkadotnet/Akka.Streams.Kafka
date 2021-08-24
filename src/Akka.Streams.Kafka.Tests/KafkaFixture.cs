@@ -54,6 +54,9 @@ namespace Akka.Streams.Kafka.Tests
         public int KafkaPort { get; private set; }
         public string KafkaServer => $"127.0.0.1:{KafkaPort}";
 
+        public const int KafkaReplicationFactor = 1;
+        public const int KafkaPartitions = 3;
+
         public async Task InitializeAsync()
         {
             if (TestsConfiguration.UseExistingDockerContainer)
@@ -82,13 +85,13 @@ namespace Akka.Streams.Kafka.Tests
             await CreateContainer(KafkaImageName, KafkaImageTag, _kafkaContainerName, KafkaPort, new Dictionary<string, string>()
             {
                 ["KAFKA_BROKER_ID"] = "1",
-                ["KAFKA_NUM_PARTITIONS"] = "3",
+                ["KAFKA_NUM_PARTITIONS"] = KafkaPartitions.ToString(),
                 ["KAFKA_ZOOKEEPER_CONNECT"] = $"{_zookeeperContainerName}:{zookeeperPort}", // referencing zookeeper container directly in common docker network
                 ["KAFKA_LISTENERS"] = $"PLAINTEXT://:{KafkaPort}",
                 ["KAFKA_ADVERTISED_LISTENERS"] = $"PLAINTEXT://127.0.0.1:{KafkaPort}",
                 ["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] = "true",
                 ["KAFKA_DELETE_TOPIC_ENABLE"] = "true",
-                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = "1",
+                ["KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"] = KafkaReplicationFactor.ToString(),
                 ["KAFKA_OPTS"] = "-Djava.net.preferIPv4Stack=True"
             });
 

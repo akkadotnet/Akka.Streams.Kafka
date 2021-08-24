@@ -210,7 +210,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             consumedMessagesTask.Result.Should().Be(totalMessages);
         }
 
-        [Fact]
+        [Fact(Skip = "Racy")]
         public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_failes()
         {
             var topic = CreateTopic(1);

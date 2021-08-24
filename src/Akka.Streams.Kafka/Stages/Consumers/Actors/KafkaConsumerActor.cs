@@ -4,6 +4,8 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Dispatch.SysMsg;
 using Akka.Event;
@@ -398,16 +400,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 PausePartitions(pauseThese);
                 ResumePartitions(resumeThese);
 
-                ConsumeResult<K, V> consumed; 
-                var pooled = new List<ConsumeResult<K, V>>();
-                var deadline = _settings.PollTimeout.TotalMilliseconds;
-                var watch = Stopwatch.StartNew();
-                do
-                {
-                    consumed = _consumer.Consume(_settings.PollTimeout);
-                    if(consumed != null)
-                        pooled.Add(consumed);
-                } while (consumed != null && watch.ElapsedMilliseconds < deadline);
+                var cts = new CancellationTokenSource(_settings.PollTimeout);
+                var pooled = PollKafka(cts.Token);
                 
                 ProcessResult(partitionsToFetch, pooled);
             }
@@ -434,6 +428,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _log.Debug("Stopping");
                 Context.Stop(Self);
             }
+        }
+
+        private List<ConsumeResult<K, V>> PollKafka(CancellationToken token)
+        {
+            ConsumeResult<K, V> consumed = null;
+            var timeout = (int) _settings.PollTimeout.TotalMilliseconds;
+            var pooled = new List<ConsumeResult<K, V>>();
+            do
+            {
+                // this would return immediately if there are messages waiting inside the client queue buffer
+                consumed = _consumer.Consume(timeout);
+                if (consumed != null)
+                    pooled.Add(consumed);
+            } while (consumed != null && !token.IsCancellationRequested);
+
+            return pooled;
         }
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
