@@ -393,17 +393,27 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             try
             {
-                // resume partitions to fetch
-                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
-                var pauseThese = currentAssignment.Except(resumeThese).ToList();
-                PausePartitions(pauseThese);
-                ResumePartitions(resumeThese);
+                if (_requests.IsEmpty())
+                {
+                    PausePartitions(currentAssignment);
+                    var consumed = _consumer.Consume(0);
+                    if (consumed != null)
+                        throw new IllegalActorStateException("Consumed message should be null");
+                }
+                else
+                {
+                    // resume partitions to fetch
+                    IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                    var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
+                    var pauseThese = currentAssignment.Except(resumeThese).ToList();
+                    PausePartitions(pauseThese);
+                    ResumePartitions(resumeThese);
 
-                var cts = new CancellationTokenSource(_settings.PollTimeout);
-                var pooled = PollKafka(cts.Token);
-                
-                ProcessResult(partitionsToFetch, pooled);
+                    var cts = new CancellationTokenSource(_settings.PollTimeout);
+                    var pooled = PollKafka(cts.Token);
+                    
+                    ProcessResult(partitionsToFetch, pooled);
+                }
             }
             // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
             catch (ConsumeException ex) when (ex.Message.Contains("Broker: Unknown topic or partition") && _settings.AutoCreateTopicsEnabled)
