@@ -107,7 +107,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             shutdown.Result.Should().BeTrue();
         }
 
-        [Fact(Skip = "Racy")]
+        [Fact]
         public async Task PlainPartitionedSource_should_stop_partition_sources_when_stopped()
         {
             var topic = CreateTopic(1);
@@ -180,7 +180,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
         }
 
-        [Fact(Skip = "Racy")]
+        [Fact]
         public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_is_cancelled()
         {
             var topic = CreateTopic(1);
