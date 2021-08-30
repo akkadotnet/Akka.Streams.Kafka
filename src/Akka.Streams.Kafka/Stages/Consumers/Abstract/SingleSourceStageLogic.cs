@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Kafka.Helpers;
@@ -133,14 +134,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
         {
-            TopicPartitions = partitions.ToImmutableHashSet();
+            TopicPartitions = TopicPartitions.Union(partitions);
             Log.Debug($"Partitions were assigned: {string.Join(", ", TopicPartitions)}");
             RequestMessages();
         }
         
         private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
         {
-            TopicPartitions = TopicPartitions.Clear();
+            TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
             Log.Debug("Partitions were revoked");
         }
     }
