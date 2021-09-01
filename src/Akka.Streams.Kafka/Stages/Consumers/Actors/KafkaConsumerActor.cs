@@ -563,8 +563,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     }
                 }
                 if(!messages.IsEmpty())
+                {
                     stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages.ToImmutableList()));
-                _requests = _requests.Remove(stageActorRef);
+                    _requests = _requests.Remove(stageActorRef);
+                }
             }
         }
         
