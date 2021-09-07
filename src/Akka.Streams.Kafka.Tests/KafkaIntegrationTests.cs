@@ -21,13 +21,13 @@ namespace Akka.Streams.Kafka.Tests
     [Collection(KafkaSpecsFixture.Name)]
     public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        private readonly KafkaFixture _fixture;
+        public KafkaFixture Fixture { get; }
         protected IMaterializer Materializer { get; }
 
         public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), actorSystemName, output)
         {
-            _fixture = fixture;
+            Fixture = fixture;
             Materializer = Sys.Materializer();
             
             Sys.Log.Info("Starting test: " + output.GetCurrentTestName());
@@ -42,7 +42,7 @@ namespace Akka.Streams.Kafka.Tests
         
         protected ProducerSettings<TKey, TValue> BuildProducerSettings<TKey, TValue>()
         {
-            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(Fixture.KafkaServer);
         }
 
         protected CommitterSettings CommitterSettings
@@ -53,7 +53,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group)
         {
             return ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -62,7 +62,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
         {
             return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithProperty("enable.auto.commit", "false")
@@ -123,7 +123,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             var builder = new AdminClientBuilder(new AdminClientConfig
             {
-                BootstrapServers = _fixture.KafkaServer
+                BootstrapServers = Fixture.KafkaServer
             });
             using (var client = builder.Build())
             {
@@ -140,7 +140,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             var builder = new AdminClientBuilder(new AdminClientConfig
             {
-                BootstrapServers = _fixture.KafkaServer
+                BootstrapServers = Fixture.KafkaServer
             });
             using (var client = builder.Build())
             {
