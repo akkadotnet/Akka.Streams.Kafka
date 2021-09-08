@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
@@ -211,60 +216,189 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_failes()
+        public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_failed()
         {
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
             var totalMessages = 105;
 
-            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
-
-            var (queue, accumulatorTask) = Source.Queue<long>(8, OverflowStrategy.Backpressure)
-                .Scan(0, (c, _) => c + 1)
-                .TakeWhile(val => val < totalMessages)
-                .ToMaterialized(Sink.Aggregate<int, int>(0, (c, _) => c + 1), Keep.Both)
-                .Run(Materializer);
+            var producerSettings = BuildProducerSettings<string, string>();
             
-            var (killSwitch, consumerCompletion) = KafkaConsumer.PlainPartitionedSource(CreateConsumerSettings<string>(group), Subscriptions.Topics(topic))
-                .Log(topic, m => $"Consuming topic partition {m.Item1}")
-                .ViaMaterialized(KillSwitches.Single<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Keep.Both)
-                .ToMaterialized(Sink.ForEach<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(tuple =>
+            await Source
+                .From(Enumerable.Range(1, totalMessages))
+                .Select(elem => new ProducerRecord<string, string>(topic, elem.ToString(), elem.ToString()))
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+
+            var queue = new ConcurrentQueue<int>();
+            
+            var consumerSettings = ConsumerSettings<string, string>.Create(Sys, null, null)
+                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithProperty("enable.auto.commit", "false")
+                .WithGroupId(group);
+            
+            KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+                .RunForeach(tuple =>
                 {
                     var (topicPartition, source) = tuple;
+                    
+                    Log.Info($"Consuming topic partition {topicPartition}");
                     source
-                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Value})")
-                        .SelectAsync(1, async message =>
+                        .Select(message =>
                         {
-                            await queue.OfferAsync(message.Offset);
-                            var value = int.Parse(message.Value);
+                            var value = int.Parse(message.Message.Value);
+                            queue.Enqueue(value);
                             
                             if (value % 10 == 0)
                             {
-                                Log.Debug("Reached message to fail: {0}", value);
-                                throw new Exception("Stopping subsource");
-                            }
-
-                            return value;
-                        })
-                        .Select(value =>
-                        {
-                            if (value % 10 == 0)
-                            {
-                                Log.Debug("Reached message to fail: {0}", value);
+                                Log.Debug("[{0}] Reached message to fail: offset: [{1}], value: [{2}]", message.TopicPartition, message.Offset, value);
                                 throw new Exception("Stopping subsource");
                             }
 
                             return value;
                         })
                         .RunWith(Sink.Ignore<int>(), Materializer);
-                }), Keep.Both)
-                .Run(Materializer);
+                }, Materializer);
+
+            await AwaitConditionAsync(
+                () => queue.Count >= totalMessages, 
+                TimeSpan.FromSeconds(60),
+                TimeSpan.FromMilliseconds(100));
+
+            var sorted = queue.ToImmutableSortedSet();
+            sorted.Should().BeEquivalentTo(Enumerable.Range(1, totalMessages));
+        }
+
+        // This is a rough benchmark number for the unit test above, of how much time it should have taken
+        // if it is implemented using native client and given the best running environment as possible
+        // (no threading, no stream, etc).
+        [Fact(DisplayName = "Native Kafka IConsumer.Seek() should not fail to seek to proper offset")]
+        public void NativeKafkaIConsumerSeekShouldNotFail()
+        {
+            var topic = "topic-1";
+            var group = "group-1";
+            var totalMessages = 105;
+
+            var producerConfig = new ProducerConfig
+            {
+                BootstrapServers = Fixture.KafkaServer
+            };
+
+            var producer = new ProducerBuilder<string, string>(producerConfig).Build();
+
+            foreach (var i in Enumerable.Range(1, totalMessages))
+            {
+                producer.Produce(topic, new Message<string, string>
+                {
+                    Key = i.ToString(),
+                    Value = i.ToString()
+                });
+            }
+
+            producer.Flush();
+
+            var consumerConfig = new ConsumerConfig
+            {
+                BootstrapServers = Fixture.KafkaServer,
+                GroupId = group,
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                EnableAutoCommit = false
+            };
+
+            var consumer = new ConsumerBuilder<string, string>(consumerConfig)
+                .Build();
+            consumer.Subscribe(topic);
             
-            AwaitCondition(() => accumulatorTask.IsCompleted, TimeSpan.FromSeconds(10));
-            accumulatorTask.Result.Should().Be(totalMessages);
+            const int consumeTimeout = 50;
+            const int testTimeout = 10_000;
             
-            killSwitch.Item2.Shutdown();
-            AwaitCondition(() => consumerCompletion.IsCompleted, TimeSpan.FromSeconds(10));
+            var consumeCount = 0;
+
+            var offsets = new List<TopicPartitionOffset>
+            {
+                new TopicPartitionOffset(new TopicPartition(topic, 0), 0),
+                new TopicPartitionOffset(new TopicPartition(topic, 1), 0),
+                new TopicPartitionOffset(new TopicPartition(topic, 2), 0),
+            };
+            
+            var watch = Stopwatch.StartNew();
+            while (consumeCount < totalMessages && watch.ElapsedMilliseconds < testTimeout)
+            {
+                var consumed = ConsumeAllMessages(consumer, totalMessages, offsets, consumeTimeout);
+                //Log.Info($"Polled {consumed.consumed} messages");
+                
+                if (consumed.consumed != 0)
+                {
+                    for(var i=0; i<3; i++)
+                    {
+                        var seekResult = CheckForSeek(consumed.messages[i]);
+                        consumeCount += seekResult.count;
+                        offsets[i] = seekResult.seekOffset;
+                    }
+
+                    foreach (var offset in offsets)
+                    {
+                        if(offset != null)
+                        {
+                            Log.Info($"Seeking {offset.TopicPartition} to {offset.Offset}");
+                            consumer.Seek(offset);
+                        }
+                    }
+                }
+                
+                Thread.Sleep(consumeTimeout);
+            }
+            watch.Stop();
+
+            consumeCount.Should().Be(totalMessages);
+        }
+
+        private (int count, TopicPartitionOffset seekOffset) CheckForSeek(List<ConsumeResult<string, string>> messages)
+        {
+            var messageCount = 0;
+            foreach (var msg  in messages)
+            {
+                messageCount++;
+                if (int.TryParse(msg.Message.Value, out var i) && i % 10 == 0)
+                    return (messageCount, new TopicPartitionOffset(msg.TopicPartition, msg.Offset + 1));
+            }
+
+            return (messageCount, null);
+        }
+
+        private (int consumed, List<ConsumeResult<string, string>>[] messages) ConsumeAllMessages(
+            IConsumer<string, string> consumer,
+            long totalMessages,
+            List<TopicPartitionOffset> offsets,
+            int consumeTimeout)
+        {
+            var result = new []
+            {
+                new List<ConsumeResult<string, string>>(),
+                new List<ConsumeResult<string, string>>(),
+                new List<ConsumeResult<string, string>>(),
+            };
+
+            totalMessages = offsets
+                .Where(offset => offset != null)
+                .Aggregate(totalMessages, (current, offset) => current - offset.Offset.Value);
+
+            var consumeCount = 0;
+            var watch = Stopwatch.StartNew();
+            // poll messages
+            while (consumeCount < totalMessages && watch.ElapsedMilliseconds < consumeTimeout)
+            {
+                var consumed = consumer.Consume(consumeTimeout);
+                if (consumed != null)
+                {
+                    result[consumed.Partition].Add(consumed);
+                    consumeCount++;
+                }
+            }
+            watch.Stop();
+
+            return (consumeCount, result);
         }
         
         private long LogReceivedMessages(TopicPartition tp, int counter)

@@ -56,7 +56,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group = CreateGroup(1);
             var consumerSettings = CreateConsumerSettings<string>(group);
 
-            await ProduceStrings(topic, Enumerable.Range(1, 100), ProducerSettings);
+            await ProduceStrings(topic, Enumerable.Range(0, 100), ProducerSettings);
             
             var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
                     consumerSettings, 

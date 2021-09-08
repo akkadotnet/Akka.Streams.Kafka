@@ -35,7 +35,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             return KafkaConsumer
                 .PlainSource(consumerSettings, sub)
-                .Where(c => !c.Value.Equals(InitialMsg))
                 .Select(c => c.Value)
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
@@ -75,7 +74,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await GivenInitializedTopic(topicPartition1);
 
-            await ProduceStrings(topicPartition1, Enumerable.Range(1, elementsCount), ProducerSettings);
+            await ProduceStrings(topicPartition1, Enumerable.Range(0, elementsCount), ProducerSettings);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
 

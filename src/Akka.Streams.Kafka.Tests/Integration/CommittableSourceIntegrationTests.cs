@@ -42,7 +42,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = KafkaConsumer
                 .CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
-                .Where(c => !c.Record.Value.Equals(InitialMsg))
                 .Select(c => c.Record.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
@@ -72,7 +71,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var committedElements = new ConcurrentQueue<string>();
 
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
-                .WhereNot(c => c.Record.Value == InitialMsg)
                 .SelectAsync(10, async elem =>
                 {
                     await elem.CommitableOffset.Commit();
@@ -114,7 +112,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             // another consumer should see all
             var probe3 = KafkaConsumer.CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .WhereNot(c => c.Record.Value == InitialMsg)
                 .Select(_ => _.Record.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 

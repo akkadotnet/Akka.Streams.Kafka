@@ -26,6 +26,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventHub.Producer", "exampl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventHub.Consumer", "examples\EventHub.Consumer\EventHub.Consumer.csproj", "{9B4B5FBF-A46C-490E-8E19-72F577A1C31E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Streams.Kafka.Benchmark", "src\Akka.Streams.Kafka.Benchmark\Akka.Streams.Kafka.Benchmark.csproj", "{1BF52F4E-93FA-40C4-8985-C21D779C7997}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -56,6 +58,10 @@ Global
 		{9B4B5FBF-A46C-490E-8E19-72F577A1C31E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9B4B5FBF-A46C-490E-8E19-72F577A1C31E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9B4B5FBF-A46C-490E-8E19-72F577A1C31E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BF52F4E-93FA-40C4-8985-C21D779C7997}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BF52F4E-93FA-40C4-8985-C21D779C7997}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BF52F4E-93FA-40C4-8985-C21D779C7997}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BF52F4E-93FA-40C4-8985-C21D779C7997}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

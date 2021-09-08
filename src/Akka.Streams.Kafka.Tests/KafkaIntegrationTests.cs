@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,21 +21,19 @@ namespace Akka.Streams.Kafka.Tests
     [Collection(KafkaSpecsFixture.Name)]
     public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
     {
-        private readonly KafkaFixture _fixture;
+        public KafkaFixture Fixture { get; }
         protected IMaterializer Materializer { get; }
 
         public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), actorSystemName, output)
         {
-            _fixture = fixture;
+            Fixture = fixture;
             Materializer = Sys.Materializer();
             
             Sys.Log.Info("Starting test: " + output.GetCurrentTestName());
         }
         
         private string Uuid { get; } = Guid.NewGuid().ToString();
-        
-        protected const string InitialMsg = "initial msg in topic, required to create the topic before any consumer subscribes to it";
         
         protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
@@ -43,7 +42,7 @@ namespace Akka.Streams.Kafka.Tests
         
         protected ProducerSettings<TKey, TValue> BuildProducerSettings<TKey, TValue>()
         {
-            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(_fixture.KafkaServer);
+            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(Fixture.KafkaServer);
         }
 
         protected CommitterSettings CommitterSettings
@@ -54,7 +53,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group)
         {
             return ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -63,7 +62,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
         {
             return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(_fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithProperty("enable.auto.commit", "false")
@@ -122,19 +121,35 @@ namespace Akka.Streams.Kafka.Tests
 
         protected async Task GivenInitializedTopic(string topic)
         {
-            using (var producer = ProducerSettings.CreateKafkaProducer())
+            var builder = new AdminClientBuilder(new AdminClientConfig
             {
-                await producer.ProduceAsync(topic, new Message<Null, string> { Value = InitialMsg });
-                producer.Flush(TimeSpan.FromSeconds(1));
+                BootstrapServers = Fixture.KafkaServer
+            });
+            using (var client = builder.Build())
+            {
+                await client.CreateTopicsAsync(new[] {new TopicSpecification
+                {
+                    Name = topic,
+                    NumPartitions = KafkaFixture.KafkaPartitions,
+                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
+                }});
             }
         }
         
         protected async Task GivenInitializedTopic(TopicPartition topicPartition)
         {
-            using (var producer = ProducerSettings.CreateKafkaProducer())
+            var builder = new AdminClientBuilder(new AdminClientConfig
             {
-                await producer.ProduceAsync(topicPartition, new Message<Null, string> { Value = InitialMsg });
-                producer.Flush(TimeSpan.FromSeconds(1));
+                BootstrapServers = Fixture.KafkaServer
+            });
+            using (var client = builder.Build())
+            {
+                await client.CreateTopicsAsync(new[] {new TopicSpecification
+                {
+                    Name = topicPartition.Topic,
+                    NumPartitions = KafkaFixture.KafkaPartitions,
+                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
+                }});
             }
         }
         
@@ -142,7 +157,6 @@ namespace Akka.Streams.Kafka.Tests
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub)
-                .Where(c => !c.Value.Equals(InitialMsg))
                 .Select(c => c.Value)
                 .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
                 .Run(Materializer);
@@ -150,8 +164,8 @@ namespace Akka.Streams.Kafka.Tests
 
         private static Config Default()
         {
-            //var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
-            var config = ConfigurationFactory.ParseString("akka{}");
+            var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
+            //var config = ConfigurationFactory.ParseString("akka{}");
 
             if (TestsConfiguration.UseFileLogging)
             {
