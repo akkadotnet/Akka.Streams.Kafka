@@ -1,8 +1,9 @@
-#### 1.1.4 August 31 2021 ####
+#### 1.1.4 September 08 2021 ####
 
-* [Upgrade to Akka.NET 1.4.24](https://github.com/akkadotnet/akka.net/releases/tag/1.4.24)
+* [Upgrade to Akka.NET 1.4.25](https://github.com/akkadotnet/akka.net/releases/tag/1.4.25)
 * [Optimize Consumer polling](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/217)
 * [Fix topic partition assignment and revocation bug](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/221)
+* [Fix failing Kafka seek causing plain partitioned source to fail](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/225)
 
 __Kafka consumer client polling optimization__
 
