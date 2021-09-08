@@ -5,15 +5,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
-using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.Dispatch.SysMsg;
 using Akka.Event;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
@@ -44,14 +41,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private readonly TimeSpan _warningDuration;
         
         private ICancelable _pollCancellation;
-        private Internal.Poll<K, V> _pollMessage;
-        private Internal.Poll<K, V> _delayedPollMessage;
+        private readonly Internal.Poll<K, V> _pollMessage;
+        private readonly Internal.Poll<K, V> _delayedPollMessage;
 
         private TimeSpan _pollTimeout;
         /// <summary>
         /// Limits the blocking on offsetForTimes
         /// </summary>
         private TimeSpan _offsetForTimesTimeout;
+
+        private ImmutableDictionary<TopicPartition, TopicPartitionOffset> _seekedOffset = ImmutableDictionary<TopicPartition, TopicPartitionOffset>.Empty;
 
         /// <summary>
         /// Limits the blocking on position in [[RebalanceListenerImpl]]
@@ -250,18 +249,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case KafkaConsumerActorMetadata.Internal.Seek seek:
-                    seek.Offsets.ForEach(topicPartitionOffset =>
+                    foreach (var offset in seek.Offsets)
                     {
-                        try
-                        {
-                            _consumer.Seek(topicPartitionOffset);
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.Error($"Failed to seek to {topicPartitionOffset}: {ex}");
-                            throw;
-                        }
-                    });
+                        _seekedOffset = _seekedOffset.SetItem(offset.TopicPartition, offset);
+                    }
                     Sender.Tell(Done.Instance);
                     return true;
                     
@@ -354,6 +345,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             base.PostStop();
             try
             {
+                _pollCancellation?.Cancel(); // Stop existing scheduling, if any
+                
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
                     _connectionCheckerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
@@ -484,6 +477,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
                 else
                 {
+                    // Seek has to be done here because they can somehow fail.
+                    // Would need to see if we can move this somewhere else
+                    // because a seek can take up to 200ms to complete
+                    foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
+                    {
+                        try
+                        {
+                            _consumer.Seek(tpo);
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
+                            throw;
+                        }
+                    }
+                    
                     // resume partitions to fetch
                     IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                     var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
@@ -492,9 +501,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     ResumePartitions(resumeThese);
 
                     var cts = new CancellationTokenSource(_settings.PollTimeout);
-                    var pooled = PollKafka(cts.Token);
-                    
-                    ProcessResult(partitionsToFetch, pooled);
+                    ProcessResult(partitionsToFetch, PollKafka(cts.Token));
                 }
             }
             // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
@@ -525,7 +532,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private List<ConsumeResult<K, V>> PollKafka(CancellationToken token)
         {
             ConsumeResult<K, V> consumed = null;
-            var timeout = (int) _settings.PollTimeout.TotalMilliseconds;
+            var timeout = (int) _pollTimeout.TotalMilliseconds;
             var pooled = new List<ConsumeResult<K, V>>();
             do
             {
@@ -556,8 +563,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 var messages = new List<ConsumeResult<K, V>>();
                 foreach (var message in rawResult)
                 {
+                    var currentTp = message.TopicPartition;
+                    
+                    if (_seekedOffset.TryGetValue(currentTp, out var seekedTpo))
+                    {
+                        if (message.Offset != seekedTpo.Offset)
+                            throw new Exception("Seek failed, received message offset is greater than seek offset");
+                        _seekedOffset = _seekedOffset.Remove(currentTp);
+                    }
+                    
                     // If requestor is interested in consumed topic, send him consumed result
-                    if (request.Topics.Contains(message.TopicPartition))
+                    if (request.Topics.Contains(currentTp))
                     {
                         messages.Add(message);
                     }

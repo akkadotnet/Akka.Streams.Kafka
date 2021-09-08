@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
@@ -14,15 +14,37 @@ using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
-using Akka.Streams.Util;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
-using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
+    internal interface ISubSourceCancellationStrategy { }
+
+    internal sealed class SeekToOffsetAndReEmit : ISubSourceCancellationStrategy
+    {
+        public SeekToOffsetAndReEmit(long offset)
+        {
+            Offset = offset;
+        }
+
+        public long Offset { get; }
+    }
+
+    internal sealed class ReEmit : ISubSourceCancellationStrategy
+    {
+        public static readonly ISubSourceCancellationStrategy Instance = new ReEmit();
+        private ReEmit() {}
+    }
+
+    internal sealed class DoNothing : ISubSourceCancellationStrategy
+    {
+        public static readonly ISubSourceCancellationStrategy Instance = new DoNothing();
+        private DoNothing() {}
+    }
+    
     /// <summary>
     /// Stage logic used to produce sub-sources per topic partitions
     /// </summary>
@@ -39,10 +61,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private readonly int _actorNumber = KafkaConsumerActorMetadata.NextNumber();
         private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
-        private Action<IImmutableSet<TopicPartition>> _updatePendingPartitionsAndEmitSubSourcesCallback;
+        private readonly Action<IImmutableSet<TopicPartition>> _updatePendingPartitionsAndEmitSubSourcesCallback;
         private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
-        private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subsourceCancelledCallback;
+        private readonly Action<(TopicPartition, ISubSourceCancellationStrategy)> _subsourceCancelledCallback;
         private readonly Action<(TopicPartition, IControl)> _subsourceStartedCallback;
+        private readonly Action<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)> _offsetsFromExternalResponseCb;
         private readonly Action<ConsumerFailed> _stageFailCallback;
         private readonly Decider _decider;
 
@@ -93,8 +116,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _partitionAssignedCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(HandlePartitionsAssigned);
             _partitionRevokedCallback = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(HandlePartitionsRevoked);
             _stageFailCallback = GetAsyncCallback<ConsumerFailed>(FailStage);
-            _subsourceCancelledCallback = GetAsyncCallback<(TopicPartition, Option<ConsumeResult<K, V>>)>(HandleSubsourceCancelled);
+            _subsourceCancelledCallback = GetAsyncCallback<(TopicPartition, ISubSourceCancellationStrategy)>(HandleSubsourceCancelled);
             _subsourceStartedCallback = GetAsyncCallback<(TopicPartition, IControl)>(HandleSubsourceStarted);
+            _offsetsFromExternalResponseCb = GetAsyncCallback<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)>(OffsetsFromExternalResponseCallback);
 
             SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: PerformShutdown);
         }
@@ -108,20 +132,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 switch (args.Item2)
                 {
                     case Status.Failure failure:
-                        var exception = failure.Cause;
-                        switch (_decider(failure.Cause))
-                        {
-                            case Directive.Stop:
-                                // Throw
-                                FailStage(exception);
-                                break;
-                            case Directive.Resume:
-                                // keep going
-                                break;
-                            case Directive.Restart:
-                                // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
-                                break;
-                        }
+                        FailStage(failure.Cause);
                         break;
 
                     case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
@@ -175,13 +186,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _onRevoke(_partitionsToRevoke);
                 _pendingPartitions = _pendingPartitions.Except(_partitionsToRevoke);
                 _partitionsInStartup = _partitionsInStartup.Except(_partitionsToRevoke);
-                _partitionsToRevoke.ForEach(tp => _subSources[tp].Shutdown());
+                _partitionsToRevoke.ForEach(tp =>
+                {
+                    if (_subSources.TryGetValue(tp, out var source))
+                        source.Shutdown();
+                });
                 _subSources = _subSources.RemoveRange(_partitionsToRevoke);
-                _partitionsToRevoke = _partitionsToRevoke.Clear();
+                _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
             }
         }
 
-        private async void HandlePartitionsAssigned(IImmutableSet<TopicPartition> assigned)
+        private void HandlePartitionsAssigned(IImmutableSet<TopicPartition> assigned)
         {
             var formerlyUnknown = assigned.Except(_partitionsToRevoke);
 
@@ -195,38 +210,61 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             if (!_getOffsetsOnAssign.HasValue)
             {
-                UpdatePendingPartitionsAndEmitSubSources(formerlyUnknown);
+                _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
             }
             else
             {
-                try
+                _getOffsetsOnAssign.Value(assigned).ContinueWith(t =>
                 {
-                    var offsets = await _getOffsetsOnAssign.Value(assigned);
-
-                    SeekAndEmitSubSources(formerlyUnknown, offsets);
-                }
-                catch (Exception ex)
-                {
-                    _stageFailCallback(new ConsumerFailed($"{_actorNumber} Failed to fetch offset for partitions: {formerlyUnknown.JoinToString(", ")}", ex));
-                }
+                    if (t.IsFaulted)
+                    {
+                        _stageFailCallback(new ConsumerFailed($"{_actorNumber} Failed to fetch offset for partitions: {formerlyUnknown.JoinToString(", ")}", t.Exception));
+                    }
+                    else
+                    {
+                        _offsetsFromExternalResponseCb((formerlyUnknown, t.Result));
+                    }
+                }, TaskContinuationOptions.ExecuteSynchronously);
             }
         }
 
-        private async void SeekAndEmitSubSources(IImmutableSet<TopicPartition> formerlyUnknown, IImmutableSet<TopicPartitionOffset> offsets)
+        private void OffsetsFromExternalResponseCallback((IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>) result)
         {
-            try
-            {
-                // Without this delay kafka does not allow to perform seek operation (gives Local: Erroneous state error)
-                await Task.Delay(50);
+            var (formerlyUnknown, offsets) = result;
+            var updatedFormerlyUnknown =
+                formerlyUnknown.Except(_partitionsToRevoke.Union(_partitionsInStartup).Union(_pendingPartitions));
+            SeekAndEmitSubSources(updatedFormerlyUnknown,
+                offsets.Where(o => !_partitionsToRevoke.Contains(o.TopicPartition)).ToImmutableHashSet());
+        }
 
-                await ConsumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Seek(offsets), TimeSpan.FromSeconds(10));
-
-                _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
-            }
-            catch (AskTimeoutException ex)
-            {
-                _stageFailCallback(new ConsumerFailed($"{_actorNumber} Consumer failed during seek for partitions: {offsets.JoinToString(", ")}"));
-            }
+        private void SeekAndEmitSubSources(IImmutableSet<TopicPartition> formerlyUnknown, IImmutableSet<TopicPartitionOffset> offsets)
+        {
+            ConsumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Seek(offsets), TimeSpan.FromSeconds(10))
+                .ContinueWith(t =>
+                {
+                    if (t.IsCanceled)
+                    {
+                        _stageFailCallback(new ConsumerFailed($"{_actorNumber} Consumer failed during seek, task cancelled. Partitions: {offsets.JoinToString(", ")}"));
+                    } else if (t.IsFaulted)
+                    {
+                        if(t.Exception == null)
+                            throw new Exception(
+                                $"{_actorNumber} Consumer failed during seek, task faulted with null cause. Partitions: {offsets.JoinToString(", ")}");
+                        
+                        if (t.Exception.Flatten().InnerExceptions.OfType<AskTimeoutException>().Any())
+                        {
+                            _stageFailCallback(new ConsumerFailed($"{_actorNumber} Consumer failed during seek, Ask timed out. Partitions: {offsets.JoinToString(", ")}"));
+                        }
+                        else
+                        {
+                            ExceptionDispatchInfo.Capture(t.Exception).Throw();
+                        }
+                    }
+                    else
+                    {
+                        _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
+                    }
+                }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         private void HandlePartitionsRevoked(IImmutableSet<TopicPartitionOffset> revoked)
@@ -236,24 +274,33 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             ScheduleOnce(new CloseRevokedPartitions(), _settings.WaitClosePartition);
         }
 
-        private void HandleSubsourceCancelled((TopicPartition, Option<ConsumeResult<K, V>>) obj)
+        private void HandleSubsourceCancelled((TopicPartition, ISubSourceCancellationStrategy) obj)
         {
-            var (topicPartition, firstUnconsumed) = obj;
+            var (topicPartition, cancellationStrategy) = obj;
 
             _subSources = _subSources.Remove(topicPartition);
             _partitionsInStartup = _partitionsInStartup.Remove(topicPartition);
-            _pendingPartitions = _pendingPartitions.Add(topicPartition);
 
-            if (firstUnconsumed.HasValue)
+            switch (cancellationStrategy)
             {
-                var topicPartitionOffset = new TopicPartitionOffset(topicPartition, firstUnconsumed.Value.Offset);
-                Log.Debug("#{0} Seeking {1} to {2} after partition SubSource cancelled", _actorNumber, topicPartition, topicPartitionOffset.Offset);
-
-                SeekAndEmitSubSources(formerlyUnknown: ImmutableHashSet<TopicPartition>.Empty, offsets: ImmutableList.Create(topicPartitionOffset).ToImmutableHashSet());
-            }
-            else
-            {
-                EmitSubSourcesForPendingPartitions();
+                case SeekToOffsetAndReEmit seek:
+                    var offset = seek.Offset;
+                    // re-add this partition to pending partitions so it can be re-emitted
+                    _pendingPartitions = _pendingPartitions.Add(topicPartition);
+                    if(Log.IsDebugEnabled)
+                        Log.Debug("#{0} Seeking {1} to {2} after partition SubSource cancelled", _actorNumber, topicPartition, offset);
+                    var topicPartitionOffset = new TopicPartitionOffset(topicPartition, offset);
+                    SeekAndEmitSubSources(
+                        formerlyUnknown: ImmutableHashSet<TopicPartition>.Empty, 
+                        offsets: ImmutableList.Create(topicPartitionOffset).ToImmutableHashSet());
+                    break;
+                case ReEmit _:
+                    // re-add this partition to pending partitions so it can be re-emitted
+                    _pendingPartitions = _pendingPartitions.Add(topicPartition);
+                    EmitSubSourcesForPendingPartitions();
+                    break;
+                case DoNothing _:
+                    break;
             }
         }
 
@@ -282,20 +329,31 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void EmitSubSourcesForPendingPartitions()
         {
-            if (_pendingPartitions.Any() && IsAvailable(_shape.Outlet))
+            while (true)
             {
-                var topicPartition = _pendingPartitions.First();
+                if (_pendingPartitions.Any() && IsAvailable(_shape.Outlet))
+                {
+                    var topicPartition = _pendingPartitions.First();
 
-                _pendingPartitions = _pendingPartitions.Remove(topicPartition);
-                _partitionsInStartup = _partitionsInStartup.Add(topicPartition);
+                    _pendingPartitions = _pendingPartitions.Remove(topicPartition);
+                    _partitionsInStartup = _partitionsInStartup.Add(topicPartition);
 
-                var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(topicPartition, ConsumerActor, _subsourceStartedCallback,
-                                                                              _subsourceCancelledCallback, _messageBuilder, _decider, _actorNumber);
-                var subsource = Source.FromGraph(subSourceStage);
+                    var subSourceStage = new SubSourceStreamStage<K, V, TMessage>(
+                        topicPartition,
+                        ConsumerActor,
+                        _subsourceStartedCallback,
+                        _subsourceCancelledCallback,
+                        _messageBuilder,
+                        _decider,
+                        _actorNumber);
+                    var subsource = Source.FromGraph(subSourceStage);
 
-                Push(_shape.Outlet, (topicPartition, subsource));
+                    Push(_shape.Outlet, (topicPartition, subsource));
 
-                EmitSubSourcesForPendingPartitions();
+                    continue;
+                }
+
+                break;
             }
         }
 
@@ -363,7 +421,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             private readonly TopicPartition _topicPartition;
             private readonly IActorRef _consumerActor;
             private readonly Action<(TopicPartition, IControl)> _subSourceStartedCallback;
-            private readonly Action<(TopicPartition, Option<ConsumeResult<K, V>>)> _subSourceCancelledCallback;
+            private readonly Action<(TopicPartition, ISubSourceCancellationStrategy)> _subSourceCancelledCallback;
             private readonly IMessageBuilder<K, V, TMsg> _messageBuilder;
             private readonly int _actorNumber;
             private readonly Decider _decider;
@@ -373,7 +431,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             public SubSourceStreamStage(TopicPartition topicPartition, IActorRef consumerActor,
                                   Action<(TopicPartition, IControl)> subSourceStartedCallback,
-                                  Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback,
+                                  Action<(TopicPartition, ISubSourceCancellationStrategy)> subSourceCancelledCallback,
                                   IMessageBuilder<K, V, TMsg> messageBuilder,
                                   Decider decider,
                                   int actorNumber)
@@ -415,7 +473,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 public SubSourceStreamStageLogic(SourceShape<TMsg> shape, TopicPartition topicPartition, IActorRef consumerActor,
                                            int actorNumber, IMessageBuilder<K, V, TMsg> messageBuilder, Decider decider,
                                            Action<(TopicPartition, IControl)> subSourceStartedCallback,
-                                           Action<(TopicPartition, Option<ConsumeResult<K, V>>)> subSourceCancelledCallback)
+                                           Action<(TopicPartition, ISubSourceCancellationStrategy)> subSourceCancelledCallback)
                     : base(shape)
                 {
                     _shape = shape;
@@ -432,57 +490,46 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                     SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: () =>
                     {
-                        var firstUnconsumed = _buffer.TryDequeue(out var message) ? new Option<ConsumeResult<K, V>>(message) : Option<ConsumeResult<K, V>>.None;
-                        subSourceCancelledCallback((topicPartition, firstUnconsumed));
-                        CompleteStage();
+                        subSourceCancelledCallback((
+                            topicPartition, 
+                            _buffer.TryPeek(out var next) ? new SeekToOffsetAndReEmit(next.Offset) : ReEmit.Instance));
+                        //CompleteStage();
                     });
                 }
 
                 public override void PreStart()
                 {
+                    base.PreStart();
                     Log.Debug("{0} Starting SubSource for partition {1}", _actorNumber, _topicPartition);
 
-                    base.PreStart();
-
-                    _subSourceStartedCallback((_topicPartition, Control));
-                    _subSourceActor = GetStageActor(args =>
-                    {
-                        var (actor, message) = args;
-
-                        switch (message)
-                        {
-                            case KafkaConsumerActorMetadata.Internal.Messages<K, V> messages:
-                                _requested = false;
-
-                                foreach (var consumerMessage in messages.MessagesList)
-                                    _buffer.Enqueue(consumerMessage);
-
-                                Pump();
-                                break;
-                            case Status.Failure failure:
-                                var exception = failure.Cause;
-                                switch (_decider(failure.Cause))
-                                {
-                                    case Directive.Stop:
-                                        // Throw
-                                        FailStage(exception);
-                                        break;
-                                    case Directive.Resume:
-                                        // keep going
-                                        break;
-                                    case Directive.Restart:
-                                        // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
-                                        break;
-                                }
-                                break;
-                            case Terminated terminated when terminated.ActorRef.Equals(_consumerActor):
-                                FailStage(new ConsumerFailed());
-                                break;
-                        }
-                    });
-
+                    _subSourceActor = GetStageActor(MessageHandling());
                     _subSourceActor.Watch(_consumerActor);
+                    
+                    _subSourceStartedCallback((_topicPartition, Control));
+                    // consumerActor.tell(RegisterSubStage(requestMessages.tps), subSourceActor.ref) // JVM
                 }
+
+                private StageActorRef.Receive MessageHandling() => args =>
+                {
+                    var (actor, message) = args;
+
+                    switch (message)
+                    {
+                        case KafkaConsumerActorMetadata.Internal.Messages<K, V> messages:
+                            _requested = false;
+                            foreach (var consumerMessage in messages.MessagesList)
+                                _buffer.Enqueue(consumerMessage);
+
+                            Pump();
+                            break;
+                        case Status.Failure failure:
+                            FailStage(failure.Cause);
+                            break;
+                        case Terminated terminated when terminated.ActorRef.Equals(_consumerActor):
+                            FailStage(new ConsumerFailed());
+                            break;
+                    }
+                };
 
                 public override void PostStop()
                 {
@@ -493,18 +540,24 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                 private void Pump()
                 {
-                    if (IsAvailable(_shape.Outlet))
+                    while (true)
                     {
-                        if (_buffer.TryDequeue(out var message))
+                        if (IsAvailable(_shape.Outlet))
                         {
-                            Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-                            Pump();
+                            if (_buffer.TryDequeue(out var message))
+                            {
+                                Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                                continue;
+                            }
+                            
+                            if (!_requested)
+                            {
+                                _requested = true;
+                                _consumerActor.Tell(_requestMessages, _subSourceActor.Ref);
+                            }
                         }
-                        else if (!_requested)
-                        {
-                            _requested = true;
-                            _consumerActor.Tell(_requestMessages, _subSourceActor.Ref);
-                        }
+
+                        break;
                     }
                 }
 
