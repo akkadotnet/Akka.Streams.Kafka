@@ -85,6 +85,7 @@ namespace Akka.Streams.Kafka.Helpers
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
+                Console.WriteLine("AsyncPartitionCallback");
                 _partitionAssignedCallback(assignedTopicPartitions);
             }
 
