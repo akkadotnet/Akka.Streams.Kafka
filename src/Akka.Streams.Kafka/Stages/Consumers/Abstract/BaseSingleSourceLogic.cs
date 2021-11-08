@@ -147,8 +147,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            Log.Debug("Pump pulled");
-            
             while(IsAvailable(_shape.Outlet) && _buffer.TryDequeue(out var message))
             {
                 Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
@@ -156,12 +154,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
             {
-                Log.Debug("Pump requesting messages");
                 RequestMessages();
-            }
-            else
-            {
-                Log.Debug("Pump not available");
             }
         }
 
@@ -169,7 +162,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _requested = true;
             _requestId += 1;
-            Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
+            if (Log.IsDebugEnabled)
+                Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 

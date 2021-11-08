@@ -471,7 +471,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 if (_requests.IsEmpty())
                 {
-                    _log.Debug("Requests are empty - attempting to consume.");
+                    if(_log.IsDebugEnabled)
+                        _log.Debug("Requests are empty - attempting to consume.");
                     PausePartitions(currentAssignment);
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
@@ -486,7 +487,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         try
                         {
-                            _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
+                            if(_log.IsDebugEnabled)
+                                _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
                             _consumer.Seek(tpo);
                         }
                         catch (Exception ex)
@@ -543,7 +545,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             do
             {
                 // this would return immediately if there are messages waiting inside the client queue buffer
-                _log.Debug("Polling for {0} ms", timeout);
                 consumed = _consumer.Consume(timeout);
                 if (consumed != null)
                     pooled.Add(consumed);
@@ -555,7 +556,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            _log.Debug("Processing poll result with {0} records", rawResult.Count);
+            if(_log.IsDebugEnabled)
+                _log.Debug("Processing poll result with {0} records", rawResult.Count);
             if(rawResult.IsEmpty())
                 return;
 
@@ -680,7 +682,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void PausePartitions(List<TopicPartition> partitions)
         {
-            _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
+            if(_log.IsDebugEnabled)
+                _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
             _consumer.Pause(partitions);
             _resumedPartitions = _resumedPartitions.Except(partitions);
         }
@@ -688,7 +691,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void ResumePartitions(List<TopicPartition> partitions)
         {
             var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
-            _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
+            if(_log.IsDebugEnabled)
+                _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
             _consumer.Resume(partitionsToResume);
             _resumedPartitions = _resumedPartitions.Union(partitionsToResume);
         }
