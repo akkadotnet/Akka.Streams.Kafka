@@ -540,7 +540,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             ConsumeResult<K, V> consumed = null;
             var i = 10; // 10 poll attempts
-            var timeout = (int) _pollTimeout.TotalMilliseconds / i;
+            var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
             var pooled = new List<ConsumeResult<K, V>>();
             do
             {
