@@ -48,11 +48,8 @@ namespace Akka.Streams.Kafka.Stages
         where TIn: IEnvelope<K, V, P>
         where TOut: IResults<K, V, P>
     {
-        private volatile bool _inIsClosed;
         private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
-        private readonly Action _checkForCompletionCallback;
-        private readonly Action<Exception> _failStageCallback;
         private readonly Decider _decider;
         
         protected IProducer<K, V> Producer { get; private set; }
@@ -64,9 +61,6 @@ namespace Akka.Streams.Kafka.Stages
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
-            
-            _checkForCompletionCallback = GetAsyncCallback(CheckForCompletion);
-            _failStageCallback = GetAsyncCallback<Exception>(FailStage);
 
             SetHandler(_stage.In, 
                 onPush: () =>
@@ -79,10 +73,11 @@ namespace Akka.Streams.Kafka.Stages
                         {
                             var result = new TaskCompletionSource<IResults<K, V, P>>();
                             AwaitingConfirmation.IncrementAndGet();
-                            Producer.Produce(message.Record, BuildSendCallback(result, onSuccess: report =>
+                            var callback = BuildSendCallback(result, onSuccess: report =>
                             {
                                 result.SetResult(new Result<K, V, P>(report, message));
-                            }));
+                            });
+                            Producer.Produce(message.Record, GetAsyncCallback(callback));
                             PostSend(msg);
                             Push(stage.Out, result.Task as Task<TOut>);
                             break;
@@ -117,15 +112,13 @@ namespace Akka.Streams.Kafka.Stages
                 },
                 onUpstreamFinish: () =>
                 {
-                    _inIsClosed = true;
                     _completionState.SetResult(NotUsed.Instance);
-                    _checkForCompletionCallback();
+                    CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
                 {
-                    _inIsClosed = true;
                     _completionState.SetException(exception);
-                    _checkForCompletionCallback();
+                    CheckForCompletion();
                 });
 
             SetHandler(_stage.Out, onPull: () =>
@@ -138,7 +131,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            Producer = _stage.ProducerProvider(HandleProduceError);
+            Producer = _stage.ProducerProvider(null);
             Log.Debug($"Producer started: {Producer.Name}");
         }
 
@@ -175,9 +168,12 @@ namespace Akka.Streams.Kafka.Stages
         {
             return report =>
             {
-                if (!report.Error.IsError)
+                if (!report.Error.IsFatal)
                 {
+                    if(report.Error.IsError)
+                        Log.Info($"[{report.Error.Code}] {report.Error.Reason}, this has been handled internally");
                     onSuccess(report);
+                    ConfirmAndCheckForCompletion();
                 }
                 else
                 {
@@ -186,22 +182,21 @@ namespace Akka.Streams.Kafka.Stages
                     switch (_decider(exception))
                     {
                         case Directive.Stop:
-                            if (_stage.CloseProducerOnStop)
-                            {
-                                // TODO: address the missing Producer.Close() in the future
-                                Producer.Dispose();
-                            }
-                            _failStageCallback(exception);
+                            CloseAndFailStage(exception);
                             break;
                         default:
                             completion.SetException(exception);
+                            ConfirmAndCheckForCompletion();
                             break;
                     }
                 }
-                
-                if (AwaitingConfirmation.DecrementAndGet() == 0 && _inIsClosed)
-                    _checkForCompletionCallback();
             };
+        }
+
+        private void ConfirmAndCheckForCompletion()
+        {
+            AwaitingConfirmation.Decrement();
+            CheckForCompletion();
         }
 
         private void CheckForCompletion()
@@ -225,27 +220,57 @@ namespace Akka.Streams.Kafka.Stages
                 }
             }
         }
+
+        private void CloseAndFailStage(Exception ex)
+        {
+            CloseProducerImmediately();
+            FailStage(ex);
+        }
+
+        private void CloseProducerImmediately()
+        {
+            if (Producer != null && _stage.CloseProducerOnStop)
+            {
+                Producer.Dispose();
+            }
+        }
+
+        private void CloseProducer()
+        {
+            try
+            {
+                if (Producer != null && _stage.CloseProducerOnStop)
+                {
+                    Producer.Flush();
+                    Producer.Dispose();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Problem occured during producer close");
+            }
+        }
         
         private void HandleProduceError(IProducer<K, V> producer, Error error)
         {
-            Log.Error(error.Reason);
-
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
+            if (!error.IsError)
+                return;
+            
+            if (!error.IsFatal)
             {
-                var exception = new KafkaException(error);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        if (_stage.CloseProducerOnStop)
-                        {
-                            // TODO: address the missing Producer.Close() in the future.
-                            producer.Dispose();
-                        }
-                        _failStageCallback(exception);
-                        break;
-                    default:
-                        break;
-                }
+                Log.Info($"[{error.Code}] {error.Reason}, this has been handled internally");
+                return;
+            }
+            
+            Log.Error(error.Reason);
+            var exception = new KafkaException(error);
+            switch (_decider(exception))
+            {
+                case Directive.Stop:
+                    CloseAndFailStage(exception);
+                    break;
+                default:
+                    break;
             }
         }
 

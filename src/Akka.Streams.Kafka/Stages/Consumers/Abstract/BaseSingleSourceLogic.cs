@@ -118,27 +118,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         _buffer.Enqueue(consumerMessage);
                     
                     Pump();
-                    
                     break;
                 
                 case Status.Failure failure:
-                    var exception = failure.Cause;
-                    switch (_decider(failure.Cause))
-                    {
-                        case Directive.Stop:
-                            // Throw
-                            FailStage(exception);
-                            break;
-                        case Directive.Resume:
-                            // keep going
-                            break;
-                        case Directive.Restart:
-                            // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
-                            break;
-                    }
+                    FailStage(failure.Cause);
                     break;
                 
-                case Terminated terminated:
+                case Terminated terminated when ReferenceEquals(terminated.ActorRef, ConsumerActor):
                     FailStage(new ConsumerFailed());
                     break;
             }
@@ -146,17 +132,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            if (IsAvailable(_shape.Outlet))
+            while (true)
             {
-                if (_buffer.TryDequeue(out var message))
+                if (IsAvailable(_shape.Outlet))
                 {
-                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-                    Pump();
+                    if (_buffer.TryDequeue(out var message))
+                    {
+                        Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                        continue;
+                    }
+                    if (!_requested && TopicPartitions.Any())
+                    {
+                        RequestMessages();
+                    }
                 }
-                else if (!_requested && TopicPartitions.Any())
-                {
-                    RequestMessages();
-                }
+                break;
             }
         }
 
