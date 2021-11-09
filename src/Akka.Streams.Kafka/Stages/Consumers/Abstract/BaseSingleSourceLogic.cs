@@ -132,21 +132,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            while (true)
+            if (IsAvailable(_shape.Outlet))
             {
-                if (IsAvailable(_shape.Outlet))
+                if (_buffer.TryDequeue(out var message))
                 {
-                    if (_buffer.TryDequeue(out var message))
-                    {
-                        Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-                        continue;
-                    }
-                    if (!_requested && TopicPartitions.Any())
-                    {
-                        RequestMessages();
-                    }
+                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+                    Pump();
                 }
-                break;
+                else if (!_requested && TopicPartitions.Any())
+                {
+                    RequestMessages();
+                }
             }
         }
 
