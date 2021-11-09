@@ -600,7 +600,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void ProcessConsumingError(ConsumeException ex)
         {
             var error = ex.Error;
-            _log.Error(error.Reason);
+            _log.Error(ex, $"ConsumerError: Code={error.Code}, Reason={error.Reason}, IsError={error.IsError}, IsFatal={error.IsFatal}");
 
             if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
             {
