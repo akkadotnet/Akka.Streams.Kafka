@@ -178,8 +178,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
             substream.Request(1);
             
             await ProduceStrings(topic, new int[] { 0 }, ProducerSettings); // Produce "0" string
-            
-            Within(TimeSpan.FromSeconds(10), () => substream.ExpectError().Should().BeOfType<SerializationException>());
+
+            Within(TimeSpan.FromSeconds(10), () =>
+            {
+                var err = substream.ExpectError();
+                err.Should().BeOfType<ConsumeException>();
+                ((ConsumeException) err).Error.IsSerializationError().Should().BeTrue();
+            });
 
             var shutdown = control1.Shutdown();
             AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));

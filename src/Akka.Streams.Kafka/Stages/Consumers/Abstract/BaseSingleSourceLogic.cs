@@ -31,6 +31,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
+        private bool _consumerActorTerminated;        
         private readonly Decider _decider;
 
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
@@ -53,7 +54,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -121,11 +122,26 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     break;
                 
                 case Status.Failure failure:
-                    FailStage(failure.Cause);
+                    if (_decider(failure.Cause) == Directive.Stop)
+                    {
+                        FailStage(failure.Cause);
+                    } else if (_consumerActorTerminated)
+                    {
+                        // ConsumerActor are designed to suicide itself on any error except for de/serialization error
+                        // to prevent any offset/commit runaway, we will need to restart it.
+                        // TODO: PLEASE REVIEW THAT THIS WORKS
+                        _consumerActorTerminated = false;
+                        SourceActor.Unwatch(ConsumerActor);
+                        ConsumerActor = CreateConsumerActor();
+                        SourceActor.Watch(ConsumerActor);
+                    }
                     break;
                 
-                case Terminated terminated when ReferenceEquals(terminated.ActorRef, ConsumerActor):
-                    FailStage(new ConsumerFailed());
+                case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
+                    _consumerActorTerminated = true;
+                    var exception = new ConsumerFailed();
+                    if (_decider(exception) == Directive.Stop)
+                        FailStage(exception);
                     break;
             }
         }

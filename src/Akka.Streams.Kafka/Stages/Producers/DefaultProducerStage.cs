@@ -71,15 +71,26 @@ namespace Akka.Streams.Kafka.Stages
                     {
                         case Message<K, V, P> message:
                         {
-                            var result = new TaskCompletionSource<IResults<K, V, P>>();
-                            AwaitingConfirmation.IncrementAndGet();
-                            var callback = BuildSendCallback(result, onSuccess: report =>
+                            try
                             {
-                                result.SetResult(new Result<K, V, P>(report, message));
-                            });
-                            Producer.Produce(message.Record, GetAsyncCallback(callback));
-                            PostSend(msg);
-                            Push(stage.Out, result.Task as Task<TOut>);
+                                var result = new TaskCompletionSource<IResults<K, V, P>>();
+                                AwaitingConfirmation.IncrementAndGet();
+                                var callback = BuildSendCallback(
+                                    completion: result, 
+                                    onSuccess: report =>
+                                    {
+                                        result.SetResult(new Result<K, V, P>(report, message));
+                                    }, 
+                                    onFailure: OnProduceFailure);
+                                Producer.Produce(message.Record, GetAsyncCallback(callback));
+                                PostSend(msg);
+                                Push(stage.Out, result.Task as Task<TOut>);
+                            }
+                            catch (Exception exception)
+                            {
+                                OnProduceFailure(exception);
+                                Pull(_stage.In);
+                            }
                             break;
                         }
 
@@ -89,12 +100,24 @@ namespace Akka.Streams.Kafka.Stages
                             {
                                 var result = new TaskCompletionSource<MultiResultPart<K, V>>();
                                 AwaitingConfirmation.IncrementAndGet();
-                                Producer.Produce(record, BuildSendCallback(result, report =>
+                                var callback = BuildSendCallback(
+                                    completion: result,
+                                    onSuccess: report =>
+                                    {
+                                        result.SetResult(new MultiResultPart<K, V>(report, record));
+                                    },
+                                    onFailure: OnProduceFailure);
+                                try
                                 {
-                                    result.SetResult(new MultiResultPart<K, V>(report, record));
-                                }));
-                                return result.Task;
-                            });
+                                    Producer.Produce(record, GetAsyncCallback(callback));
+                                    return result.Task;
+                                }
+                                catch (Exception exception)
+                                {
+                                    OnProduceFailure(exception);
+                                    return null;
+                                }
+                            }).Where(t => t != null);
                             PostSend(msg);
                             var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
                             Push(stage.Out, resultTask as Task<TOut>);
@@ -164,31 +187,49 @@ namespace Akka.Streams.Kafka.Stages
         
         protected virtual void PostSend(IEnvelope<K, V, P> msg) { }
 
-        private Action<DeliveryReport<K, V>> BuildSendCallback<TResult>(TaskCompletionSource<TResult> completion, Action<DeliveryReport<K, V>> onSuccess)
+        private void OnProduceFailure(Exception ex)
+        {
+            switch (_decider(ex))
+            {
+                case Directive.Stop:
+                    CloseAndFailStage(ex);
+                    Log.Error(ex, $"Producer.Produce threw an exception: {ex.Message}");
+                    break;
+                default:
+                    Log.Debug($"This exception has been handled by the Supervision Decider: {ex.Message}");
+                    if (ex is ProduceException<K, V> pEx)
+                    {
+                        var error = pEx.Error;
+                        if (error.IsFatal)
+                        {
+                            // if it is a fatal exception, producer needs to be restarted
+                            Producer = _stage.ProducerProvider(null);
+                            Log.Debug($"Producer restarted: {Producer.Name}");
+                        }
+                    }
+                    //completion.SetException(ex);
+                    //completion.SetCanceled();
+                    //ConfirmAndCheckForCompletion();
+                    break;
+            }
+        }
+        
+        private Action<DeliveryReport<K, V>> BuildSendCallback<TResult>(
+            TaskCompletionSource<TResult> completion, 
+            Action<DeliveryReport<K, V>> onSuccess,
+            Action<Exception> onFailure)
         {
             return report =>
             {
-                if (!report.Error.IsFatal)
+                var error = report.Error;
+                if (error.IsError)
                 {
-                    if(report.Error.IsError)
-                        Log.Info($"[{report.Error.Code}] {report.Error.Reason}, this has been handled internally");
-                    onSuccess(report);
-                    ConfirmAndCheckForCompletion();
+                    onFailure(new ProduceException<K, V>(error, report));
                 }
                 else
                 {
-                    Log.Error(report.Error.Reason);
-                    var exception = new KafkaException(report.Error);
-                    switch (_decider(exception))
-                    {
-                        case Directive.Stop:
-                            CloseAndFailStage(exception);
-                            break;
-                        default:
-                            completion.SetException(exception);
-                            ConfirmAndCheckForCompletion();
-                            break;
-                    }
+                    onSuccess(report);
+                    ConfirmAndCheckForCompletion();
                 }
             };
         }

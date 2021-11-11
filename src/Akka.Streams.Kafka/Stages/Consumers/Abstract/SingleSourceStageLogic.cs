@@ -24,8 +24,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly ConsumerSettings<K, V> _settings;
         private readonly ISubscription _subscription;
 
-        private readonly int _actorNumber = KafkaConsumerActorMetadata.NextNumber();
-
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
@@ -80,7 +78,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
             var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler, statisticsHandler),
-                                                          $"kafka-consumer-{_actorNumber}");
+                                                          $"kafka-consumer-{KafkaConsumerActorMetadata.NextNumber()}");
             return actor;
         }
 
