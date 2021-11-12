@@ -24,7 +24,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
         }
 
-        [Theory]
+        [Theory(Skip = "This test looks fishy, will need to investigate -- Gregorius")]
         [InlineData(1)]
         [InlineData(5)]
         public async Task CommitterFlow_commits_offsets_from_CommittableSource(int batchSize)
