@@ -321,7 +321,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)),
+                    consumeErrorHandler: (c, e) =>
+                    {
+                        var exception = new KafkaException(e);
+                        ProcessError(exception);
+                        _pollCancellation?.Cancel();
+                        _requests = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
+                        _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.ToString());
+                        Context.Stop(Self);
+                    },
                     partitionAssignedHandler: (c, tp) => Self.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
                     partitionRevokedHandler: (c, tp) => Self.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
@@ -500,10 +508,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     PausePartitions(pauseThese);
                     ResumePartitions(resumeThese);
 
-                    var consumed = _consumer.Consume(_settings.PollTimeout);
-                    ProcessResult(partitionsToFetch, consumed);
-                    //var cts = new CancellationTokenSource(_settings.PollTimeout);
-                    //ProcessResult(partitionsToFetch, PollKafka(cts.Token));
+                    var cts = new CancellationTokenSource(_settings.PollTimeout);
+                    try
+                    {
+                        ProcessResult(partitionsToFetch, PollKafka(cts.Token));
+                    }
+                    finally
+                    {
+                        cts.Dispose();
+                    }
                 }
             }
             // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
@@ -518,6 +531,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             catch (Exception ex)
             {
                 ProcessError(ex);
+                _pollCancellation?.Cancel();
+                _requests = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
                 _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
                 Context.Stop(Self);
             }
@@ -531,7 +546,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        /*
         private List<ConsumeResult<K, V>> PollKafka(CancellationToken token)
         {
             ConsumeResult<K, V> consumed = null;
@@ -547,12 +561,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             return pooled;
         }
-        */
 
-        //private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
-        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, ConsumeResult<K,V> rawResult)
+        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            /*
             if(rawResult.IsEmpty())
                 return;
 
@@ -590,32 +601,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     _requests = _requests.Remove(stageActorRef);
                 }
             }                    
-            */
-            if(rawResult == null)
-                return;
-
-            var currentTp = rawResult.TopicPartition;
-            if (!partitionsToFetch.Contains(currentTp))
-                throw new ArgumentException(
-                    $"Unexpected records polled. Expected: [{string.Join(", ", partitionsToFetch.Select(p => p.ToString()))}], " +
-                    $"result: [{currentTp}], " +
-                    $"consumer assignment: [{string.Join(", ", _consumer.Assignment.Select(p => p.ToString()))}]");
-
-            foreach (var (stageActorRef, request) in _requests.ToTuples())
-            {
-                if (_seekedOffset.TryGetValue(currentTp, out var seekedTpo))
-                {
-                    if (rawResult.Offset != seekedTpo.Offset)
-                        throw new Exception("Seek failed, received message offset is greater than seek offset");
-                    _seekedOffset = _seekedOffset.Remove(currentTp);
-                }
-                // If requestor is interested in consumed topic, send him consumed result
-                if (request.Topics.Contains(currentTp))
-                {
-                    stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, new[]{rawResult}.ToImmutableList()));
-                    _requests = _requests.Remove(stageActorRef);
-                }
-            }
         }
         
         private void ProcessError(Exception error)
