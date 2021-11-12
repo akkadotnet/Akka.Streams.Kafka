@@ -71,10 +71,10 @@ namespace Akka.Streams.Kafka.Stages
                     {
                         case Message<K, V, P> message:
                         {
+                            var result = new TaskCompletionSource<IResults<K, V, P>>();
+                            AwaitingConfirmation.IncrementAndGet();
                             try
                             {
-                                var result = new TaskCompletionSource<IResults<K, V, P>>();
-                                AwaitingConfirmation.IncrementAndGet();
                                 var callback = BuildSendCallback(
                                     completion: result, 
                                     onSuccess: report =>
@@ -89,7 +89,6 @@ namespace Akka.Streams.Kafka.Stages
                             catch (Exception exception)
                             {
                                 OnProduceFailure(exception);
-                                Pull(_stage.In);
                             }
                             break;
                         }
@@ -117,10 +116,17 @@ namespace Akka.Streams.Kafka.Stages
                                     OnProduceFailure(exception);
                                     return null;
                                 }
-                            }).Where(t => t != null);
-                            PostSend(msg);
-                            var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
-                            Push(stage.Out, resultTask as Task<TOut>);
+                            }).Where(t => t != null).ToArray();
+                            if (tasks.Length > 0)
+                            {
+                                PostSend(msg);
+                                var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
+                                Push(stage.Out, resultTask as Task<TOut>);
+                            }
+                            else
+                            {
+                                TryPull(_stage.In);
+                            }
                             break;
                         }
 
@@ -196,6 +202,7 @@ namespace Akka.Streams.Kafka.Stages
                     Log.Error(ex, $"Producer.Produce threw an exception: {ex.Message}");
                     break;
                 default:
+                {
                     Log.Debug($"This exception has been handled by the Supervision Decider: {ex.Message}");
                     if (ex is ProduceException<K, V> pEx)
                     {
@@ -207,10 +214,10 @@ namespace Akka.Streams.Kafka.Stages
                             Log.Debug($"Producer restarted: {Producer.Name}");
                         }
                     }
-                    //completion.SetException(ex);
-                    //completion.SetCanceled();
-                    //ConfirmAndCheckForCompletion();
+                    TryPull(_stage.In);
+                    ConfirmAndCheckForCompletion();
                     break;
+                }
             }
         }
         
