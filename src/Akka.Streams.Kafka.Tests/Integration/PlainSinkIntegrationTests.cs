@@ -34,7 +34,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await GivenInitializedTopic(topicPartition1);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
-            var consumer = consumerSettings.CreateKafkaConsumer();
+            var consumer = consumerSettings.ConsumerFactory != null 
+                ? consumerSettings.ConsumerFactory(consumerSettings) 
+                : consumerSettings.CreateKafkaConsumer();
             consumer.Assign(new List<TopicPartition> { topicPartition1 });
 
             var task = new TaskCompletionSource<NotUsed>();

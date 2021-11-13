@@ -112,7 +112,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             switch (args.Item2)
             {
-                case Terminated terminated when terminated.ActorRef.Equals(ConsumerActor):
+                case Terminated _:
                     Control.OnShutdown();
                     CompleteStage();
                     break;

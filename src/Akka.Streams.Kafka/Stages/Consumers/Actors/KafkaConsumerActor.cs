@@ -320,21 +320,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 if (_log.IsDebugEnabled)
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
+                var localSelf = Self;
                 _consumer = _settings.CreateKafkaConsumer(
                     consumeErrorHandler: (c, e) =>
                     {
                         var exception = new KafkaException(e);
                         ProcessError(exception);
                         _pollCancellation?.Cancel();
-                        _requests = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
                         _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.ToString());
                         Context.Stop(Self);
                     },
-                    partitionAssignedHandler: (c, tp) => Self.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
-                    partitionRevokedHandler: (c, tp) => Self.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
+                    partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
+                    partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
-                _adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build();
+                _adminClient = _consumer.Handle != null ? new DependentAdminClientBuilder(_consumer.Handle).Build() : null;
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
@@ -379,7 +379,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try { _consumer.Close(); }
                 catch (Exception) { /* no-op */ }
 
-                _adminClient.Dispose();
+                _adminClient?.Dispose();
                 _consumer.Dispose();
             }
         }
@@ -532,7 +532,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 ProcessError(ex);
                 _pollCancellation?.Cancel();
-                _requests = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
                 _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
                 Context.Stop(Self);
             }

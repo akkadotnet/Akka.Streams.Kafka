@@ -9,6 +9,7 @@
     <PackageReference Include="Akka.Streams.TestKit" Version="$(AkkaVersion)" />
     <PackageReference Include="Akka.TestKit.Xunit2" Version="$(AkkaVersion)" />
     <PackageReference Include="Docker.DotNet" Version="3.125.5" />
+    <PackageReference Include="FakeItEasy" Version="7.2.0" />
     <PackageReference Include="FluentAssertions" Version="6.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSdkVersion)" />
     <PackageReference Include="xunit" Version="$(XunitVersion)" />
