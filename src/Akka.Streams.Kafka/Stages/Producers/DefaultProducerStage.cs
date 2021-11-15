@@ -48,11 +48,8 @@ namespace Akka.Streams.Kafka.Stages
         where TIn: IEnvelope<K, V, P>
         where TOut: IResults<K, V, P>
     {
-        private volatile bool _inIsClosed;
         private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
-        private readonly Action _checkForCompletionCallback;
-        private readonly Action<Exception> _failStageCallback;
         private readonly Decider _decider;
         
         protected IProducer<K, V> Producer { get; private set; }
@@ -64,9 +61,6 @@ namespace Akka.Streams.Kafka.Stages
 
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
-            
-            _checkForCompletionCallback = GetAsyncCallback(CheckForCompletion);
-            _failStageCallback = GetAsyncCallback<Exception>(FailStage);
 
             SetHandler(_stage.In, 
                 onPush: () =>
@@ -79,12 +73,23 @@ namespace Akka.Streams.Kafka.Stages
                         {
                             var result = new TaskCompletionSource<IResults<K, V, P>>();
                             AwaitingConfirmation.IncrementAndGet();
-                            Producer.Produce(message.Record, BuildSendCallback(result, onSuccess: report =>
+                            try
                             {
-                                result.SetResult(new Result<K, V, P>(report, message));
-                            }));
-                            PostSend(msg);
-                            Push(stage.Out, result.Task as Task<TOut>);
+                                var callback = BuildSendCallback(
+                                    completion: result, 
+                                    onSuccess: report =>
+                                    {
+                                        result.SetResult(new Result<K, V, P>(report, message));
+                                    }, 
+                                    onFailure: OnProduceFailure);
+                                Producer.Produce(message.Record, GetAsyncCallback(callback));
+                                PostSend(msg);
+                                Push(stage.Out, result.Task as Task<TOut>);
+                            }
+                            catch (Exception exception)
+                            {
+                                OnProduceFailure(exception);
+                            }
                             break;
                         }
 
@@ -94,15 +99,34 @@ namespace Akka.Streams.Kafka.Stages
                             {
                                 var result = new TaskCompletionSource<MultiResultPart<K, V>>();
                                 AwaitingConfirmation.IncrementAndGet();
-                                Producer.Produce(record, BuildSendCallback(result, report =>
+                                var callback = BuildSendCallback(
+                                    completion: result,
+                                    onSuccess: report =>
+                                    {
+                                        result.SetResult(new MultiResultPart<K, V>(report, record));
+                                    },
+                                    onFailure: OnProduceFailure);
+                                try
                                 {
-                                    result.SetResult(new MultiResultPart<K, V>(report, record));
-                                }));
-                                return result.Task;
-                            });
-                            PostSend(msg);
-                            var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
-                            Push(stage.Out, resultTask as Task<TOut>);
+                                    Producer.Produce(record, GetAsyncCallback(callback));
+                                    return result.Task;
+                                }
+                                catch (Exception exception)
+                                {
+                                    OnProduceFailure(exception);
+                                    return null;
+                                }
+                            }).Where(t => t != null).ToArray();
+                            if (tasks.Length > 0)
+                            {
+                                PostSend(msg);
+                                var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
+                                Push(stage.Out, resultTask as Task<TOut>);
+                            }
+                            else
+                            {
+                                TryPull(_stage.In);
+                            }
                             break;
                         }
 
@@ -117,15 +141,13 @@ namespace Akka.Streams.Kafka.Stages
                 },
                 onUpstreamFinish: () =>
                 {
-                    _inIsClosed = true;
                     _completionState.SetResult(NotUsed.Instance);
-                    _checkForCompletionCallback();
+                    CheckForCompletion();
                 },
                 onUpstreamFailure: exception =>
                 {
-                    _inIsClosed = true;
                     _completionState.SetException(exception);
-                    _checkForCompletionCallback();
+                    CheckForCompletion();
                 });
 
             SetHandler(_stage.Out, onPull: () =>
@@ -138,7 +160,7 @@ namespace Akka.Streams.Kafka.Stages
         {
             base.PreStart();
 
-            Producer = _stage.ProducerProvider(HandleProduceError);
+            Producer = _stage.ProducerProvider(null);
             Log.Debug($"Producer started: {Producer.Name}");
         }
 
@@ -171,37 +193,58 @@ namespace Akka.Streams.Kafka.Stages
         
         protected virtual void PostSend(IEnvelope<K, V, P> msg) { }
 
-        private Action<DeliveryReport<K, V>> BuildSendCallback<TResult>(TaskCompletionSource<TResult> completion, Action<DeliveryReport<K, V>> onSuccess)
+        private void OnProduceFailure(Exception ex)
+        {
+            switch (_decider(ex))
+            {
+                case Directive.Stop:
+                    CloseAndFailStage(ex);
+                    Log.Error(ex, $"Producer.Produce threw an exception: {ex.Message}");
+                    break;
+                default:
+                {
+                    Log.Debug($"This exception has been handled by the Supervision Decider: {ex.Message}");
+                    if (ex is ProduceException<K, V> pEx)
+                    {
+                        var error = pEx.Error;
+                        if (error.IsFatal)
+                        {
+                            // if it is a fatal exception, producer needs to be restarted
+                            Producer = _stage.ProducerProvider(null);
+                            Log.Debug($"Producer restarted: {Producer.Name}");
+                        }
+                    }
+                    TryPull(_stage.In);
+                    ConfirmAndCheckForCompletion();
+                    break;
+                }
+            }
+        }
+        
+        private Action<DeliveryReport<K, V>> BuildSendCallback<TResult>(
+            TaskCompletionSource<TResult> completion, 
+            Action<DeliveryReport<K, V>> onSuccess,
+            Action<Exception> onFailure)
         {
             return report =>
             {
-                if (!report.Error.IsError)
+                var error = report.Error;
+                if (error.IsError)
                 {
-                    onSuccess(report);
+                    onFailure(new ProduceException<K, V>(error, report));
                 }
                 else
                 {
-                    Log.Error(report.Error.Reason);
-                    var exception = new KafkaException(report.Error);
-                    switch (_decider(exception))
-                    {
-                        case Directive.Stop:
-                            if (_stage.CloseProducerOnStop)
-                            {
-                                // TODO: address the missing Producer.Close() in the future
-                                Producer.Dispose();
-                            }
-                            _failStageCallback(exception);
-                            break;
-                        default:
-                            completion.SetException(exception);
-                            break;
-                    }
+                    onSuccess(report);
+                    ConfirmAndCheckForCompletion();
                 }
-                
-                if (AwaitingConfirmation.DecrementAndGet() == 0 && _inIsClosed)
-                    _checkForCompletionCallback();
             };
+        }
+
+        private void ConfirmAndCheckForCompletion()
+        {
+            AwaitingConfirmation.Decrement();
+            CheckForCompletion();
         }
 
         private void CheckForCompletion()
@@ -225,30 +268,39 @@ namespace Akka.Streams.Kafka.Stages
                 }
             }
         }
-        
-        private void HandleProduceError(IProducer<K, V> producer, Error error)
-        {
-            Log.Error(error.Reason);
 
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
+        private void CloseAndFailStage(Exception ex)
+        {
+            DisposeProducerImmediately();
+            FailStage(ex);
+        }
+
+        // Called CloseProducerImmediately in JVM, there is no Producer.Close() in C#, we just dispose.
+        private void DisposeProducerImmediately()
+        {
+            if (Producer != null && _stage.CloseProducerOnStop)
             {
-                var exception = new KafkaException(error);
-                switch (_decider(exception))
-                {
-                    case Directive.Stop:
-                        if (_stage.CloseProducerOnStop)
-                        {
-                            // TODO: address the missing Producer.Close() in the future.
-                            producer.Dispose();
-                        }
-                        _failStageCallback(exception);
-                        break;
-                    default:
-                        break;
-                }
+                Producer.Dispose();
             }
         }
 
+        // Called CloseProducer in JVM, there is no Producer.Close() in C#, we just dispose.
+        private void DisposeProducer()
+        {
+            try
+            {
+                if (Producer != null && _stage.CloseProducerOnStop)
+                {
+                    Producer.Flush();
+                    Producer.Dispose();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Problem occured during producer close");
+            }
+        }
+        
         /// <inheritdoc />
         protected override void OnTimer(object timerKey) { }
     }

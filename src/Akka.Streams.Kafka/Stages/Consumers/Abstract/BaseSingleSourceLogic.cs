@@ -53,7 +53,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -119,28 +119,34 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         _buffer.Enqueue(consumerMessage);
                     
                     Pump();
-                    
                     break;
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    switch (_decider(failure.Cause))
+                    if (_decider(exception) == Directive.Stop)
                     {
-                        case Directive.Stop:
-                            // Throw
-                            FailStage(exception);
-                            break;
-                        case Directive.Resume:
-                            // keep going
-                            break;
-                        case Directive.Restart:
-                            // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
-                            break;
-                    }
+                        FailStage(failure.Cause);
+                        break;
+                    } 
+                    
+                    var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
+                    if (isSerializationError)
+                        break;
+                    
+                    // Empty the buffer to make sure that messages does not get duplicated
+                    while (_buffer.TryDequeue(out _))
+                    { }
+                    
+                    // ConsumerActor are designed to suicide itself on any error except for de/serialization error
+                    // to prevent any offset/commit runaway. We will need to restart it.
+                    SourceActor.Unwatch(ConsumerActor);
+                    ConsumerActor = CreateConsumerActor();
+                    SourceActor.Watch(ConsumerActor);
+                    ConfigureSubscription();
                     break;
                 
                 case Terminated terminated:
-                    FailStage(new ConsumerFailed());
+                    Log.Info($"Consumer actor terminated: {terminated.ActorRef.Path}");
                     break;
             }
         }

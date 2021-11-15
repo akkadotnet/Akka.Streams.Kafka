@@ -7,6 +7,7 @@ using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Util.Internal;
 using Confluent.Kafka;
+using Newtonsoft.Json;
 
 namespace Akka.Streams.Kafka.Settings
 {
@@ -67,7 +68,8 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 autoCreateTopicsEnabled: config.GetBoolean("allow.auto.create.topics", true),
                 properties: properties,
-                connectionCheckerSettings: ConnectionCheckerSettings.Create(config.GetConfig(ConnectionCheckerSettings.ConfigPath)));
+                connectionCheckerSettings: ConnectionCheckerSettings.Create(config.GetConfig(ConnectionCheckerSettings.ConfigPath)),
+                consumerFactory: null );
         }
 
         /// <summary>
@@ -148,6 +150,34 @@ namespace Akka.Streams.Kafka.Settings
         public TimeSpan MetadataRequestTimeout { get; }
 
         public ConnectionCheckerSettings ConnectionCheckerSettings { get; }
+        
+        [JsonIgnore]
+        public Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> ConsumerFactory { get; }
+
+        [Obsolete("Please use ctor with consumerFactory parameter")]
+        public ConsumerSettings(
+            IDeserializer<TKey> keyDeserializer,
+            IDeserializer<TValue> valueDeserializer,
+            TimeSpan pollInterval,
+            TimeSpan pollTimeout,
+            TimeSpan commitTimeout,
+            TimeSpan commitRefreshInterval,
+            TimeSpan stopTimeout,
+            TimeSpan positionTimeout,
+            TimeSpan commitTimeWarning,
+            TimeSpan partitionHandlerWarning,
+            TimeSpan waitClosePartition,
+            TimeSpan metadataRequestTimeout,
+            TimeSpan drainingCheckInterval,
+            bool autoCreateTopicsEnabled,
+            int bufferSize, string dispatcherId,
+            IImmutableDictionary<string, string> properties,
+            ConnectionCheckerSettings connectionCheckerSettings)
+            => new ConsumerSettings<TKey, TValue>(
+                keyDeserializer, valueDeserializer, pollInterval, pollTimeout, commitTimeout, commitRefreshInterval,
+                stopTimeout, positionTimeout, commitTimeWarning, partitionHandlerWarning, waitClosePartition,
+                metadataRequestTimeout, drainingCheckInterval, autoCreateTopicsEnabled, bufferSize, dispatcherId,
+                properties, connectionCheckerSettings, null);
 
         public ConsumerSettings(
             IDeserializer<TKey> keyDeserializer, 
@@ -166,7 +196,8 @@ namespace Akka.Streams.Kafka.Settings
             bool autoCreateTopicsEnabled,
             int bufferSize, string dispatcherId, 
             IImmutableDictionary<string, string> properties,
-            ConnectionCheckerSettings connectionCheckerSettings)
+            ConnectionCheckerSettings connectionCheckerSettings,
+            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory)
         {
             KeyDeserializer = keyDeserializer;
             ValueDeserializer = valueDeserializer;
@@ -186,6 +217,7 @@ namespace Akka.Streams.Kafka.Settings
             DrainingCheckInterval = drainingCheckInterval;
             AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
             ConnectionCheckerSettings = connectionCheckerSettings;
+            ConsumerFactory = consumerFactory;
         }
 
         public string GetProperty(string key) => Properties.GetValueOrDefault(key, null);
@@ -297,6 +329,10 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithValueDeserializer(IDeserializer<TValue> valueDeserializer) => Copy(valueDeserializer: valueDeserializer);
         
+        public ConsumerSettings<TKey, TValue> WithCloseTimeout(TimeSpan closeTimeout) => Copy(closeTimeout: closeTimeout);
+        
+        public ConsumerSettings<TKey, TValue> WithConsumerFactory(Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory) 
+            => Copy(consumerFactory: consumerFactory);
         
         /// <summary>
         /// Assigned consumer group Id, or null
@@ -321,7 +357,10 @@ namespace Akka.Streams.Kafka.Settings
             int? bufferSize = null,
             string dispatcherId = null,
             IImmutableDictionary<string, string> properties = null,
-            ConnectionCheckerSettings connectionCheckerSettings = null) =>
+            ConnectionCheckerSettings connectionCheckerSettings = null,
+            TimeSpan? closeTimeout = null,
+            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory = null
+            ) =>
             new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer ?? this.KeyDeserializer,
                 valueDeserializer: valueDeserializer ?? this.ValueDeserializer,
@@ -340,8 +379,11 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: dispatcherId ?? this.DispatcherId,
                 autoCreateTopicsEnabled: autoCreateTopicsEnabled ?? this.AutoCreateTopicsEnabled,
                 properties: properties ?? this.Properties,
-                connectionCheckerSettings: connectionCheckerSettings ?? this.ConnectionCheckerSettings);
+                connectionCheckerSettings: connectionCheckerSettings ?? this.ConnectionCheckerSettings,
+                consumerFactory: consumerFactory ?? this.ConsumerFactory);
 
+        internal RebalanceListener<TKey, TValue> RebalanceListener { get; private set; }
+        
         /// <summary>
         /// Creates new kafka consumer, using event handlers provided
         /// </summary>
@@ -350,7 +392,14 @@ namespace Akka.Streams.Kafka.Settings
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
         {
-            return new Confluent.Kafka.ConsumerBuilder<TKey, TValue>(this.Properties)
+            RebalanceListener = new RebalanceListener<TKey, TValue>(
+                onPartitionAssigned: partitionAssignedHandler,
+                onPartitionRevoked: partitionRevokedHandler);
+
+            if (this.ConsumerFactory != null)
+                return this.ConsumerFactory(this);
+            
+            return new ConsumerBuilder<TKey, TValue>(this.Properties)
                 .SetKeyDeserializer(this.KeyDeserializer)
                 .SetValueDeserializer(this.ValueDeserializer)
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
@@ -359,5 +408,17 @@ namespace Akka.Streams.Kafka.Settings
                 .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
                 .Build();
         }
+    }
+
+    internal sealed class RebalanceListener<TKey, TValue>
+    {
+        public RebalanceListener(Action<IConsumer<TKey, TValue>, List<TopicPartition>> onPartitionAssigned, Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionRevoked)
+        {
+            OnPartitionAssigned = onPartitionAssigned;
+            OnPartitionRevoked = onPartitionRevoked;
+        }
+
+        public Action<IConsumer<TKey, TValue>, List<TopicPartition>> OnPartitionAssigned { get; } 
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionRevoked { get; }
     }
 }

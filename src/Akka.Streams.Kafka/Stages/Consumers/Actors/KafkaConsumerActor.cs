@@ -321,13 +321,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 if (_log.IsDebugEnabled)
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
+                var localSelf = Self;
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) => ProcessError(new KafkaException(e)),
-                    partitionAssignedHandler: (c, tp) => Self.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
-                    partitionRevokedHandler: (c, tp) => Self.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
+                    consumeErrorHandler: (c, e) =>
+                    {
+                        var exception = new KafkaException(e);
+                        ProcessError(exception);
+                        _pollCancellation?.Cancel();
+                        _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.ToString());
+                        Context.Stop(Self);
+                    },
+                    partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
+                    partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
-                _adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build();
+                _adminClient = _consumer.Handle != null ? new DependentAdminClientBuilder(_consumer.Handle).Build() : null;
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
@@ -372,7 +380,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try { _consumer.Close(); }
                 catch (Exception) { /* no-op */ }
 
-                _adminClient.Dispose();
+                _adminClient?.Dispose();
                 _consumer.Dispose();
             }
         }
@@ -516,13 +524,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 // Trying to consume from not existing topics/partitions - assume that there are not messages to consume
             }
-            catch (ConsumeException ex)
+            catch (ConsumeException ex) when (ex.Error.IsSerializationError())
             {
-                ProcessConsumingError(ex);
+                ProcessError(ex);
             }
             catch (Exception ex)
             {
                 ProcessError(ex);
+                _pollCancellation?.Cancel();
                 _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
                 Context.Stop(Self);
             }
@@ -567,7 +576,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     $"Unexpected records polled. Expected: [{string.Join(", ", partitionsToFetch.Select(p => p.ToString()))}], " +
                     $"result: [{string.Join(", ", fetchedTps.Select(p => p.ToString()))}], " +
                     $"consumer assignment: [{string.Join(", ", _consumer.Assignment.Select(p => p.ToString()))}]");
-
+                    
             //send messages to actors
             foreach (var (stageActorRef, request) in _requests.ToTuples())
             {
@@ -594,28 +603,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages.ToImmutableList()));
                     _requests = _requests.Remove(stageActorRef);
                 }
-            }
-        }
-        
-        private void ProcessConsumingError(ConsumeException ex)
-        {
-            var error = ex.Error;
-            _log.Error(ex, $"ConsumerError: Code={error.Code}, Reason={error.Reason}, IsError={error.IsError}, IsFatal={error.IsFatal}");
-
-            if (!KafkaExtensions.IsBrokerErrorRetriable(error) && !KafkaExtensions.IsLocalErrorRetriable(error))
-            {
-                var exception = new KafkaException(error);
-                ProcessError(exception);
-            }
-            else if (KafkaExtensions.IsLocalValueSerializationError(error))
-            {
-                var exception = new SerializationException(error.Reason);
-                ProcessError(exception);
-            }
-            else
-            {
-                ProcessError(ex);
-            }
+            }                    
         }
         
         private void ProcessError(Exception error)
@@ -625,7 +613,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             foreach (var actor in involvedStageActors)
             {
                 actor.Tell(new Status.Failure(error));
-                _requests = _requests.Remove(actor);
             }
         }
 

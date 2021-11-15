@@ -84,6 +84,7 @@ namespace Akka.Streams.Kafka.Internal
         {
             base.PreStart();
             StartTimer();
+            Become(Regular());
         }
 
         private void StartTimer()

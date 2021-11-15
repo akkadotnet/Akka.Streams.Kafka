@@ -86,8 +86,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await ProduceStrings(new TopicPartition(topic, 1), new int[] { 1 }, ProducerSettings);
 
             // First two stages should fail, and only stage without demand should keep going
-            probe1.ExpectError().Should().BeOfType<SerializationException>();
-            probe2.ExpectError().Should().BeOfType<SerializationException>();
+            var ex = probe1.ExpectError();
+            ex.Should().BeOfType<ConsumeException>();
+            ((ConsumeException) ex).Error.IsSerializationError().Should().BeTrue();
+            
+            ex = probe2.ExpectError();
+            ex.Should().BeOfType<ConsumeException>();
+            ((ConsumeException) ex).Error.IsSerializationError().Should().BeTrue();
+            
             probe3.Cancel();
             
             // Make sure source tasks finish accordingly
