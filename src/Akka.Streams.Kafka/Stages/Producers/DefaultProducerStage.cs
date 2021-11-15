@@ -271,11 +271,12 @@ namespace Akka.Streams.Kafka.Stages
 
         private void CloseAndFailStage(Exception ex)
         {
-            CloseProducerImmediately();
+            DisposeProducerImmediately();
             FailStage(ex);
         }
 
-        private void CloseProducerImmediately()
+        // Called CloseProducerImmediately in JVM, there is no Producer.Close() in C#, we just dispose.
+        private void DisposeProducerImmediately()
         {
             if (Producer != null && _stage.CloseProducerOnStop)
             {
@@ -283,7 +284,8 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
 
-        private void CloseProducer()
+        // Called CloseProducer in JVM, there is no Producer.Close() in C#, we just dispose.
+        private void DisposeProducer()
         {
             try
             {
@@ -299,29 +301,6 @@ namespace Akka.Streams.Kafka.Stages
             }
         }
         
-        private void HandleProduceError(IProducer<K, V> producer, Error error)
-        {
-            if (!error.IsError)
-                return;
-            
-            if (!error.IsFatal)
-            {
-                Log.Info($"[{error.Code}] {error.Reason}, this has been handled internally");
-                return;
-            }
-            
-            Log.Error(error.Reason);
-            var exception = new KafkaException(error);
-            switch (_decider(exception))
-            {
-                case Directive.Stop:
-                    CloseAndFailStage(exception);
-                    break;
-                default:
-                    break;
-            }
-        }
-
         /// <inheritdoc />
         protected override void OnTimer(object timerKey) { }
     }

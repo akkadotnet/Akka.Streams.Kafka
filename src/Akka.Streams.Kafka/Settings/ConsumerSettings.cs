@@ -69,7 +69,6 @@ namespace Akka.Streams.Kafka.Settings
                 autoCreateTopicsEnabled: config.GetBoolean("allow.auto.create.topics", true),
                 properties: properties,
                 connectionCheckerSettings: ConnectionCheckerSettings.Create(config.GetConfig(ConnectionCheckerSettings.ConfigPath)),
-                closeTimeout: config.GetTimeSpan("stop-timeout"),
                 consumerFactory: null );
         }
 
@@ -152,8 +151,6 @@ namespace Akka.Streams.Kafka.Settings
 
         public ConnectionCheckerSettings ConnectionCheckerSettings { get; }
         
-        public TimeSpan CloseTimeout { get; }
-
         [JsonIgnore]
         public Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> ConsumerFactory { get; }
 
@@ -180,7 +177,7 @@ namespace Akka.Streams.Kafka.Settings
                 keyDeserializer, valueDeserializer, pollInterval, pollTimeout, commitTimeout, commitRefreshInterval,
                 stopTimeout, positionTimeout, commitTimeWarning, partitionHandlerWarning, waitClosePartition,
                 metadataRequestTimeout, drainingCheckInterval, autoCreateTopicsEnabled, bufferSize, dispatcherId,
-                properties, connectionCheckerSettings, TimeSpan.FromSeconds(20),  null);
+                properties, connectionCheckerSettings, null);
 
         public ConsumerSettings(
             IDeserializer<TKey> keyDeserializer, 
@@ -200,7 +197,6 @@ namespace Akka.Streams.Kafka.Settings
             int bufferSize, string dispatcherId, 
             IImmutableDictionary<string, string> properties,
             ConnectionCheckerSettings connectionCheckerSettings,
-            TimeSpan closeTimeout,
             Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory)
         {
             KeyDeserializer = keyDeserializer;
@@ -221,7 +217,6 @@ namespace Akka.Streams.Kafka.Settings
             DrainingCheckInterval = drainingCheckInterval;
             AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
             ConnectionCheckerSettings = connectionCheckerSettings;
-            CloseTimeout = closeTimeout;
             ConsumerFactory = consumerFactory;
         }
 
@@ -385,7 +380,6 @@ namespace Akka.Streams.Kafka.Settings
                 autoCreateTopicsEnabled: autoCreateTopicsEnabled ?? this.AutoCreateTopicsEnabled,
                 properties: properties ?? this.Properties,
                 connectionCheckerSettings: connectionCheckerSettings ?? this.ConnectionCheckerSettings,
-                closeTimeout: closeTimeout ?? CloseTimeout,
                 consumerFactory: consumerFactory ?? this.ConsumerFactory);
 
         internal RebalanceListener<TKey, TValue> RebalanceListener { get; private set; }

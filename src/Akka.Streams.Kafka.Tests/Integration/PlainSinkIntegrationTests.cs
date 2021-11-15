@@ -92,16 +92,18 @@ namespace Akka.Streams.Kafka.Tests.Integration
             probe.OnError(new KafkaException(ErrorCode.Local_Transport));
         }
         
+        // Testing that PlainSink will continue to work and discards failed de/serialized messages when a custom decider is being used.
+        // The default is to stop the stream when this happened.
         [Fact]
         public async Task PlainSink_should_resume_on_deserialization_errors()
         {
             var callCount = 0;
             Directive Decider(Exception cause)
             {
+                callCount++;
                 switch (cause)
                 {
                     case ProduceException<Null, string> ex when ex.Error.IsSerializationError():
-                        callCount++;
                         return Directive.Resume;
                     default:
                         return Directive.Stop;

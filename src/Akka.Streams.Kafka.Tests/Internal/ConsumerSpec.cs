@@ -4,25 +4,28 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams.Dsl;
+using Akka.Streams.Implementation;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Tests.TestKit.Internal;
 using Akka.Streams.TestKit;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
 
+using K = System.String;
+using V = System.String;
 namespace Akka.Streams.Kafka.Tests.Internal
 {
-    using K = String;
-    using V = String;
-    using Record = ConsumeResult<string, string>;
+    using Record = ConsumeResult<K, V>;
 
     public class ConsumerSpec: Akka.TestKit.Xunit2.TestKit
     {
@@ -88,7 +91,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
                 received.Record.Message.Key.Should().Be(message.Record.Message.Key);
                 received.Record.Message.Value.Should().Be(message.Record.Message.Value);
             }
-            await GuardTimeout(control.Shutdown(), RemainingOrDefault);
+            await control.Shutdown().WithTimeout(RemainingOrDefault);
         }
 
         private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
@@ -146,7 +149,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
             probe.Request(100);
 
-            await GuardTimeout(control.Shutdown(), TimeSpan.FromSeconds(10));
+            await control.Shutdown().WithTimeout(TimeSpan.FromSeconds(10));
             probe.ExpectComplete();
             mock.VerifyClosed();
         }
@@ -162,7 +165,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             probe.Request(100);
             mock.VerifyNotClosed();
             probe.Cancel();
-            await GuardTimeout(control.IsShutdown, RemainingOrDefault);
+            await control.IsShutdown.WithTimeout(RemainingOrDefault);
             mock.VerifyClosed();
         }
 
@@ -176,18 +179,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         [Fact(DisplayName = "CommittableSource should emit messages received as medium chunk")]
         public async Task ShouldEmitMediumChunk()
         {
-            var splits = new List<List<CommittableMessage<string, string>>>();
-            var list = new List<CommittableMessage<string, string>>();
-            for (var i = 0; i < splits.Count; ++i)
-            {
-                list.Add(Messages[i]);
-                if(i != 0 && i % 97 == 0)
-                {
-                    splits.Add(list);
-                    list = new List<CommittableMessage<string, string>>();
-                }
-            }
-            await CheckMessagesReceiving(splits);
+            await CheckMessagesReceiving(Messages.Grouped(97));
         }
         
         [Fact(DisplayName = "CommittableSource should emit messages received as chunked singles")]
@@ -201,10 +193,29 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             await CheckMessagesReceiving(splits);
         }
         
-        private async Task GuardTimeout(Task task, TimeSpan timeout)
+        [Fact(DisplayName = "CommittableSource should emit messages received empties")]
+        public async Task ShouldEmitEmpties()
         {
-            var cts = new CancellationTokenSource();
-            try
+            await CheckMessagesReceiving(Messages.Grouped(97)
+                .Select(x => new List<CommittableMessage<string, string>>()).ToList());
+        }
+
+        [Fact(DisplayName =
+            "CommittableSource should complete out and keep underlying client open when control.stop called")]
+        public async Task ShouldKeepClientOpenOnStop()
+        {
+            this.AssertAllStagesStopped(() =>
+            {
+                
+            }, Sys.Materializer());
+        }
+    }
+
+    internal static class Extensions
+    {
+        public static async Task WithTimeout(this Task task, TimeSpan timeout)
+        {
+            using (var cts = new CancellationTokenSource())
             {
                 var timeoutTask = Task.Delay(timeout, cts.Token);
                 var completed = await Task.WhenAny(task, timeoutTask);
@@ -213,10 +224,69 @@ akka.stream.materializer.debug.fuzzing-mode = on")
                 else
                     cts.Cancel();
             }
-            finally
+        }
+        
+        public static List<List<T>> Grouped<T>(this IEnumerable<T> messages, int size)
+        {
+            var groups = new List<List<T>>();
+            var list = new List<T>();
+            var index = 0;
+            foreach (var message in messages)
             {
-                cts.Dispose();
+                list.Add(message);
+                if(index != 0 && index % size == 0)
+                {
+                    groups.Add(list);
+                    list = new List<T>();
+                }
+
+                index++;
             }
+            if(list.Count > 0)
+                groups.Add(list);
+            return groups;
+        }
+
+        public static void AssertAllStagesStopped(this Akka.TestKit.Xunit2.TestKit spec, Action block, IMaterializer materializer)
+        {
+            AssertAllStagesStopped(spec, () =>
+            {
+                block();
+                return NotUsed.Instance;
+            }, materializer);
+        }
+        
+        public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit2.TestKit spec, Func<T> block, IMaterializer materializer)
+        {
+            if (!(materializer is ActorMaterializerImpl impl))
+                return block();
+
+            var probe = spec.CreateTestProbe(impl.System);
+            probe.Send(impl.Supervisor, StreamSupervisor.StopChildren.Instance);
+            probe.ExpectMsg<StreamSupervisor.StoppedChildren>();
+            var result = block();
+
+            probe.Within(TimeSpan.FromSeconds(5), () =>
+            {
+                IImmutableSet<IActorRef> children = ImmutableHashSet<IActorRef>.Empty;
+                try
+                {
+                    probe.AwaitAssert(() =>
+                    {
+                        impl.Supervisor.Tell(StreamSupervisor.GetChildren.Instance, probe.Ref);
+                        children = probe.ExpectMsg<StreamSupervisor.Children>().Refs;
+                        if (children.Count != 0)
+                            throw new Exception($"expected no StreamSupervisor children, but got {children.Aggregate("", (s, @ref) => s + @ref + ", ")}");
+                    });
+                }
+                catch 
+                {
+                    children.ForEach(c=>c.Tell(StreamSupervisor.PrintDebugDump.Instance));
+                    throw;
+                }
+            });
+
+            return result;
         }
     }
 }
