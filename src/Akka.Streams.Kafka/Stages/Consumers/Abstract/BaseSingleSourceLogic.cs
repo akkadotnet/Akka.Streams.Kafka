@@ -110,6 +110,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             switch (args.Item2)
             {
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
+                    Log.Debug("Received messages");
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
                         _requested = false;
@@ -152,17 +153,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            if (IsAvailable(_shape.Outlet))
+            while(IsAvailable(_shape.Outlet) && _buffer.TryDequeue(out var message))
             {
-                if (_buffer.TryDequeue(out var message))
-                {
-                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-                    Pump();
-                }
-                else if (!_requested && TopicPartitions.Any())
-                {
-                    RequestMessages();
-                }
+                Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+            }
+            
+            if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
+            {
+                RequestMessages();
             }
         }
 
@@ -170,7 +168,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _requested = true;
             _requestId += 1;
-            Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
+            if (Log.IsDebugEnabled)
+                Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
