@@ -5,7 +5,7 @@
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
     <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-      <LangVersion>9.0</LangVersion>
+      <LangVersion>8.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

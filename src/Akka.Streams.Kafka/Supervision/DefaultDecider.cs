@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Reflection;
 using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
