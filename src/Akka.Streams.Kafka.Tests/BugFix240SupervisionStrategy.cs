@@ -11,6 +11,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Supervision;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -279,7 +280,7 @@ namespace Akka.Streams.Kafka.Tests
         }
         
         // Test that an error that happened internally inside the PlainSink stage should be handled
-        // by the decider. In this case, it is a deserialization error.
+        // by the decider. In this case, it is a serialization error.
         [Fact]
         public async Task SupervisionStrategy_Decider_on_PlainSink_should_work()
         {
@@ -331,6 +332,47 @@ namespace Akka.Streams.Kafka.Tests
             probe.Cancel();
         }
         
+        // Test that the default decider can be overridden with custom decider.
+        // In this case, a deserialization error should resume the stream, instead of the default stop.
+        [Fact]
+        public async Task Overridden_default_decider_on_PlainSink_should_work()
+        {
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+            var decider = new OverridenProducerDecider<Null, string>();
+            
+            var producerSettings = ProducerSettings<Null, string>
+                .Create(Sys, null, new FailingSerializer())
+                .WithBootstrapServers(Fixture.KafkaServer);
+            
+            // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
+            // when the message "5" is encountered.
+            var sourceTask = Source
+                .From(new []{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+                .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
+                .RunWith(
+                    KafkaProducer.PlainSink(producerSettings)
+                        .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide)), 
+                    Materializer);
+
+            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(5));
+            
+            var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
+            var probe = KafkaConsumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<string>(), Materializer);
+
+            probe.Request(10);
+            for (var i = 0; i < 9; i++)
+            {
+                var message = probe.ExpectNext();
+                Log.Info($"> [{i}]: {message}");
+            }
+            decider.CallCount.Should().Be(1);
+            probe.Cancel();
+        }
+        
         // Test that an error that happened internally inside the PlainSource stage should be handled
         // by the decider. In this case, it is a deserialization error.
         [Fact]
@@ -368,6 +410,34 @@ namespace Akka.Streams.Kafka.Tests
             callCount.Should().Be(elementsCount);
             probe.Cancel();
         }        
+        
+        // Test that the default decider can be overridden with custom decider.
+        // In this case, a deserialization error should resume the stream, instead of the default stop.
+        [Fact]
+        public async Task Overriden_default_decider_on_PlainSource_should_work()
+        {
+            int elementsCount = 10;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            var sourceTask = ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
+
+            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(3));
+            
+            var settings = CreateConsumerSettings<int>(group1).WithValueDeserializer(Deserializers.Int32);
+            var decider = new OverridenConsumerDecider<Null, string>(settings.AutoCreateTopicsEnabled);
+
+            var probe = KafkaConsumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<int>(), Materializer);
+
+            probe.Request(elementsCount);
+            probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
+            decider.CallCount.Should().Be(elementsCount);
+            probe.Cancel();
+        }
         
         [Fact]
         public async Task SupervisionStrategy_Decider_on_PlainSource_should_stop_on_internal_error()
@@ -461,6 +531,30 @@ namespace Akka.Streams.Kafka.Tests
             public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
             {
                 return BitConverter.ToInt32(data).ToString();
+            }
+        }
+        
+        private class OverridenConsumerDecider<K, V> : DefaultConsumerDecider<K, V>
+        {
+            public int CallCount { get; private set; }
+            public OverridenConsumerDecider(bool autoCreateTopics) : base(autoCreateTopics)
+            { }
+
+            public override Directive OnDeserializationError(ConsumeException exception)
+            {
+                CallCount++;
+                return Directive.Resume;
+            }
+        }
+        
+        private class OverridenProducerDecider<K, V> : DefaultProducerDecider<K, V>
+        {
+            public int CallCount { get; private set; }
+            
+            public override Directive OnSerializationError(ProduceException<K, V> exception)
+            {
+                CallCount++;
+                return Directive.Resume;
             }
         }
     }

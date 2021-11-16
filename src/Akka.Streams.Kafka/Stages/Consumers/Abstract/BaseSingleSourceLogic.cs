@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Akka.Streams.Util;
@@ -44,15 +45,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         public virtual PromiseControl<TMessage> Control { get; }
         
-        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, Attributes attributes,
-                                        Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+        protected BaseSingleSourceLogic(
+            SourceShape<TMessage> shape,
+            Attributes attributes,
+            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
+            bool autoCreateTopics) 
             : base(shape)
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultConsumerDecider<K, V>(autoCreateTopics).Decide));
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);

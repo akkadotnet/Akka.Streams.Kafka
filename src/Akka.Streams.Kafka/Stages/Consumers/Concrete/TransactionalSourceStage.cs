@@ -23,7 +23,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// <param name="settings">Consumer settings</param>
         /// <param name="subscription">Subscription</param>
         public TransactionalSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription) 
-            : base("TransactionalSource", settings.AutoCreateTopicsEnabled)
+            : base("TransactionalSource")
         {
             _settings = settings;
             _subscription = subscription;

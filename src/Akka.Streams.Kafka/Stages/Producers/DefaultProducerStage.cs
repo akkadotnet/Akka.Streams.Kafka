@@ -27,10 +27,6 @@ namespace Akka.Streams.Kafka.Stages
         public Outlet<Task<TOut>> Out { get; } = new Outlet<Task<TOut>>("kafka.producer.out");
         public override FlowShape<TIn, Task<TOut>> Shape { get; }
 
-        /// <inheritdoc />
-        protected override Attributes InitialAttributes
-            => ActorAttributes.CreateSupervisionStrategy(new DefaultProducerDecider<K, V>().Decide);
-
         public DefaultProducerStage(
             ProducerSettings<K, V> settings,
             bool closeProducerOnStop,
@@ -64,8 +60,9 @@ namespace Akka.Streams.Kafka.Stages
         {
             _stage = stage;
 
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultProducerDecider<K, V>().Decide));
+            _decider = supervisionStrategy.Decider;
 
             SetHandler(_stage.In, 
                 onPush: () =>

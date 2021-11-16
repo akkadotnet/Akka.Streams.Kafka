@@ -24,24 +24,30 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// Subscription
         /// </summary>
         public IManualSubscription Subscription { get; }
+        
+        public bool AutoCreateTopics { get; }
 
         /// <summary>
         /// ExternalPlainSourceStage
         /// </summary>
         /// <param name="consumer">Externally provided consumer</param>
         /// <param name="subscription">Manual subscription</param>
-        public ExternalPlainSourceStage(IActorRef consumer, IManualSubscription subscription) 
-            : base("ExternalPlainSubSource", false)
+        /// <param name="autoCreateTopics">Flag to mark that the consumer actor uses `auto.create.topics.enable`</param>
+        public ExternalPlainSourceStage(IActorRef consumer, IManualSubscription subscription, bool autoCreateTopics) 
+            : base("ExternalPlainSubSource")
         {
             Consumer = consumer;
             Subscription = subscription;
+            AutoCreateTopics = autoCreateTopics;
         }
 
         /// <inheritdoc />
         protected override (GraphStageLogic, IControl) Logic(SourceShape<ConsumeResult<K, V>> shape, Attributes inheritedAttributes)
         {
-            var logic = new ExternalSingleSourceLogic<K, V, ConsumeResult<K, V>>(shape, Consumer, Subscription,
-                                                                                 inheritedAttributes, _ => new PlainMessageBuilder<K, V>());
+            var logic = new ExternalSingleSourceLogic<K, V, ConsumeResult<K, V>>(
+                shape, Consumer, Subscription,
+                inheritedAttributes, _ => new PlainMessageBuilder<K, V>(),
+                AutoCreateTopics);
 
             return (logic, logic.Control);
         }

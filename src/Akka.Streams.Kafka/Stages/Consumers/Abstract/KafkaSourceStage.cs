@@ -29,24 +29,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// <inheritdoc />
         public override SourceShape<TMessage> Shape { get; }
         
-        protected bool AutoCreateTopics { get; }
-
         /// <summary>
         /// KafkaSourceStage
         /// </summary>
         /// <param name="stageName">Stage name</param>
         /// <param name="autoCreateTopics">Kafka source should auto create topics</param>
-        protected KafkaSourceStage(string stageName, bool autoCreateTopics)
+        protected KafkaSourceStage(string stageName)
         {
             StageName = stageName;
-            AutoCreateTopics = autoCreateTopics;
             Shape = new SourceShape<TMessage>(Out);
         }
 
         /// <inheritdoc />
-        protected override Attributes InitialAttributes 
-            => Attributes.CreateName(StageName)
-                .And(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(AutoCreateTopics).Decide));
+        protected override Attributes InitialAttributes => Attributes.CreateName(StageName);
         
         /// <summary>
         /// Provides actual stage logic
