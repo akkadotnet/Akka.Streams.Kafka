@@ -11,6 +11,7 @@ using Confluent.Kafka;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Util;
 using Akka.Util;
 
@@ -33,7 +34,8 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<ConsumeResult<K, V>, IControl> PlainSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new PlainSourceStage<K, V>(settings, subscription));
+            return Source.FromGraph(new PlainSourceStage<K, V>(settings, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -42,7 +44,8 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<ConsumeResult<K, V>, IControl> PlainExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription)
         {
-            return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription));
+            return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>().Decide));
         }
 
         /// <summary>
@@ -55,7 +58,8 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<CommittableMessage<K, V>, IControl> CommittableSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription));
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -69,7 +73,8 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return Source.FromGraph(new PlainSubSourceStage<K, V>(settings, subscription, 
                                     Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>.None, 
-                                    _ => { }));
+                                    _ => { }))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
         
         /// <summary>
@@ -80,7 +85,8 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<CommittableMessage<K, V>, IControl> CommitWithMetadataSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription,
                                                                                             Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
-            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord));
+            return Source.FromGraph(new CommittableSourceStage<K, V>(settings, subscription, metadataFromRecord))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -99,6 +105,7 @@ namespace Akka.Streams.Kafka.Dsl
             ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
         {
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide))
                 .AsSourceWithContext(m => m.Item2)
                 .Select(m => m.Item1);
         }
@@ -109,7 +116,9 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
                                                                                                  string groupId, TimeSpan commitTimeout)
         {
-            return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+            return Source
+                .FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>().Decide));
         }
 
         /// <summary>
@@ -118,7 +127,8 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<(TopicPartition, Source<CommittableMessage<K, V>, NotUsed>), IControl> CommittablePartitionedSource<K, V>(
                 ConsumerSettings<K, V> settings, IAutoSubscription subscription)
         {
-            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription));
+            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -128,10 +138,10 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<ConsumeResult<K, V>, IControl> AtMostOnceSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
             return CommittableSource(settings, subscription).SelectAsync(1, async message =>
-            {
-               await message.CommitableOffset.Commit();
-               return message.Record;
-            });
+                {
+                    await message.CommitableOffset.Commit();
+                    return message.Record;
+                });
         }
 
         /// <summary>
@@ -140,7 +150,8 @@ namespace Akka.Streams.Kafka.Dsl
         public static Source<(TopicPartition, Source<CommittableMessage<K, V>, NotUsed>), IControl> CommitWithMetadataPartitionedSource<K, V>(
             ConsumerSettings<K, V> settings, IAutoSubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
-            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription, metadataFromRecord));
+            return Source.FromGraph(new CommittableSubSourceStage<K, V>(settings, subscription, metadataFromRecord))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -163,7 +174,8 @@ namespace Akka.Streams.Kafka.Dsl
                 settings, 
                 subscription, 
                 new Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>(getOffsetsOnAssign), 
-                onRevoke));
+                onRevoke))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
 
         /// <summary>
@@ -172,7 +184,8 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         public static Source<TransactionalMessage<K, V>, IControl> TransactionalSource<K, V>(ConsumerSettings<K, V> settings, ISubscription subscription)
         {
-            return Source.FromGraph(new TransactionalSourceStage<K, V>(settings, subscription));
+            return Source.FromGraph(new TransactionalSourceStage<K, V>(settings, subscription))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(settings).Decide));
         }
     }
 }

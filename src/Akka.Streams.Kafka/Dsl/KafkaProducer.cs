@@ -6,6 +6,7 @@ using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages;
+using Akka.Streams.Kafka.Supervision;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Dsl
@@ -88,6 +89,7 @@ namespace Akka.Streams.Kafka.Dsl
             var flow = Flow.FromGraph(new DefaultProducerStage<TKey, TValue, TPassThrough, IEnvelope<TKey, TValue, TPassThrough>, IResults<TKey, TValue, TPassThrough>>(
                     settings,
                     closeProducerOnStop: true))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultProducerDecider<TKey, TValue>().Decide))
                 .SelectAsync(settings.Parallelism, x => x);
 
             return FlowWithDispatcher(settings, flow);
@@ -129,6 +131,7 @@ namespace Akka.Streams.Kafka.Dsl
                     settings,
                     closeProducerOnStop: false,
                     customProducerProvider: () => producer))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultProducerDecider<TKey, TValue>().Decide))
                 .SelectAsync(settings.Parallelism, x => x);
 
             return FlowWithDispatcher(settings, flow);
@@ -231,6 +234,7 @@ namespace Akka.Streams.Kafka.Dsl
                 .WithProperty("max.in.flight.requests.per.connection", "1");
 
             var flow = Flow.FromGraph(new TransactionalProducerStage<K, V, GroupTopicPartitionOffset>(closeProducerOnStop: true, settings: transactionalSettings))
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(new DefaultProducerDecider<K, V>().Decide))
                 .SelectAsync(transactionalSettings.Parallelism, message => message);
             
             return FlowWithDispatcher(transactionalSettings, flow);
@@ -256,7 +260,7 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return string.IsNullOrEmpty(settings.DispatcherId) 
                 ? flow
-                : flow.WithAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
+                : flow.AddAttributes(ActorAttributes.CreateDispatcher(settings.DispatcherId));
         }
     }
 }
