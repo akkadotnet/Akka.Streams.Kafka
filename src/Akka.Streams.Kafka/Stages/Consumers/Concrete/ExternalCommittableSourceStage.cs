@@ -40,7 +40,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// ExternalCommittableSourceStage
         /// </summary>
         public ExternalCommittableSourceStage(IActorRef consumer, string groupId, TimeSpan commitTimeout, IManualSubscription subscription) 
-            : base("ExternalCommittableSource")
+            : base("ExternalCommittableSource", false)
         {
             Consumer = consumer;
             GroupId = groupId;

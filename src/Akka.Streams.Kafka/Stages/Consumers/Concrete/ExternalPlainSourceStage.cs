@@ -31,7 +31,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// <param name="consumer">Externally provided consumer</param>
         /// <param name="subscription">Manual subscription</param>
         public ExternalPlainSourceStage(IActorRef consumer, IManualSubscription subscription) 
-            : base("ExternalPlainSubSource")
+            : base("ExternalPlainSubSource", false)
         {
             Consumer = consumer;
             Subscription = subscription;

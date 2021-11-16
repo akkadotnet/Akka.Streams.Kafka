@@ -44,7 +44,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         public PlainSubSourceStage(ConsumerSettings<K, V> settings, IAutoSubscription subscription, 
                                    Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>> getOffsetsOnAssign,
                                    Action<IImmutableSet<TopicPartition>> onRevoke) 
-            : base("PlainSubSource")
+            : base("PlainSubSource", settings.AutoCreateTopicsEnabled)
         {
             Settings = settings;
             Subscription = subscription;

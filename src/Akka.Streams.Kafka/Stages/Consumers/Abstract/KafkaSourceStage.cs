@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
@@ -27,19 +28,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         
         /// <inheritdoc />
         public override SourceShape<TMessage> Shape { get; }
+        
+        protected bool AutoCreateTopics { get; }
 
         /// <summary>
         /// KafkaSourceStage
         /// </summary>
         /// <param name="stageName">Stage name</param>
-        protected KafkaSourceStage(string stageName)
+        /// <param name="autoCreateTopics">Kafka source should auto create topics</param>
+        protected KafkaSourceStage(string stageName, bool autoCreateTopics)
         {
             StageName = stageName;
+            AutoCreateTopics = autoCreateTopics;
             Shape = new SourceShape<TMessage>(Out);
         }
 
         /// <inheritdoc />
-        protected override Attributes InitialAttributes => Attributes.CreateName(StageName);
+        protected override Attributes InitialAttributes 
+            => Attributes.CreateName(StageName)
+                .And(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider<K, V>(AutoCreateTopics).Decide));
         
         /// <summary>
         /// Provides actual stage logic

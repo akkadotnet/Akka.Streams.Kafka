@@ -30,7 +30,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// <param name="settings">Consumer settings</param>
         /// <param name="subscription">Subscription to be used</param>
         public PlainSourceStage(ConsumerSettings<K, V> settings, ISubscription subscription) 
-            : base("PlainSource")
+            : base("PlainSource", settings.AutoCreateTopicsEnabled)
         {
             Settings = settings;
             Subscription = subscription;

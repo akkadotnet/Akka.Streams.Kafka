@@ -7,6 +7,7 @@ using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Akka.Util.Internal;
@@ -25,6 +26,10 @@ namespace Akka.Streams.Kafka.Stages
         public Inlet<TIn> In { get; } = new Inlet<TIn>("kafka.producer.in");
         public Outlet<Task<TOut>> Out { get; } = new Outlet<Task<TOut>>("kafka.producer.out");
         public override FlowShape<TIn, Task<TOut>> Shape { get; }
+
+        /// <inheritdoc />
+        protected override Attributes InitialAttributes
+            => ActorAttributes.CreateSupervisionStrategy(new DefaultProducerDecider<K, V>().Decide);
 
         public DefaultProducerStage(
             ProducerSettings<K, V> settings,

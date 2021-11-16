@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         public IAutoSubscription Subscription { get; }
 
         public CommittableSubSourceStage(ConsumerSettings<K, V> settings, IAutoSubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null) 
-            : base("CommittableSubSourceStage")
+            : base("CommittableSubSourceStage", settings.AutoCreateTopicsEnabled)
         {
             Settings = settings;
             Subscription = subscription;

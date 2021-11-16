@@ -9,9 +9,9 @@ namespace Akka.Streams.Kafka.Supervision
     {
         private readonly bool _autoCreateTopics;
 
-        public DefaultConsumerDecider(ConsumerSettings<TKey, TValue> settings = null)
+        public DefaultConsumerDecider(bool autoCreateTopics)
         {
-            _autoCreateTopics = settings?.AutoCreateTopicsEnabled ?? false;
+            _autoCreateTopics = autoCreateTopics;
         }
         
         public Directive Decide(Exception e)
