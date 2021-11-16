@@ -123,11 +123,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    if (_decider(exception) == Directive.Stop)
+                    var cause = exception is KafkaException ke ? ke.Error.Reason : exception.Message; 
+                    var directive = _decider(exception); 
+                    if (directive == Directive.Stop)
                     {
+                        if(Log.IsErrorEnabled)
+                            Log.Error(exception, "Source stage failed with exception: [{0}]. Decider directive: {1}", cause, directive);
                         FailStage(failure.Cause);
                         break;
-                    } 
+                    }
+
+                    if(Log.IsInfoEnabled)
+                        Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
                     
                     var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
                     if (isSerializationError)
@@ -146,7 +153,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     break;
                 
                 case Terminated terminated:
-                    Log.Info($"Consumer actor terminated: {terminated.ActorRef.Path}");
+                    if(Log.IsInfoEnabled)
+                        Log.Info("Consumer actor terminated: {0}", terminated.ActorRef.Path);
                     break;
             }
         }
@@ -169,7 +177,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _requested = true;
             _requestId += 1;
             if (Log.IsDebugEnabled)
-                Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
+                Log.Debug("Requesting messages, requestId: {0}, partitions: {1}", _requestId, string.Join(", ", TopicPartitions));
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
