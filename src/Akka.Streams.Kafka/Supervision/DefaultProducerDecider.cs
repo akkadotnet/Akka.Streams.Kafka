@@ -5,11 +5,11 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Supervision
 {
-    public class DefaultDecider<TKey, TValue>
+    public class DefaultProducerDecider<TKey, TValue>
     {
         private readonly bool _autoCreateTopics;
 
-        public DefaultDecider(ConsumerSettings<TKey, TValue> settings)
+        public DefaultProducerDecider(ConsumerSettings<TKey, TValue> settings)
         {
             _autoCreateTopics = settings.AutoCreateTopicsEnabled;
         }
@@ -18,14 +18,6 @@ namespace Akka.Streams.Kafka.Supervision
         {
             switch (e)
             {
-                case ConsumeException ce:
-                    if (ce.Error.IsFatal)
-                        return Directive.Stop;
-                    if (ce.Error.Code == ErrorCode.UnknownTopicOrPart && _autoCreateTopics)
-                        return Directive.Resume;
-                    if (ce.Error.IsSerializationError())
-                        return OnDeserializationError(ce);
-                    return OnConsumeException(ce);
                 case ProduceException<TKey, TValue> pe:
                     if (pe.Error.IsFatal)
                         return Directive.Stop;
@@ -41,13 +33,7 @@ namespace Akka.Streams.Kafka.Supervision
             }
         }
 
-        public virtual Directive OnDeserializationError(ConsumeException exception)
-            => Directive.Stop;
-
         public virtual Directive OnSerializationError(ProduceException<TKey, TValue> exception)
-            => Directive.Stop;
-
-        public virtual Directive OnConsumeException(ConsumeException exception)
             => Directive.Stop;
 
         public virtual Directive OnProduceException(ProduceException<TKey, TValue> exception)
