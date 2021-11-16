@@ -425,7 +425,7 @@ namespace Akka.Streams.Kafka.Tests
             await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(3));
             
             var settings = CreateConsumerSettings<int>(group1).WithValueDeserializer(Deserializers.Int32);
-            var decider = new OverridenConsumerDecider<Null, string>(settings.AutoCreateTopicsEnabled);
+            var decider = new OverridenConsumerDecider(settings.AutoCreateTopicsEnabled);
 
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
@@ -534,13 +534,13 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
         
-        private class OverridenConsumerDecider<K, V> : DefaultConsumerDecider<K, V>
+        private class OverridenConsumerDecider : DefaultConsumerDecider
         {
             public int CallCount { get; private set; }
             public OverridenConsumerDecider(bool autoCreateTopics) : base(autoCreateTopics)
             { }
 
-            public override Directive OnDeserializationError(ConsumeException exception)
+            protected override Directive OnDeserializationError(ConsumeException exception)
             {
                 CallCount++;
                 return Directive.Resume;
@@ -550,8 +550,8 @@ namespace Akka.Streams.Kafka.Tests
         private class OverridenProducerDecider<K, V> : DefaultProducerDecider<K, V>
         {
             public int CallCount { get; private set; }
-            
-            public override Directive OnSerializationError(ProduceException<K, V> exception)
+
+            protected override Directive OnSerializationError(ProduceException<K, V> exception)
             {
                 CallCount++;
                 return Directive.Resume;

@@ -5,11 +5,22 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Supervision
 {
+    /// <summary>
+    /// Default Supervision decider used internally inside all producer sink stages.
+    ///
+    /// You can extend and override the virtual methods in this class to provide your own
+    /// custom supervision decider. 
+    /// </summary>
     public class DefaultProducerDecider<TKey, TValue>
     {
-        public Directive Decide(Exception e)
+        /// <summary>
+        /// The delegate method that is passed to the ActorAttributes.CreateSupervisionStrategy() method 
+        /// </summary>
+        /// <param name="exception">The exception thrown</param>
+        /// <returns><see cref="Directive"/>></returns>
+        public Directive Decide(Exception exception)
         {
-            switch (e)
+            switch (exception)
             {
                 case ProduceException<TKey, TValue> pe:
                     if (pe.Error.IsFatal)
@@ -26,21 +37,41 @@ namespace Akka.Streams.Kafka.Supervision
                         return Directive.Stop;
                     return OnKafkaException(ke);
                 
-                case var exception:
-                    return OnException(exception);
+                case var ex:
+                    return OnException(ex);
             }
         }
 
-        public virtual Directive OnSerializationError(ProduceException<TKey, TValue> exception)
+        /// <summary>
+        /// Decider for all serialization exceptions raised by the underlying Kafka producer
+        /// </summary>
+        /// <param name="exception"><see cref="ProduceException{TKey,TValue}"/> thrown when producer produced</param>
+        /// <returns><see cref="Directive"/>></returns>
+        protected virtual Directive OnSerializationError(ProduceException<TKey, TValue> exception)
             => Directive.Stop;
 
-        public virtual Directive OnProduceException(ProduceException<TKey, TValue> exception)
+        /// <summary>
+        /// Decider for all produce exceptions raised by the underlying Kafka producer
+        /// </summary>
+        /// <param name="exception"><see cref="ProduceException{TKey,TValue}"/> thrown when producer produced</param>
+        /// <returns><see cref="Directive"/>></returns>
+        protected virtual Directive OnProduceException(ProduceException<TKey, TValue> exception)
             => Directive.Stop;
 
-        public virtual Directive OnKafkaException(KafkaException exception)
+        /// <summary>
+        /// Decider for all kafka exceptions raised by the underlying Kafka producer
+        /// </summary>
+        /// <param name="exception"><see cref="KafkaException"/> thrown when producer produced</param>
+        /// <returns><see cref="Directive"/>></returns>
+        protected virtual Directive OnKafkaException(KafkaException exception)
             => Directive.Stop;
         
-        public virtual Directive OnException(Exception exception)
+        /// <summary>
+        /// Decider for all other exceptions raised by the underlying Kafka producer
+        /// </summary>
+        /// <param name="exception"><see cref="KafkaException"/> thrown when producer produced</param>
+        /// <returns><see cref="Directive"/>></returns>
+        protected virtual Directive OnException(Exception exception)
             => Directive.Stop;
     }
 }
