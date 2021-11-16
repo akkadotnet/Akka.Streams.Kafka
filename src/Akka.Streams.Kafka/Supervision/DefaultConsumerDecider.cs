@@ -1,6 +1,6 @@
 ﻿using System;
-using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Supervision;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Supervision
@@ -9,9 +9,9 @@ namespace Akka.Streams.Kafka.Supervision
     {
         private readonly bool _autoCreateTopics;
 
-        public DefaultConsumerDecider(ConsumerSettings<TKey, TValue> settings)
+        public DefaultConsumerDecider(ConsumerSettings<TKey, TValue> settings = null)
         {
-            _autoCreateTopics = settings.AutoCreateTopicsEnabled;
+            _autoCreateTopics = settings?.AutoCreateTopicsEnabled ?? false;
         }
         
         public Directive Decide(Exception e)
@@ -26,8 +26,15 @@ namespace Akka.Streams.Kafka.Supervision
                     if (ce.Error.IsSerializationError())
                         return OnDeserializationError(ce);
                     return OnConsumeException(ce);
+                
+                case KafkaRetriableException _:
+                    return Directive.Resume;
+                
                 case KafkaException ke:
+                    if (ke.Error.IsFatal)
+                        return Directive.Stop;
                     return OnKafkaException(ke);
+                
                 case var exception:
                     return OnException(exception);
             }
@@ -40,7 +47,7 @@ namespace Akka.Streams.Kafka.Supervision
             => Directive.Resume;
 
         public virtual Directive OnKafkaException(KafkaException exception)
-            => Directive.Stop;
+            => Directive.Resume;
         
         public virtual Directive OnException(Exception exception)
             => Directive.Stop;

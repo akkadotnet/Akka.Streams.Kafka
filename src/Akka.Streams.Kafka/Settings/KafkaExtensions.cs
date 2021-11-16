@@ -11,11 +11,15 @@ namespace Akka.Streams.Kafka.Settings
 
         public static bool IsSerializationError(this Error error)
             => error.Code.IsSerializationError();
-        
+
         public static bool IsSerializationError(this ErrorCode code)
-            => code == ErrorCode.Local_ValueDeserialization ||
-               code == ErrorCode.Local_ValueSerialization ||
-               code == ErrorCode.Local_KeyDeserialization ||
-               code == ErrorCode.Local_KeySerialization;
+            => code switch
+            {
+                ErrorCode.Local_ValueDeserialization => true,
+                ErrorCode.Local_ValueSerialization => true,
+                ErrorCode.Local_KeyDeserialization => true,
+                ErrorCode.Local_KeySerialization => true,
+                _ => false
+            };
     }
 }

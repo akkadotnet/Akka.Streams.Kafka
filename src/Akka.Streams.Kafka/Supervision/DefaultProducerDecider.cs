@@ -1,19 +1,12 @@
 ﻿using System;
-using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Supervision;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Supervision
 {
     public class DefaultProducerDecider<TKey, TValue>
     {
-        private readonly bool _autoCreateTopics;
-
-        public DefaultProducerDecider(ConsumerSettings<TKey, TValue> settings)
-        {
-            _autoCreateTopics = settings.AutoCreateTopicsEnabled;
-        }
-        
         public Directive Decide(Exception e)
         {
             switch (e)
@@ -21,13 +14,18 @@ namespace Akka.Streams.Kafka.Supervision
                 case ProduceException<TKey, TValue> pe:
                     if (pe.Error.IsFatal)
                         return Directive.Stop;
-                    if (pe.Error.Code == ErrorCode.UnknownTopicOrPart && _autoCreateTopics)
-                        return Directive.Resume;
                     if (pe.Error.IsSerializationError())
                         return OnSerializationError(pe);
                     return OnProduceException(pe);
+                
+                case KafkaRetriableException _:
+                    return Directive.Resume;
+                
                 case KafkaException ke:
+                    if (ke.Error.IsFatal)
+                        return Directive.Stop;
                     return OnKafkaException(ke);
+                
                 case var exception:
                     return OnException(exception);
             }
