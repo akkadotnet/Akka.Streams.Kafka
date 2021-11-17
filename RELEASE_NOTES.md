@@ -1,5 +1,10 @@
-#### 1.1.5 November 05 2021 ####
-**Placeholder for nightlies**
+#### 1.2.0 November 17 2021 ####
+* [Bump Akka.NET to 1.4.28](https://github.com/akkadotnet/akka.net/releases/tag/1.4.28)
+* [Bump Confluent.Kafka to 1.8.2](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/234)
+* [Log consumer errors more explicitly](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/244)
+* [Improve consumer polling efficiency](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/241)
+* [Fix supervision strategy bug](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/246)
+* [Add default supervision strategy](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/254)
 
 #### 1.1.4 September 08 2021 ####
 
