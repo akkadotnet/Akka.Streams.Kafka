@@ -436,7 +436,153 @@ KafkaConsumer.PlainSource(settings, Subscriptions.Topics(yourTopic).WithPartitio
 ```
 
 > Note: Your handler callbacks will be invoked in the same thread where kafka consumer is handling all events and getting messages, so be careful when using it.
->
+
+## Error handling
+Akka.Streams.Kafka stages utilizes stream supervision deciders to dictate what happens when a failure or 
+exception is thrown from inside the stream stage. These deciders are basically delegate functions that
+returns an `Akka.Streams.Supervision.Directive` enumeration to tell the stage how to behave when a
+specific exception occured during the stream lifetime.
+
+You can read more about stream supervision strategies in the [Akka documentation](https://getakka.net/articles/streams/error-handling.html#supervision-strategies)
+
+> [!NOTE]
+> A decider applied to a stream will be used for the whole stream, any exception that happened in any
+> of the stream stages will use the same decider to determine their fault behavior.
+
+### Producer error handling
+The Akka.Streams.Kafka producers are using a default convenience error handling class called 
+`Akka.Streams.Kafka.Supervision.DefaultProducerDecider`. This supervision decider uses these strategies
+by default:
+- Any `ProduceException` with its `IsFatal` flag set will use a hard wired `Directive.Stop`.
+- Any `ProduceException` that is classified as a serialization error will use a `Directive.Stop`. This behavior can be overriden.
+- Any other `ProduceException` will use a `Directive.Stop`. This behavior can be overriden.
+- Any `KafkaRetriableException` will use a hard wired `Directive.Resume`. This behavior assumes that this exception is a transient exception.
+- Any `KafkaException` will use a `Directive.Stop`. This behavior can be overriden.
+- Any `Exception` will use a `Directive.Stop`. This behavior can be overriden.
+
+To create a custom decider, you will need to extend the `DefaultProducerDecider`:
+```C#
+private class CustomProducerDecider<K, V> : DefaultProducerDecider<K, V>
+{
+    protected override Directive OnSerializationError(ProduceException<K, V> exception)
+    {
+        // custom logic can go here
+        return Directive.Resume;
+    }
+    
+    protected override Directive OnProduceException(ProduceException<TKey, TValue> exception)
+    {
+        // custom logic can go here
+        return Directive.Resume;
+    }
+    
+    protected virtual Directive OnKafkaException(KafkaException exception)
+    {
+        // custom logic can go here
+        return Directive.Stop;
+    }
+    
+    protected virtual Directive OnException(Exception exception)
+    {
+        // custom logic can go here
+        return Directive.Stop;
+    }
+}
+```
+
+You then register this new decider on to the stream using a stream attribute:
+```c#
+var decider = new CustomProducerDecider<Null, int>();
+var topicPartition = new TopicPartition("my-topic", 0);
+await Source.From(new []{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+    .Select(elem => new ProducerRecord<Null, string>(topicPartition, elem))
+    .RunWith(
+        KafkaProducer.PlainSink(ProducerSettings)
+            .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide)), 
+        System.Materializer());
+```
+In this case, the decider is applied only to the `PlainSink` stream, it is not propagated to the stream
+using it.
+
+### Consumer error handling
+The Akka.Streams.Kafka consumers are using a default convenience error handling class called
+`Akka.Streams.Kafka.Supervision.DefaultConsumerDecider`. This supervision decider uses these strategies
+by default:
+- Any `ConsumeException` with its `IsFatal` flag set will use a hard wired `Directive.Stop`. 
+  
+  As of the writing of this document, there are no fatal `ConsumeException`. Fatal exceptions are only
+  thrown by producers that requires idempotence guarantee or requires transactions.
+- Any `ConsumeException` that returns an error code of `ErrorCode.UnknownTopicOrPart` inside a kafka 
+  stream with `auto.create.topics.enable` enabled will use a `Directive.Resume`. 
+  
+  This behavior assumes that the consumer client started before the producer was running and the broker 
+  did not have the topic or partition created yet.
+- Any `ConsumeException` that is classified as a deserialization error will use a `Directive.Stop`. This behavior can be overriden.
+- Any other `ConsumeException` will use a `Directive.Resume`. This behavior can be overriden.
+- Any `KafkaRetriableException` will use a hard wired `Directive.Resume`. This behavior assumes that this exception is a transient exception.
+- Any `KafkaException` will use a `Directive.Resume`. This behavior can be overriden.
+- Any `Exception` will use a `Directive.Stop`. This behavior can be overriden.
+
+A `Directive.Resume` is chosen as default because a fatal and data compromising error very rarely
+happened during a `Consumer.Consume`. The most common exceptions that are thrown during a consume are
+kafka configuration errors. 
+
+To create a custom decider, you will need to extend the `DefaultConsumerDecider`:
+```C#
+private class CustomConsumerDecider : DefaultConsumerDecider
+{
+    protected override Directive OnDeserializationError(ConsumeException exception)
+    {
+        // custom logic can go here
+        return Directive.Resume;
+    }
+    
+    protected override Directive OnConsumeException(ConsumeException exception)
+    {
+        // custom logic can go here
+        return Directive.Resume;
+    }
+    
+    protected virtual Directive OnKafkaException(KafkaException exception)
+    {
+        // custom logic can go here
+        return Directive.Resume;
+    }
+    
+    protected virtual Directive OnException(Exception exception)
+    {
+        // custom logic can go here
+        return Directive.Stop;
+    }
+}
+```
+
+You then register this new decider on to the stream using a stream attribute:
+```c#
+var decider = new CustomConsumerDecider();
+var topicPartition = new TopicPartition("my-topic", 0);
+var publisher = KafkaConsumer
+    .PlainSource(settings, Subscriptions.Assignment(topicPartition))
+    .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide))
+    .Select(c => c.Value)
+    .RunWith(Sink.Publisher<int>(), System.Materializer());
+```
+
+### Handling de/serialization exceptions
+In the producer side, any serialization errors will be routed to the 
+`OnSerializationError(ProduceException<K, V> exception)` callback function. The original message will be 
+embedded inside the `ProduceException.DeliveryResult.Message` property if analysis were needed to 
+determine the cause of the serialization failure. A key serialization failure will have an error code
+of `ErrorCode.Local_KeySerialization`, while a value serialization failure will have an error code
+of `ErrorCode.Local_ValueSerialization`.
+
+In the consumer side, any deserialization errors will be routed to the
+`OnDeserializationError(ConsumeException exception)` callback function. The consumed message will be
+embedded inside the `ConsumeException.ConsumerRecord` property as a `ConsumeResult<byte[], byte[]>` 
+instance. You can inspect the raw byte arrays to determine the cause of the failure. A key 
+deserialization failure will have an error code of `ErrorCode.Local_KeyDeserialization`, while a value 
+deserialization failure will have an error code of `ErrorCode.Local_ValueDeserialization`.
+
 ## Local development
 
 There are some helpers to simplify local development
