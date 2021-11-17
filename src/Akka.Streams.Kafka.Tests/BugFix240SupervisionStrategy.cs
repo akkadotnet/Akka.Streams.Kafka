@@ -121,6 +121,64 @@ namespace Akka.Streams.Kafka.Tests
             callCount.Should().Be(1);
         }
         
+        // In this test, the exception happened inside the consumer source while it is deserializing the value
+        // Since we're restarting the stream, the output should be gapless
+        [Fact]
+        public async Task SupervisionStrategy_Restart_Decider_on_Consumer_should_be_gapless()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+            var topicPartition = new TopicPartition(topic, 0);
+            var serializationCallCount = 0;
+            var callCount = 0;
+
+            Directive Decider(Exception cause)
+            {
+                callCount++;
+                if (cause is ConsumeException ce && ce.Error.IsSerializationError())
+                {
+                    serializationCallCount++;
+                    return Directive.Restart;
+                }
+                return Directive.Stop;
+            }
+
+            var serializer = new Serializer<int>(BitConverter.GetBytes);
+            var producerSettings = ProducerSettings<Null, int>
+                .Create(Sys, null, serializer)
+                .WithBootstrapServers(Fixture.KafkaServer);
+            
+            await Source.From(Enumerable.Range(1, 10))
+                .Select(elem => new ProducerRecord<Null, int>(topicPartition, elem))
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+            
+            // Exception is injected once using the FailOnceDeserializer
+            var deserializer = new FailOnceDeserializer<int>(5, data => BitConverter.ToInt32(data.Span));
+            var consumerSettings = ConsumerSettings<Null, int>.Create(Sys, null, deserializer)
+                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithProperty("enable.auto.commit", "false")
+                .WithGroupId(group);
+            
+            var (_, probe) = KafkaConsumer
+                .PlainSource(consumerSettings, Subscriptions.Assignment(topicPartition))
+                .Select(c => c.Message.Value)
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
+                .ToMaterialized(this.SinkProbe<int>(), Keep.Both)
+                .Run(Materializer);
+
+            probe.Request(10);
+            for (var i = 1; i < 11; i++)
+            {
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10)); 
+            }
+            probe.Cancel();
+            
+            callCount.Should().Be(1);
+            serializationCallCount.Should().Be(1);
+        }        
+        
         [Fact]
         public async Task Committable_consumer_with_failed_downstream_stage_result_should_be_gapless()
         {
@@ -440,7 +498,7 @@ namespace Akka.Streams.Kafka.Tests
         }
         
         [Fact]
-        public async Task SupervisionStrategy_Decider_on_PlainSource_should_stop_on_internal_error()
+        public async Task Default_Decider_on_PlainSource_should_stop_on_internal_error()
         {
             int elementsCount = 10;
             var topic1 = CreateTopic(1);
@@ -525,6 +583,42 @@ namespace Akka.Streams.Kafka.Tests
                 return BitConverter.GetBytes(i);
             }
         }
+        
+        private class FailOnceDeserializer<T> : IDeserializer<T>
+        {
+            private readonly T _failOn;
+            private readonly Func<Memory<byte>, T> _deserializer;
+            private bool _failThrown = false;
+
+            public FailOnceDeserializer(T failOn, Func<Memory<byte>, T> deserializer)
+            {
+                _failOn = failOn;
+                _deserializer = deserializer;
+            }
+            
+            public T Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            {
+                var result = _deserializer(data.ToArray());
+                if (!_failThrown && result.Equals(_failOn))
+                {
+                    _failThrown = true;
+                    throw new Exception("BOOM");
+                }
+
+                return result;
+            }
+        }
+        
+        private class Serializer<T> : ISerializer<T>
+        {
+            private readonly Func<T, byte[]> _serializer;
+            public Serializer(Func<T, byte[]> serializer)
+            {
+                _serializer = serializer;
+            }
+            public byte[] Serialize(T data, SerializationContext context)
+                => _serializer(data);
+        }        
         
         private class StringDeserializer: IDeserializer<string>
         {
