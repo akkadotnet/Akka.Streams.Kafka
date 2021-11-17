@@ -13,6 +13,7 @@ using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
+using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
@@ -33,7 +34,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await GivenInitializedTopic(topicPartition1);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
-            var consumer = consumerSettings.CreateKafkaConsumer();
+            var consumer = consumerSettings.ConsumerFactory != null 
+                ? consumerSettings.ConsumerFactory(consumerSettings) 
+                : consumerSettings.CreateKafkaConsumer();
             consumer.Assign(new List<TopicPartition> { topicPartition1 });
 
             var task = new TaskCompletionSource<NotUsed>();
@@ -87,6 +90,80 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.ExpectSubscription();
             probe.OnError(new KafkaException(ErrorCode.Local_Transport));
+        }
+        
+        // Testing that PlainSink will continue to work and discards failed de/serialized messages when a custom decider is being used.
+        // The default is to stop the stream when this happened.
+        [Fact]
+        public async Task PlainSink_should_resume_on_deserialization_errors()
+        {
+            var callCount = 0;
+            Directive Decider(Exception cause)
+            {
+                callCount++;
+                switch (cause)
+                {
+                    case ProduceException<Null, string> ex when ex.Error.IsSerializationError():
+                        return Directive.Resume;
+                    default:
+                        return Directive.Stop;
+                }
+            }
+
+            var elementsCount = 10;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+            
+            var producerSettings = ProducerSettings<Null, string>
+                .Create(Sys, null, new FailingSerializer())
+                .WithBootstrapServers(Fixture.KafkaServer);
+
+            var sink = KafkaProducer.PlainSink(producerSettings)
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(Decider)); 
+            
+            var sourceTask = Source
+                .From(new []{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+                .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
+                .RunWith(sink, Materializer);
+            
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+            var completeTask = await Task.WhenAny(sourceTask, timeoutTask);
+            if (completeTask == timeoutTask)
+                throw new Exception("Producer timed out");
+
+            var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
+            var probe = KafkaConsumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<string>(), Materializer);
+
+            probe.Request(elementsCount);
+            for (var i = 0; i < 9; i++)
+            {
+                Log.Info($">>>>>>>>>>> {i}");
+                probe.ExpectNext();
+            }
+            callCount.Should().Be(1);
+            probe.Cancel();
+        }
+        
+        private class FailingSerializer: ISerializer<string>
+        {
+            public byte[] Serialize(string data, SerializationContext context)
+            {
+                var i = int.Parse(data);
+                if (i == 5)
+                    throw new Exception("BOOM");
+                return BitConverter.GetBytes(i);
+            }
+        }
+        
+        private class StringDeserializer: IDeserializer<string>
+        {
+            public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            {
+                return BitConverter.ToInt32(data).ToString();
+            }
         }
     }
 }

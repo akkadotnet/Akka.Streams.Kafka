@@ -148,16 +148,23 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
             error.Should().BeOfType<TestSubscriber.OnError>();
-            ((TestSubscriber.OnError)error).Cause.Should().BeOfType<SerializationException>();
+            ((TestSubscriber.OnError)error).Cause.Should().BeOfType<ConsumeException>();
             probe.Cancel();
         }
 
         [Fact]
         public async Task PlainSource_should_resume_on_deserialization_errors()
         {
-            Directive Decider(Exception cause) => cause is SerializationException
-                ? Directive.Resume
-                : Directive.Stop;
+            var callCount = 0;
+            Directive Decider(Exception cause)
+            {
+                if(cause is ConsumeException ex && ex.Error.IsSerializationError())
+                {
+                    callCount++;
+                    return Directive.Resume;
+                }
+                return Directive.Stop;
+            }
 
             int elementsCount = 10;
             var topic1 = CreateTopic(1);
@@ -175,6 +182,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Request(elementsCount);
             probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
+            callCount.Should().Be(elementsCount);
             probe.Cancel();
         }
 

@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Settings
         public TimeSpan CheckInterval { get; }
         public double Factor { get; }
 
-        private ConnectionCheckerSettings(
+        internal ConnectionCheckerSettings(
             bool enabled, 
             int maxRetries, 
             TimeSpan checkInterval, 

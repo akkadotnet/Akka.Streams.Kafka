@@ -36,22 +36,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// </summary>
         public TimeSpan CommitTimeout { get; }
 
+        public bool AutoCreateTopics { get; }
+        
         /// <summary>
         /// ExternalCommittableSourceStage
         /// </summary>
-        public ExternalCommittableSourceStage(IActorRef consumer, string groupId, TimeSpan commitTimeout, IManualSubscription subscription) 
+        public ExternalCommittableSourceStage(IActorRef consumer, string groupId, TimeSpan commitTimeout, IManualSubscription subscription, bool autoCreateTopics) 
             : base("ExternalCommittableSource")
         {
             Consumer = consumer;
             GroupId = groupId;
             CommitTimeout = commitTimeout;
             Subscription = subscription;
+            AutoCreateTopics = autoCreateTopics;
         }
 
         /// <inheritdoc />
         protected override (GraphStageLogic, IControl) Logic(SourceShape<CommittableMessage<K, V>> shape, Attributes inheritedAttributes)
         {
-            var logic = new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription, inheritedAttributes, GetMessageBuilder);
+            var logic = new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription, inheritedAttributes, GetMessageBuilder, AutoCreateTopics);
 
             return (logic, logic.Control);
         }

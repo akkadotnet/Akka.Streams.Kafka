@@ -17,10 +17,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IActorRef _consumerActor;
         private readonly IManualSubscription _subscription;
 
-        public ExternalSingleSourceLogic(SourceShape<TMessage> shape, IActorRef consumerActor, IManualSubscription subscription,
-                                         Attributes attributes, 
-                                         Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, attributes, messageBuilderFactory)
+        public ExternalSingleSourceLogic(
+            SourceShape<TMessage> shape,
+            IActorRef consumerActor,
+            IManualSubscription subscription,
+            Attributes attributes, 
+            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
+            bool autoCreateTopics) 
+            : base(shape, attributes, messageBuilderFactory, autoCreateTopics)
         {
             _consumerActor = consumerActor;
             _subscription = subscription;

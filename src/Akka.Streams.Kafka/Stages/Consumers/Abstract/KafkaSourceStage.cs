@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
@@ -27,11 +28,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         
         /// <inheritdoc />
         public override SourceShape<TMessage> Shape { get; }
-
+        
         /// <summary>
         /// KafkaSourceStage
         /// </summary>
         /// <param name="stageName">Stage name</param>
+        /// <param name="autoCreateTopics">Kafka source should auto create topics</param>
         protected KafkaSourceStage(string stageName)
         {
             StageName = stageName;
