@@ -446,8 +446,10 @@ specific exception occured during the stream lifetime.
 You can read more about stream supervision strategies in the [Akka documentation](https://getakka.net/articles/streams/error-handling.html#supervision-strategies)
 
 > [!NOTE]
-> A decider applied to a stream will be used for the whole stream, any exception that happened in any
-> of the stream stages will use the same decider to determine their fault behavior.
+> A decider applied to a stream using 
+> `.WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider))` will be used for the whole 
+> stream, any exception that happened in any of the stream stages will use the same decider 
+> to determine their fault behavior.
 
 ### Producer error handling
 The Akka.Streams.Kafka producers are using a default convenience error handling class called 
