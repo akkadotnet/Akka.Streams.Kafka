@@ -142,8 +142,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
                     
                     var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
-                    if (isSerializationError && directive == Directive.Resume)
-                        break;
+                    if (isSerializationError)
+                    {
+                        if (directive == Directive.Resume)
+                            break;
+                        
+                        // ConsumerActor is still alive, we need to kill it.
+                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
+                    }
                     
                     // Empty the buffer to make sure that messages does not get duplicated
                     while (_buffer.TryDequeue(out _))
