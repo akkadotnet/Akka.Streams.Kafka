@@ -7,6 +7,7 @@ using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Akka.Util.Internal;
@@ -59,8 +60,9 @@ namespace Akka.Streams.Kafka.Stages
         {
             _stage = stage;
 
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultProducerDecider<K, V>().Decide));
+            _decider = supervisionStrategy.Decider;
 
             SetHandler(_stage.In, 
                 onPush: () =>
@@ -195,15 +197,20 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnProduceFailure(Exception ex)
         {
-            switch (_decider(ex))
+            var cause = ex is KafkaException ke ? ke.Error.Reason : ex.Message; 
+            var directive = _decider(ex);
+            switch (directive)
             {
                 case Directive.Stop:
+                    if(Log.IsErrorEnabled)
+                        Log.Error(ex, "Sink stage failed with exception: [{0}]. Decider directive: {1}", cause, directive);
                     CloseAndFailStage(ex);
-                    Log.Error(ex, $"Producer.Produce threw an exception: {ex.Message}");
                     break;
                 default:
                 {
-                    Log.Debug($"This exception has been handled by the Supervision Decider: {ex.Message}");
+                    if(Log.IsInfoEnabled)
+                        Log.Info(ex, "Sink stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
+                    
                     if (ex is ProduceException<K, V> pEx)
                     {
                         var error = pEx.Error;
@@ -211,7 +218,8 @@ namespace Akka.Streams.Kafka.Stages
                         {
                             // if it is a fatal exception, producer needs to be restarted
                             Producer = _stage.ProducerProvider(null);
-                            Log.Debug($"Producer restarted: {Producer.Name}");
+                            if(Log.IsDebugEnabled)
+                                Log.Debug("Producer restarted: {0}", Producer.Name);
                         }
                     }
                     TryPull(_stage.In);

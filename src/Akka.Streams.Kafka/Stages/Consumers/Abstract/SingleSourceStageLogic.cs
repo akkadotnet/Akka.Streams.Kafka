@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, attributes, messageBuilderFactory)
+            : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled)
         {
             _shape = shape;
             _settings = settings;

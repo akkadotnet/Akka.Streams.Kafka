@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Akka.Streams.Util;
@@ -44,15 +45,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         public virtual PromiseControl<TMessage> Control { get; }
         
-        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, Attributes attributes,
-                                        Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+        protected BaseSingleSourceLogic(
+            SourceShape<TMessage> shape,
+            Attributes attributes,
+            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
+            bool autoCreateTopics) 
             : base(shape)
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultConsumerDecider(autoCreateTopics).Decide));
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
@@ -123,15 +128,28 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    if (_decider(exception) == Directive.Stop)
+                    var cause = exception is KafkaException ke ? ke.Error.Reason : exception.Message; 
+                    var directive = _decider(exception); 
+                    if (directive == Directive.Stop)
                     {
+                        if(Log.IsErrorEnabled)
+                            Log.Error(exception, "Source stage failed with exception: [{0}]. Decider directive: {1}", cause, directive);
                         FailStage(failure.Cause);
                         break;
-                    } 
+                    }
+
+                    if(Log.IsInfoEnabled)
+                        Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
                     
                     var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
                     if (isSerializationError)
-                        break;
+                    {
+                        if (directive == Directive.Resume)
+                            break;
+                        
+                        // ConsumerActor is still alive, we need to kill it.
+                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
+                    }
                     
                     // Empty the buffer to make sure that messages does not get duplicated
                     while (_buffer.TryDequeue(out _))
@@ -146,7 +164,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     break;
                 
                 case Terminated terminated:
-                    Log.Info($"Consumer actor terminated: {terminated.ActorRef.Path}");
+                    if(Log.IsInfoEnabled)
+                        Log.Info("Consumer actor terminated: {0}", terminated.ActorRef.Path);
                     break;
             }
         }
@@ -169,7 +188,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _requested = true;
             _requestId += 1;
             if (Log.IsDebugEnabled)
-                Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
+                Log.Debug("Requesting messages, requestId: {0}, partitions: {1}", _requestId, string.Join(", ", TopicPartitions));
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 

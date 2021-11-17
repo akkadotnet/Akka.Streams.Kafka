@@ -11,6 +11,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Supervision;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -119,6 +120,64 @@ namespace Akka.Streams.Kafka.Tests
             
             callCount.Should().Be(1);
         }
+        
+        // In this test, the exception happened inside the consumer source while it is deserializing the value
+        // Since we're restarting the stream, the output should be gapless
+        [Fact]
+        public async Task SupervisionStrategy_Restart_Decider_on_Consumer_should_be_gapless()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+            var topicPartition = new TopicPartition(topic, 0);
+            var serializationCallCount = 0;
+            var callCount = 0;
+
+            Directive Decider(Exception cause)
+            {
+                callCount++;
+                if (cause is ConsumeException ce && ce.Error.IsSerializationError())
+                {
+                    serializationCallCount++;
+                    return Directive.Restart;
+                }
+                return Directive.Stop;
+            }
+
+            var serializer = new Serializer<int>(BitConverter.GetBytes);
+            var producerSettings = ProducerSettings<Null, int>
+                .Create(Sys, null, serializer)
+                .WithBootstrapServers(Fixture.KafkaServer);
+            
+            await Source.From(Enumerable.Range(1, 10))
+                .Select(elem => new ProducerRecord<Null, int>(topicPartition, elem))
+                .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
+            
+            // Exception is injected once using the FailOnceDeserializer
+            var deserializer = new FailOnceDeserializer<int>(5, data => BitConverter.ToInt32(data.Span));
+            var consumerSettings = ConsumerSettings<Null, int>.Create(Sys, null, deserializer)
+                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithStopTimeout(TimeSpan.FromSeconds(1))
+                .WithProperty("auto.offset.reset", "earliest")
+                .WithProperty("enable.auto.commit", "false")
+                .WithGroupId(group);
+            
+            var (_, probe) = KafkaConsumer
+                .PlainSource(consumerSettings, Subscriptions.Assignment(topicPartition))
+                .Select(c => c.Message.Value)
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
+                .ToMaterialized(this.SinkProbe<int>(), Keep.Both)
+                .Run(Materializer);
+
+            probe.Request(10);
+            for (var i = 1; i < 11; i++)
+            {
+                probe.ExpectNext(i, TimeSpan.FromSeconds(10)); 
+            }
+            probe.Cancel();
+            
+            callCount.Should().Be(1);
+            serializationCallCount.Should().Be(1);
+        }        
         
         [Fact]
         public async Task Committable_consumer_with_failed_downstream_stage_result_should_be_gapless()
@@ -279,7 +338,7 @@ namespace Akka.Streams.Kafka.Tests
         }
         
         // Test that an error that happened internally inside the PlainSink stage should be handled
-        // by the decider. In this case, it is a deserialization error.
+        // by the decider. In this case, it is a serialization error.
         [Fact]
         public async Task SupervisionStrategy_Decider_on_PlainSink_should_work()
         {
@@ -331,6 +390,47 @@ namespace Akka.Streams.Kafka.Tests
             probe.Cancel();
         }
         
+        // Test that the default decider can be overridden with custom decider.
+        // In this case, a deserialization error should resume the stream, instead of the default stop.
+        [Fact]
+        public async Task Overridden_default_decider_on_PlainSink_should_work()
+        {
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+            var decider = new OverridenProducerDecider<Null, string>();
+            
+            var producerSettings = ProducerSettings<Null, string>
+                .Create(Sys, null, new FailingSerializer())
+                .WithBootstrapServers(Fixture.KafkaServer);
+            
+            // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
+            // when the message "5" is encountered.
+            var sourceTask = Source
+                .From(new []{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+                .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
+                .RunWith(
+                    KafkaProducer.PlainSink(producerSettings)
+                        .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide)), 
+                    Materializer);
+
+            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(5));
+            
+            var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
+            var probe = KafkaConsumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<string>(), Materializer);
+
+            probe.Request(10);
+            for (var i = 0; i < 9; i++)
+            {
+                var message = probe.ExpectNext();
+                Log.Info($"> [{i}]: {message}");
+            }
+            decider.CallCount.Should().Be(1);
+            probe.Cancel();
+        }
+        
         // Test that an error that happened internally inside the PlainSource stage should be handled
         // by the decider. In this case, it is a deserialization error.
         [Fact]
@@ -369,8 +469,36 @@ namespace Akka.Streams.Kafka.Tests
             probe.Cancel();
         }        
         
+        // Test that the default decider can be overridden with custom decider.
+        // In this case, a deserialization error should resume the stream, instead of the default stop.
         [Fact]
-        public async Task SupervisionStrategy_Decider_on_PlainSource_should_stop_on_internal_error()
+        public async Task Overriden_default_decider_on_PlainSource_should_work()
+        {
+            int elementsCount = 10;
+            var topic1 = CreateTopic(1);
+            var group1 = CreateGroup(1);
+
+            var sourceTask = ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
+
+            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(3));
+            
+            var settings = CreateConsumerSettings<int>(group1).WithValueDeserializer(Deserializers.Int32);
+            var decider = new OverridenConsumerDecider(settings.AutoCreateTopicsEnabled);
+
+            var probe = KafkaConsumer
+                .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
+                .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide))
+                .Select(c => c.Value)
+                .RunWith(this.SinkProbe<int>(), Materializer);
+
+            probe.Request(elementsCount);
+            probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
+            decider.CallCount.Should().Be(elementsCount);
+            probe.Cancel();
+        }
+        
+        [Fact]
+        public async Task Default_Decider_on_PlainSource_should_stop_on_internal_error()
         {
             int elementsCount = 10;
             var topic1 = CreateTopic(1);
@@ -456,11 +584,71 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
         
+        private class FailOnceDeserializer<T> : IDeserializer<T>
+        {
+            private readonly T _failOn;
+            private readonly Func<Memory<byte>, T> _deserializer;
+            private bool _failThrown = false;
+
+            public FailOnceDeserializer(T failOn, Func<Memory<byte>, T> deserializer)
+            {
+                _failOn = failOn;
+                _deserializer = deserializer;
+            }
+            
+            public T Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            {
+                var result = _deserializer(data.ToArray());
+                if (!_failThrown && result.Equals(_failOn))
+                {
+                    _failThrown = true;
+                    throw new Exception("BOOM");
+                }
+
+                return result;
+            }
+        }
+        
+        private class Serializer<T> : ISerializer<T>
+        {
+            private readonly Func<T, byte[]> _serializer;
+            public Serializer(Func<T, byte[]> serializer)
+            {
+                _serializer = serializer;
+            }
+            public byte[] Serialize(T data, SerializationContext context)
+                => _serializer(data);
+        }        
+        
         private class StringDeserializer: IDeserializer<string>
         {
             public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
             {
                 return BitConverter.ToInt32(data).ToString();
+            }
+        }
+        
+        private class OverridenConsumerDecider : DefaultConsumerDecider
+        {
+            public int CallCount { get; private set; }
+            public OverridenConsumerDecider(bool autoCreateTopics) : base(autoCreateTopics)
+            { }
+
+            protected override Directive OnDeserializationError(ConsumeException exception)
+            {
+                CallCount++;
+                return Directive.Resume;
+            }
+        }
+        
+        private class OverridenProducerDecider<K, V> : DefaultProducerDecider<K, V>
+        {
+            public int CallCount { get; private set; }
+
+            protected override Directive OnSerializationError(ProduceException<K, V> exception)
+            {
+                CallCount++;
+                return Directive.Resume;
             }
         }
     }

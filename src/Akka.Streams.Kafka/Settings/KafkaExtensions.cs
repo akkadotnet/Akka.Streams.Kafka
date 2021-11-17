@@ -10,10 +10,16 @@ namespace Akka.Streams.Kafka.Settings
             ConfigurationFactory.FromResource<CommitterSettings>("Akka.Streams.Kafka.reference.conf");
 
         public static bool IsSerializationError(this Error error)
-            => error.Code == ErrorCode.Local_ValueDeserialization ||
-               error.Code == ErrorCode.Local_ValueSerialization ||
-               error.Code == ErrorCode.Local_KeyDeserialization ||
-               error.Code == ErrorCode.Local_KeySerialization;
+            => error.Code.IsSerializationError();
 
+        public static bool IsSerializationError(this ErrorCode code)
+            => code switch
+            {
+                ErrorCode.Local_ValueDeserialization => true,
+                ErrorCode.Local_ValueSerialization => true,
+                ErrorCode.Local_KeyDeserialization => true,
+                ErrorCode.Local_KeySerialization => true,
+                _ => false
+            };
     }
 }

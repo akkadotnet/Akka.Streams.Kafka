@@ -117,13 +117,14 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var producerSettings = ProducerSettings<Null, string>
                 .Create(Sys, null, new FailingSerializer())
                 .WithBootstrapServers(Fixture.KafkaServer);
+
+            var sink = KafkaProducer.PlainSink(producerSettings)
+                .AddAttributes(ActorAttributes.CreateSupervisionStrategy(Decider)); 
             
             var sourceTask = Source
                 .From(new []{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
                 .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
-                .RunWith(
-                    KafkaProducer.PlainSink(producerSettings).WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider)), 
-                    Materializer);
+                .RunWith(sink, Materializer);
             
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
             var completeTask = await Task.WhenAny(sourceTask, timeoutTask);
