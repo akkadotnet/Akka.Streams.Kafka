@@ -13,7 +13,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
     /// Generally this should not be used from outside of the library.
     /// </summary>
     [InternalApi]
-    public class KafkaConsumerActorMetadata
+    public static class KafkaConsumerActorMetadata
     {
         private static volatile int _number = 1;
         /// <summary>

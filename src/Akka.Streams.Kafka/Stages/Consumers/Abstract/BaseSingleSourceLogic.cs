@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Akka.Streams.Util;
@@ -44,16 +45,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         public virtual PromiseControl<TMessage> Control { get; }
         
-        protected BaseSingleSourceLogic(SourceShape<TMessage> shape, Attributes attributes,
-                                        Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+        protected BaseSingleSourceLogic(
+            SourceShape<TMessage> shape,
+            Attributes attributes,
+            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
+            bool autoCreateTopics) 
             : base(shape)
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.ResumingDecider;
+            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultConsumerDecider(autoCreateTopics).Decide));
+            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -110,6 +115,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             switch (args.Item2)
             {
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
+                    Log.Debug("Received messages");
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
                         _requested = false;
@@ -118,45 +124,62 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         _buffer.Enqueue(consumerMessage);
                     
                     Pump();
-                    
                     break;
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    switch (_decider(failure.Cause))
+                    var cause = exception is KafkaException ke ? ke.Error.Reason : exception.Message; 
+                    var directive = _decider(exception); 
+                    if (directive == Directive.Stop)
                     {
-                        case Directive.Stop:
-                            // Throw
-                            FailStage(exception);
-                            break;
-                        case Directive.Resume:
-                            // keep going
-                            break;
-                        case Directive.Restart:
-                            // TODO: Need to do something here: https://github.com/akkadotnet/Akka.Streams.Kafka/issues/33
-                            break;
+                        if(Log.IsErrorEnabled)
+                            Log.Error(exception, "Source stage failed with exception: [{0}]. Decider directive: {1}", cause, directive);
+                        FailStage(failure.Cause);
+                        break;
                     }
+
+                    if(Log.IsInfoEnabled)
+                        Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
+                    
+                    var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
+                    if (isSerializationError)
+                    {
+                        if (directive == Directive.Resume)
+                            break;
+                        
+                        // ConsumerActor is still alive, we need to kill it.
+                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
+                    }
+                    
+                    // Empty the buffer to make sure that messages does not get duplicated
+                    while (_buffer.TryDequeue(out _))
+                    { }
+                    
+                    // ConsumerActor are designed to suicide itself on any error except for de/serialization error
+                    // to prevent any offset/commit runaway. We will need to restart it.
+                    SourceActor.Unwatch(ConsumerActor);
+                    ConsumerActor = CreateConsumerActor();
+                    SourceActor.Watch(ConsumerActor);
+                    ConfigureSubscription();
                     break;
                 
                 case Terminated terminated:
-                    FailStage(new ConsumerFailed());
+                    if(Log.IsInfoEnabled)
+                        Log.Info("Consumer actor terminated: {0}", terminated.ActorRef.Path);
                     break;
             }
         }
 
         private void Pump()
         {
-            if (IsAvailable(_shape.Outlet))
+            while(IsAvailable(_shape.Outlet) && _buffer.TryDequeue(out var message))
             {
-                if (_buffer.TryDequeue(out var message))
-                {
-                    Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-                    Pump();
-                }
-                else if (!_requested && TopicPartitions.Any())
-                {
-                    RequestMessages();
-                }
+                Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+            }
+            
+            if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
+            {
+                RequestMessages();
             }
         }
 
@@ -164,7 +187,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _requested = true;
             _requestId += 1;
-            Log.Debug($"Requesting messages, requestId: {_requestId}, partitions: {string.Join(", ", TopicPartitions)}");
+            if (Log.IsDebugEnabled)
+                Log.Debug("Requesting messages, requestId: {0}, partitions: {1}", _requestId, string.Join(", ", TopicPartitions));
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 

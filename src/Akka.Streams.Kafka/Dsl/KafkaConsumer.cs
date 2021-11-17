@@ -40,9 +40,12 @@ namespace Akka.Streams.Kafka.Dsl
         /// Special source that can use an external `KafkaAsyncConsumer`. This is useful when you have
         /// a lot of manually assigned topic-partitions and want to keep only one kafka consumer.
         /// </summary>
-        public static Source<ConsumeResult<K, V>, IControl> PlainExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription)
+        public static Source<ConsumeResult<K, V>, IControl> PlainExternalSource<K, V>(
+            IActorRef consumer,
+            IManualSubscription subscription,
+            bool autoCreateTopics = false)
         {
-            return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription));
+            return Source.FromGraph(new ExternalPlainSourceStage<K, V>(consumer, subscription, autoCreateTopics));
         }
 
         /// <summary>
@@ -106,10 +109,14 @@ namespace Akka.Streams.Kafka.Dsl
         /// <summary>
         /// The same as <see cref="PlainExternalSource{K,V}"/> but for offset commit support
         /// </summary>
-        public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(IActorRef consumer, IManualSubscription subscription, 
-                                                                                                 string groupId, TimeSpan commitTimeout)
+        public static Source<CommittableMessage<K, V>, IControl> CommittableExternalSource<K, V>(
+            IActorRef consumer,
+            IManualSubscription subscription, 
+            string groupId,
+            TimeSpan commitTimeout,
+            bool autoCreateTopics = false)
         {
-            return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription));
+            return Source.FromGraph(new ExternalCommittableSourceStage<K, V>(consumer, groupId, commitTimeout, subscription, autoCreateTopics));
         }
 
         /// <summary>

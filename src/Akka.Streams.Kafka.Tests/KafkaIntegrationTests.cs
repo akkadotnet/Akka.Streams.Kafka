@@ -156,7 +156,7 @@ namespace Akka.Streams.Kafka.Tests
         protected (IControl, TestSubscriber.Probe<TValue>) CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
-                .PlainExternalSource<Null, TValue>(consumer, sub)
+                .PlainExternalSource<Null, TValue>(consumer, sub, true)
                 .Select(c => c.Value)
                 .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
                 .Run(Materializer);

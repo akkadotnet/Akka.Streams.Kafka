@@ -1,13 +1,14 @@
 ﻿using System;
+using System.Reflection;
 using BenchmarkDotNet.Running;
 
 namespace Akka.Streams.Kafka.Benchmark
 {
-    class Program
+    public static class Program
     {
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
-            BenchmarkRunner.Run<PlainSinkConsumerBenchmark>();
+            BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run(args);
         }
     }
 }
