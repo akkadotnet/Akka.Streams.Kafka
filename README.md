@@ -34,11 +34,41 @@ var producerSettings = ProducerSettings<Null, string>.Create(config, null, null)
     .WithBootstrapServers("localhost:9092");
 ```
 
-_Note_: Specifying `null` as a key/value serializer uses default serializer for key/value type. Built-in serializers are available in `Confluent.Kafka.Serializers` class.
+> __NOTE:__ 
+>
+> Specifying `null` as a key/value serializer uses default serializer for key/value type. Built-in serializers are available in `Confluent.Kafka.Serializers` class.
 
 By default when creating `ProducerSettings` with the ActorSystem parameter it uses the config section `akka.kafka.producer`.
 
+#### Defining Kafka Properties Directly Inside HOCON
+You can embed Kafka properties directly inside the HOCON configuration by declaring them inside the `kafka-clients` section:
+```HOCON
+akka.kafka.producer.kafka-clients {
+    bootstrap.servers = "localhost:9092"
+    client.id = client-1
+    enable.idempotence = true
+}
 ```
+
+#### Importing Confluent.Kafka.ProducerConfig Directly Into ProducerSettings
+
+Working with `ProducerConfig` is a lot more convenient than having to use the `ProducerSettings.WithProperty` method because you don't have to memorize all of Kafka property names.
+You can import `ProducerConfig` directly into `Akka.Streams.Kafka.ProducerSettings` by using the convenience method `ProducerSettings.WithProducerConfig` to import all of the defined Kafka properties.
+
+```c#
+var config = new ProducerConfig
+{
+    BootstrapServers = "localhost:9092",
+    ClientId = "client1", 
+    EnableIdempotence = true
+};
+var settings = ProducerSettings<string, string>.Create(system, null, null)
+    .WithProducerConfig(config);
+```
+
+### Default Producer HOCON Settings
+
+```HOCON
 akka.kafka.producer {
   # Tuning parameter of how many sends that can run in parallel.
   parallelism = 100
@@ -51,7 +81,12 @@ akka.kafka.producer {
    # When this value is empty, the dispatcher configured for the stream
    # will be used.
    use-dispatcher = "akka.kafka.default-dispatcher"
- }
+   
+   # Properties defined by Confluent.Kafka.ProducerConfig
+   # can be defined in this configuration section.
+   kafka-clients {
+   }
+}
 ```
 
 ### PlainSink
@@ -92,7 +127,7 @@ Its value is passed through the flow and becomes available in the `ProducerMessa
 It can for example hold a `Akka.Streams.Kafka.Messages.CommittableOffset` or `Akka.Streams.Kafka.Messages.CommittableOffsetBatch` (from a `KafkaConsumer.CommittableSource`) 
 that can be committed after publishing to Kafka:
 
-```csharp
+```c#
 DrainingControl<NotUsed> control = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(topic1))
     .Select(message =>
     {
@@ -114,7 +149,7 @@ To create one message to a Kafka topic, use the `Akka.Streams.Kafka.Messages.Mes
 
 It can be created with `ProducerMessage.Single` helper:
 
-```csharp
+```c#
 IEnvelope<TKey, TValue, TPassThrough> single = ProducerMessage.Single(
     new ProducerRecord<Null, string>("topic", key, value),
     passThrough)
@@ -129,7 +164,7 @@ The flow with `ProducerMessage.Message` will continue as `ProducerMessage.Result
 
 The `ProducerMessage.MultiMessage` implementation of `IEnvelope` contains a list of `ProducerRecord`s to produce multiple messages to Kafka topics:
 
-```csharp
+```c#
 var multiMessage = ProducerMessage.Multi(new[]
 {
     new ProducerRecord<string, string>(topic2, record.Key, record.Value),
@@ -148,7 +183,7 @@ The flow with `ProducerMessage.MultiMessage` will continue as `ProducerMessage.M
 The `ProducerMessage.PassThroughMessage` allows to let an element pass through a Kafka flow without producing a new message to a Kafka topic. 
 This is primarily useful with Kafka commit offsets and transactions, so that these can be committed without producing new messages.
 
-```csharp
+```c#
 var passThroughMessage = ProducerMessage.PassThrough<string, string>(passThrough);
 ```
 
@@ -184,10 +219,40 @@ var consumerSettings = ConsumerSettings<Null, string>.Create(config, null, Seria
     .WithGroupId("group1"); // Specifying GroupId is required before starting stream - otherwise you will get an exception at runtime
 ```
 
-As with producer settings, they are loaded from `akka.kafka.consumer` of configuration file (or custom `Config` instance provided). 
-Here is how configuration looks like:
+As with producer settings, they are loaded from `akka.kafka.consumer` of configuration file (or custom `Config` instance provided).
 
+#### Defining Kafka Properties Directly Inside HOCON
+You can embed Kafka properties directly inside the HOCON configuration by declaring them inside the `kafka-clients` section:
+```HOCON
+akka.kafka.consumer.kafka-clients {
+    bootstrap.servers = "localhost:9092"
+    client.id = client-1
+    group.id = group-1
+}
 ```
+
+#### Importing Confluent.Kafka.ConsumerConfig Directly Into ConsumerSettings
+
+Working with `ConsumerConfig` is a lot more convenient than having to use the `ConsumerSettings.WithProperty` method because you don't have to memorize all of Kafka property names.
+You can import `ConsumerConfig` directly into `Akka.Streams.Kafka.ConsumerSettings` by using the convenience method `ConsumerSettings.WithConsumerConfig` to import all of the defined Kafka properties.
+
+```c#
+var config = new ConsumerConfig
+{
+    BootstrapServers = "localhost:9092",
+    AutoOffsetReset = AutoOffsetReset.Latest,
+    EnableAutoCommit = true,
+    GroupId = "group1",
+    ClientId = "client1"
+};
+
+var settings = ConsumerSettings<string, string>.Create(actorSystem, null, null)
+    .WithConsumerConfig(config);
+```
+
+### Default Consumer HOCON Settings
+
+```HOCON
 # Properties for akka.kafka.ConsumerSettings can be
 # defined in this section or a configuration section with
 # the same layout.
@@ -206,9 +271,6 @@ akka.kafka.consumer {
   # This can be set to 0 for streams using `DrainingControl`.
   stop-timeout = 30s
 
-  # Duration to wait for `KafkaConsumer.close` to finish.
-  close-timeout = 20s
-
   # If offset commit requests are not completed within this timeout
   # the returned Future is completed `CommitTimeoutException`.
   # The `Transactional.source` waits this ammount of time for the producer to mark messages as not
@@ -223,9 +285,18 @@ akka.kafka.consumer {
   # for all assigned partitions. See https://issues.apache.org/jira/browse/KAFKA-4682.
   commit-refresh-interval = infinite
 
+  buffer-size = 128
+
   # Fully qualified config path which holds the dispatcher configuration
   # to be used by the KafkaConsumerActor. Some blocking may occur.
   use-dispatcher = "akka.kafka.default-dispatcher"
+
+  # Properties defined by Confluent.Kafka.ConsumerConfig
+  # can be defined in this configuration section.
+  kafka-clients {
+    # Disable auto-commit by default
+    enable.auto.commit = false
+  }
 
   # Time to wait for pending requests when a partition is closed
   wait-close-partition = 500ms
@@ -233,6 +304,19 @@ akka.kafka.consumer {
   # Limits the query to Kafka for a topic's position
   position-timeout = 5s
 
+  # When using `AssignmentOffsetsForTimes` subscriptions: timeout for the
+  # call to Kafka's API
+  offset-for-times-timeout = 5s
+  
+  # Timeout for akka.kafka.Metadata requests
+  # This value is used instead of Kafka's default from `default.api.timeout.ms`
+  # which is 1 minute.
+  metadata-request-timeout = 5s
+  
+  # Interval for checking that transaction was completed before closing the consumer.
+  # Used in the transactional flow for exactly-once-semantics processing.
+  eos-draining-check-interval = 30ms
+  
   # Issue warnings when a call to a partition assignment handler method takes
   # longer than this.
   partition-handler-warning = 5s
@@ -263,7 +347,7 @@ a lot of manually assigned topic-partitions and want to keep only one kafka cons
 
 You can create reusable consumer actor reference like this:
 
-```csharp
+```c#
 var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(consumerSettings));
 ```
 
@@ -295,7 +379,7 @@ The `PlainPartitionedSource` is a way to track automatic partition assignment fr
 When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding source of `ConsumerRecord`s.
 When a topic-partition is revoked, the corresponding source completes.
 
-```csharp
+```c#
 var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
     .GroupBy(3, tuple => tuple.Item1)
     .SelectAsync(8, async tuple =>
@@ -445,7 +529,8 @@ specific exception occured during the stream lifetime.
 
 You can read more about stream supervision strategies in the [Akka documentation](https://getakka.net/articles/streams/error-handling.html#supervision-strategies)
 
-> [!NOTE]
+> __NOTE:__
+> 
 > A decider applied to a stream using 
 > `.WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider))` will be used for the whole 
 > stream, any exception that happened in any of the stream stages will use the same decider 
