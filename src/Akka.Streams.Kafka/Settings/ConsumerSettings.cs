@@ -46,9 +46,9 @@ namespace Akka.Streams.Kafka.Settings
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
         public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
         {
-            var properties = config.GetConfig("kafka-clients").ParseKafkaClientsProperties();
-
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
+            
+            var properties = config.GetConfig("kafka-clients").ParseKafkaClientsProperties();
 
             return new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer,
@@ -246,7 +246,10 @@ namespace Akka.Streams.Kafka.Settings
         public ConsumerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
 
-        public ConsumerSettings<TKey, TValue> WithProperties(IDictionary<string, string> properties)
+        public ConsumerSettings<TKey, TValue> WithConsumerConfig(ConsumerConfig config)
+            => WithProperties(config);
+
+        public ConsumerSettings<TKey, TValue> WithProperties(IEnumerable<KeyValuePair<string, string>> properties)
         {
             var builder = ImmutableDictionary.CreateBuilder<string, string>();
             builder.AddRange(Properties);

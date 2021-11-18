@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using Akka.Actor;
+using Akka.Streams.Kafka.Internal;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 
@@ -33,13 +34,23 @@ namespace Akka.Streams.Kafka.Settings
         public TimeSpan EosCommitInterval { get; }
         public IImmutableDictionary<string, string> Properties { get; }
 
+        /// <summary>
+        /// Gets property value by key
+        /// </summary>
+        public object this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
+        
+        public string GetProperty(string key) => Properties.GetValueOrDefault(key, null);
+        
         public ProducerSettings<TKey, TValue> WithBootstrapServers(string bootstrapServers) =>
             WithProperty("bootstrap.servers", bootstrapServers);
 
         public ProducerSettings<TKey, TValue> WithProperty(string key, string value) =>
             Copy(properties: Properties.SetItem(key, value));
 
-        public ProducerSettings<TKey, TValue> WithProperties(IDictionary<string, string> properties)
+        public ProducerSettings<TKey, TValue> WithProducerConfig(ProducerConfig config)
+            => WithProperties(config);
+        
+        public ProducerSettings<TKey, TValue> WithProperties(IEnumerable<KeyValuePair<string, string>> properties)
         {
             var builder = ImmutableDictionary.CreateBuilder<string, string>();
             builder.AddRange(Properties);
@@ -48,8 +59,8 @@ namespace Akka.Streams.Kafka.Settings
                 builder.AddOrSet(kvp.Key, kvp.Value);
             }
             return Copy(properties: builder.ToImmutable());
-        }
-
+        }   
+        
         /// <summary>
         /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
         /// </summary>
@@ -90,6 +101,8 @@ namespace Akka.Streams.Kafka.Settings
         public static ProducerSettings<TKey, TValue> Create(Akka.Configuration.Config config, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET producer was not provided");
+            
+            var properties = config.GetConfig("kafka-clients").ParseKafkaClientsProperties();
 
             return new ProducerSettings<TKey, TValue>(
                 keySerializer: keySerializer,
@@ -98,7 +111,7 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 flushTimeout: config.GetTimeSpan("flush-timeout", TimeSpan.FromSeconds(2)),
                 eosCommitInterval: config.GetTimeSpan("eos-commit-interval", TimeSpan.FromMilliseconds(100)),
-                properties: ImmutableDictionary<string, string>.Empty);
+                properties: properties);
         }
 
         public Confluent.Kafka.IProducer<TKey, TValue> CreateKafkaProducer(Action<IProducer<TKey, TValue>, Error> producerErrorHandler = null)

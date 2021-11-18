@@ -240,7 +240,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
-                .WithProperty("enable.auto.commit", "false")
                 .WithGroupId(group);
             
             KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
