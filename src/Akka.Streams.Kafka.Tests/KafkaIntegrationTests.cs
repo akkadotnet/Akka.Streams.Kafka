@@ -65,7 +65,6 @@ namespace Akka.Streams.Kafka.Tests
                 .WithBootstrapServers(Fixture.KafkaServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
-                .WithProperty("enable.auto.commit", "false")
                 .WithGroupId(group);
         }
         
