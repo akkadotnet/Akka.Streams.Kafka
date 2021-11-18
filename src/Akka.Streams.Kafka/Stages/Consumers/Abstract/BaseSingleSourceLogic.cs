@@ -58,7 +58,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
             var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultConsumerDecider(autoCreateTopics).Decide));
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            _decider = supervisionStrategy.Decider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -112,10 +112,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         protected virtual void MessageHandling((IActorRef, object) args)
         {
-            switch (args.Item2)
+            var (sender, message) = args;
+            switch (message)
             {
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
-                    Log.Debug("Received messages");
+                    if(Log.IsDebugEnabled)
+                        Log.Debug("Received {0} messages from {1}", msg.MessagesList.Count, sender);
+                    
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
                         _requested = false;
@@ -128,7 +131,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    var cause = exception is KafkaException ke ? ke.Error.Reason : exception.Message; 
+                    var cause = exception.GetCause(); 
                     var directive = _decider(exception); 
                     if (directive == Directive.Stop)
                     {
