@@ -124,7 +124,7 @@ namespace Akka.Streams.Kafka.Tests
         // In this test, the exception happened inside the consumer source while it is deserializing the value
         // Since we're restarting the stream, the output should be gapless
         [Fact]
-        public async Task SupervisionStrategy_Restart_Decider_on_Consumer_should_be_gapless()
+        public async Task Directive_Restart_on_failed_Consumer_should_restart_Consumer()
         {
             var topic = CreateTopic(1);
             var group = CreateGroup(1);
@@ -162,20 +162,27 @@ namespace Akka.Streams.Kafka.Tests
             
             var (_, probe) = KafkaConsumer
                 .PlainSource(consumerSettings, Subscriptions.Assignment(topicPartition))
-                .Select(c => c.Message.Value)
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
+                .Select(c => c.Message.Value)
                 .ToMaterialized(this.SinkProbe<int>(), Keep.Both)
                 .Run(Materializer);
 
-            probe.Request(10);
-            for (var i = 1; i < 11; i++)
+            probe.Request(20);
+            var pulled = new List<int>();
+            for (var i = 0; i < 14; i++)
             {
-                probe.ExpectNext(i, TimeSpan.FromSeconds(10)); 
+                var msg = probe.ExpectNext();
+                pulled.Add(msg);
             }
+
+            probe.ExpectNoMsg(TimeSpan.FromSeconds(2));
             probe.Cancel();
+
+            pulled.Should().BeEquivalentTo(new[] {1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
             
-            callCount.Should().Be(1);
-            serializationCallCount.Should().Be(1);
+            // Decider should be called twice, because deciders are called in BaseSingleSourceLogic and KafkaConsumerActor 
+            callCount.Should().Be(2);
+            serializationCallCount.Should().Be(2);
         }        
         
         [Fact]
@@ -463,7 +470,8 @@ namespace Akka.Streams.Kafka.Tests
 
             probe.Request(elementsCount);
             probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
-            callCount.Should().Be(elementsCount);
+            // this is twice elementCount because Decider is called twice on each exceptions
+            callCount.Should().Be(elementsCount*2);
             probe.Cancel();
         }        
         
@@ -491,12 +499,13 @@ namespace Akka.Streams.Kafka.Tests
 
             probe.Request(elementsCount);
             probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
-            decider.CallCount.Should().Be(elementsCount);
+            // this is twice elementCount because Decider is called twice on each exceptions
+            decider.CallCount.Should().Be(elementsCount*2);
             probe.Cancel();
         }
         
         [Fact]
-        public async Task Default_Decider_on_PlainSource_should_stop_on_internal_error()
+        public async Task Default_Decider_on_PlainSource_should_resume_on_KafkaException()
         {
             int elementsCount = 10;
             var topic1 = CreateTopic(1);
@@ -508,19 +517,13 @@ namespace Akka.Streams.Kafka.Tests
             
             var settings = CreateConsumerSettings<Null, string>(group1).WithAutoCreateTopicsEnabled(false);
 
-            // Stage will fail because we're trying to subscribe to partition 5, which does not exist.
+            // Stage produce Error with ErrorCode.Local_UnknownPartition because we're trying to subscribe to partition 5, which does not exist.
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 5)))
                 .Select(c => c.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
-            var error = probe.ExpectEvent(TimeSpan.FromSeconds(5));
-            error.Should().BeOfType<TestSubscriber.OnError>();
-            var exception = ((TestSubscriber.OnError)error).Cause;
-            exception.Should().BeOfType<KafkaException>();
-            ((KafkaException) exception).Error.Code.Should().Be(ErrorCode.Local_UnknownPartition);
-
             probe.ExpectNoMsg(TimeSpan.FromSeconds(1));
             
             probe.Cancel();
