@@ -178,7 +178,7 @@ namespace Akka.Streams.Kafka.Tests
             probe.ExpectNoMsg(TimeSpan.FromSeconds(2));
             probe.Cancel();
 
-            pulled.Should().BeEquivalentTo(new[] {1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+            pulled.Should().BeEquivalentTo(new[] {1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, opt => opt.WithStrictOrdering());
             
             // Decider should be called twice, because deciders are called in BaseSingleSourceLogic and KafkaConsumerActor 
             callCount.Should().Be(2);
