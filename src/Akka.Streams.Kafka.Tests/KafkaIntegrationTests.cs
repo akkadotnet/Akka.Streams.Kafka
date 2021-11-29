@@ -8,7 +8,11 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit;
+using Akka.Streams.Kafka.Testkit.Fixture;
+using Akka.Streams.Kafka.Testkit.Internal;
 using Akka.Streams.TestKit;
+using Akka.Util;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using FluentAssertions;
@@ -19,30 +23,92 @@ using Config = Akka.Configuration.Config;
 namespace Akka.Streams.Kafka.Tests
 {
     [Collection(KafkaSpecsFixture.Name)]
-    public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
+    public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit, IAsyncLifetime
     {
-        public KafkaFixture Fixture { get; }
-        protected IMaterializer Materializer { get; }
+        protected const long MessageLogInterval = 500L;
 
-        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
+        protected const int Partition0 = 0;
+
+        protected Flow<int, int, NotUsed> LogSentMessages()
+            => Flow.Create<int>().Select(i =>
+            {
+                if(i % MessageLogInterval == 0)
+                    Log.Info("Sent [{0}] messages so far", i);
+                return i;
+            });
+
+        protected Flow<int, int, NotUsed> LogReceivedMessages()
+            => Flow.Create<int>().Select(i =>
+            {
+                if(i % MessageLogInterval == 0)
+                    Log.Info("Received [{0}] messages so far", i);
+                return i;
+            });
+        
+        protected Flow<int, int, NotUsed> LogReceivedMessages(TopicPartition tp)
+            => Flow.Create<int>().Select(i =>
+            {
+                if(i % MessageLogInterval == 0)
+                    Log.Info("{0}: Received [{1}] messages so far", tp, i);
+                return i;
+            });
+
+        protected async Task StopRandomBrokerAsync(int msgCount)
+        {
+            var broker = Fixture.Brokers[ThreadLocalRandom.Current.Next(Fixture.Brokers.Count)];
+            Log.Warning(
+                "Stopping one Kafka container with network aliases [{0}], container id [{1}], after [{2}] messages", 
+                broker.ContainerName,
+                broker.ContainerId,
+                msgCount);
+            await broker.StopAsync();
+        }
+
+        private IAdminClient _adminClient;
+        public KafkaFixtureBase Fixture { get; protected set; }
+        
+        protected IMaterializer Materializer { get; }
+        protected KafkaTestkitSettings Settings { get; }
+
+        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixtureBase fixture = null) 
             : base(Default(), actorSystemName, output)
         {
             Fixture = fixture;
             Materializer = Sys.Materializer();
-            
-            Sys.Log.Info("Starting test: " + output.GetCurrentTestName());
+            Sys.Settings.InjectTopLevelFallback(KafkaTestKit.DefaultConfig);
+            Settings = new KafkaTestkitSettings(Sys);
+
+            Log.Info("Starting test: " + output.GetCurrentTestName());
         }
         
         private string Uuid { get; } = Guid.NewGuid().ToString();
         
-        protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
-        protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
+        protected string CreateTopicName(int number) => $"topic-{number}-{Uuid}";
+        protected string CreateGroupId(int number) => $"group-{number}-{Uuid}";
 
+        public async Task InitializeAsync()
+        {
+            if (!(Fixture is KafkaFixture))
+                await Fixture.InitializeAsync();
+
+            _adminClient = new AdminClientBuilder(new AdminClientConfig
+            {
+                BootstrapServers = Fixture.BootstrapServer
+            }).Build();
+        }
+
+        public async Task DisposeAsync()
+        {
+            if (!(Fixture is KafkaFixture))
+                await Fixture.DisposeAsync();
+            _adminClient?.Dispose();
+        }
+        
         protected ProducerSettings<Null, string> ProducerSettings => BuildProducerSettings<Null, string>();
         
         protected ProducerSettings<TKey, TValue> BuildProducerSettings<TKey, TValue>()
         {
-            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(Fixture.KafkaServer);
+            return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(Fixture.BootstrapServer);
         }
 
         protected CommitterSettings CommitterSettings
@@ -53,7 +119,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group)
         {
             return ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.BootstrapServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -62,7 +128,7 @@ namespace Akka.Streams.Kafka.Tests
         protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group)
         {
             return ConsumerSettings<Null, TValue>.Create(Sys, null, null)
-                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.BootstrapServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -120,47 +186,35 @@ namespace Akka.Streams.Kafka.Tests
 
         protected async Task GivenInitializedTopic(string topic)
         {
-            var builder = new AdminClientBuilder(new AdminClientConfig
+            await _adminClient.CreateTopicsAsync(new[] {new TopicSpecification
             {
-                BootstrapServers = Fixture.KafkaServer
-            });
-            using (var client = builder.Build())
-            {
-                await client.CreateTopicsAsync(new[] {new TopicSpecification
-                {
-                    Name = topic,
-                    NumPartitions = KafkaFixture.KafkaPartitions,
-                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
-                }});
-            }
+                Name = topic,
+                NumPartitions = Fixture.PartitionCount,
+                ReplicationFactor = (short)Fixture.ReplicationFactor
+            }});
         }
         
         protected async Task GivenInitializedTopic(TopicPartition topicPartition)
         {
-            var builder = new AdminClientBuilder(new AdminClientConfig
+            await _adminClient.CreateTopicsAsync(new[] {new TopicSpecification
             {
-                BootstrapServers = Fixture.KafkaServer
-            });
-            using (var client = builder.Build())
-            {
-                await client.CreateTopicsAsync(new[] {new TopicSpecification
-                {
-                    Name = topicPartition.Topic,
-                    NumPartitions = KafkaFixture.KafkaPartitions,
-                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
-                }});
-            }
+                Name = topicPartition.Topic,
+                NumPartitions = Fixture.PartitionCount,
+                ReplicationFactor = (short)Fixture.ReplicationFactor
+            }});
         }
         
         protected (IControl, TestSubscriber.Probe<TValue>) CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub, true)
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
                 .Run(Materializer);
         }
 
+        
+        
         private static Config Default()
         {
             var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");

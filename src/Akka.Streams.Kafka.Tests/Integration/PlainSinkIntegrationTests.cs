@@ -8,6 +8,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -27,11 +28,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainSink_should_publish_100_elements_to_Kafka_producer()
         {
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
-
-            await GivenInitializedTopic(topicPartition1);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
             var consumer = consumerSettings.ConsumerFactory != null 
@@ -73,7 +72,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainSink_should_fail_stage_if_broker_unavailable()
         {
-            var topic1 = CreateTopic(1);
+            var topic1 = CreateTopicName(1);
 
             await GivenInitializedTopic(topic1);
 
@@ -111,12 +110,12 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
 
             var elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             
             var producerSettings = ProducerSettings<Null, string>
                 .Create(Sys, null, new FailingSerializer())
-                .WithBootstrapServers(Fixture.KafkaServer);
+                .WithBootstrapServers(Fixture.BootstrapServer);
 
             var sink = KafkaProducer.PlainSink(producerSettings)
                 .AddAttributes(ActorAttributes.CreateSupervisionStrategy(Decider)); 
@@ -131,10 +130,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
             if (completeTask == timeoutTask)
                 throw new Exception("Producer timed out");
 
-            var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
+            var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new ProperStringDeserializer());
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
@@ -158,7 +157,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
         }
         
-        private class StringDeserializer: IDeserializer<string>
+        private class ProperStringDeserializer: IDeserializer<string>
         {
             public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
             {

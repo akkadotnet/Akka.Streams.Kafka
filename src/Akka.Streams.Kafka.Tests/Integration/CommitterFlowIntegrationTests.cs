@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Confluent.Kafka;
 using Xunit;
 using Xunit.Abstractions;
@@ -29,9 +30,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [InlineData(5)]
         public async Task CommitterFlow_commits_offsets_from_CommittableSource(int batchSize)
         {
-            var topic1 = CreateTopic(1);
+            var topic1 = CreateTopicName(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
-            var group1 = CreateGroup(1);
+            var group1 = CreateGroupId(1);
 
             await GivenInitializedTopic(topicPartition1);
 
@@ -47,7 +48,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
                 .SelectAsync(10, elem =>
                 {
-                    committedElements.Enqueue(elem.Record.Value);
+                    committedElements.Enqueue(elem.Record.Message.Value);
                     return Task.FromResult(elem.CommitableOffset as ICommittable);
                 })
                 .Via(Committer.Flow(committerSettings))
@@ -66,7 +67,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Value)
+                .Select(_ => _.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe2.Request(75);

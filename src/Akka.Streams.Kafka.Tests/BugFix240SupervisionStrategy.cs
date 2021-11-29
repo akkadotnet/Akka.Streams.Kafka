@@ -12,6 +12,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Supervision;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.Supervision;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -31,8 +32,8 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task SupervisionStrategy_Decider_on_Producer_Upstream_should_work()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var topicPartition = new TopicPartition(topic, 0);
             var callCount = 0;
 
@@ -76,8 +77,8 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task SupervisionStrategy_Decider_on_Consumer_Downstream_should_work()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var topicPartition = new TopicPartition(topic, 0);
             var callCount = 0;
 
@@ -126,8 +127,8 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task SupervisionStrategy_Restart_Decider_on_Consumer_should_be_gapless()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var topicPartition = new TopicPartition(topic, 0);
             var serializationCallCount = 0;
             var callCount = 0;
@@ -146,7 +147,7 @@ namespace Akka.Streams.Kafka.Tests
             var serializer = new Serializer<int>(BitConverter.GetBytes);
             var producerSettings = ProducerSettings<Null, int>
                 .Create(Sys, null, serializer)
-                .WithBootstrapServers(Fixture.KafkaServer);
+                .WithBootstrapServers(Fixture.BootstrapServer);
             
             await Source.From(Enumerable.Range(1, 10))
                 .Select(elem => new ProducerRecord<Null, int>(topicPartition, elem))
@@ -155,7 +156,7 @@ namespace Akka.Streams.Kafka.Tests
             // Exception is injected once using the FailOnceDeserializer
             var deserializer = new FailOnceDeserializer<int>(5, data => BitConverter.ToInt32(data.Span));
             var consumerSettings = ConsumerSettings<Null, int>.Create(Sys, null, deserializer)
-                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.BootstrapServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -181,12 +182,12 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task Committable_consumer_with_failed_downstream_stage_result_should_be_gapless()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var topicPartition = new TopicPartition(topic, 0);
 
             var consumerSettings = ConsumerSettings<Null, string>.Create(Sys, null, null)
-                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.BootstrapServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -255,8 +256,8 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task SupervisionStrategy_Decider_on_complex_stream_should_work()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var topicPartition = new TopicPartition(topic, 0);
             var committedTopicPartition = new TopicPartition($"{topic}-done", 0);
             var callCount = 0;
@@ -353,12 +354,12 @@ namespace Akka.Streams.Kafka.Tests
                 }
             }
 
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             
             var producerSettings = ProducerSettings<Null, string>
                 .Create(Sys, null, new FailingSerializer())
-                .WithBootstrapServers(Fixture.KafkaServer);
+                .WithBootstrapServers(Fixture.BootstrapServer);
             
             // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
             // when the message "5" is encountered.
@@ -393,13 +394,13 @@ namespace Akka.Streams.Kafka.Tests
         [Fact]
         public async Task Overridden_default_decider_on_PlainSink_should_work()
         {
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var decider = new OverridenProducerDecider<Null, string>();
             
             var producerSettings = ProducerSettings<Null, string>
                 .Create(Sys, null, new FailingSerializer())
-                .WithBootstrapServers(Fixture.KafkaServer);
+                .WithBootstrapServers(Fixture.BootstrapServer);
             
             // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
             // when the message "5" is encountered.
@@ -411,7 +412,7 @@ namespace Akka.Streams.Kafka.Tests
                         .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide)), 
                     Materializer);
 
-            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromSeconds(5));
+            await GuardWithTimeoutAsync(sourceTask, TimeSpan.FromMinutes(1));
             
             var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
             var probe = KafkaConsumer
@@ -446,8 +447,8 @@ namespace Akka.Streams.Kafka.Tests
             }
 
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             var sourceTask = ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 
@@ -473,8 +474,8 @@ namespace Akka.Streams.Kafka.Tests
         public async Task Overriden_default_decider_on_PlainSource_should_work()
         {
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             var sourceTask = ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 
@@ -499,8 +500,8 @@ namespace Akka.Streams.Kafka.Tests
         public async Task Default_Decider_on_PlainSource_should_stop_on_internal_error()
         {
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             var sourceTask = ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 
@@ -530,8 +531,8 @@ namespace Akka.Streams.Kafka.Tests
         public async Task PlainSource_should_stop_on_errors()
         {
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             await ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 

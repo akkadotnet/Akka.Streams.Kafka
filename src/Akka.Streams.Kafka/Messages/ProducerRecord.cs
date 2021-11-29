@@ -57,6 +57,16 @@ namespace Akka.Streams.Kafka.Messages
             Message = message;
         }
 
+        public ProducerRecord(string topic, int? partition, long? timestamp, K key, V value)
+            : this(topic, partition, timestamp, new Message<K, V> {Key = key, Value = value})
+        {
+        }
+
+        public ProducerRecord(string topic, int? partition, K key, V value)
+            : this(topic, partition, null, new Message<K, V> {Key = key, Value = value})
+        {
+        }
+
         /// <summary>
         /// ProducerRecord
         /// </summary>

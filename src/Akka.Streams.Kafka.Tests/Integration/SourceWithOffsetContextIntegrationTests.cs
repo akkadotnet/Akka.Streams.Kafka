@@ -6,6 +6,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using FluentAssertions;
 using Xunit;
@@ -23,8 +24,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task SourceWithOffsetContext_at_least_once_consuming_should_work()
         {
-            var topic = CreateTopic(1);
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
+            var topic = CreateTopicName(1);
+            var settings = CreateConsumerSettings<string>(CreateGroupId(1));
             var elementCount = 10;
             var batchSize = 2;
             var messages = Enumerable.Range(1, elementCount).ToList();

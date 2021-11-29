@@ -11,6 +11,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.Kafka.Tests.Logging;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
@@ -35,7 +36,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             return KafkaConsumer
                 .PlainSource(consumerSettings, sub)
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
         }
@@ -44,8 +45,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_topicPartition_assignment()
         {
             int elementsCount = 100;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
@@ -68,8 +69,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             int elementsCount = 100;
             int offset = 50;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
@@ -91,8 +92,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task PlainSource_consumes_messages_from_KafkaProducer_with_subscribe_to_topic()
         {
             int elementsCount = 100;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
@@ -114,8 +115,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainSource_should_fail_stage_if_broker_unavailable()
         {
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
@@ -133,8 +134,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task PlainSource_should_stop_on_deserialization_errors()
         {
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             await ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 
@@ -143,7 +144,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Deciders.StoppingDecider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
@@ -167,8 +168,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
 
             int elementsCount = 10;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
 
             await ProduceStrings(new TopicPartition(topic1, 0), Enumerable.Range(1, elementsCount), ProducerSettings);
 
@@ -177,7 +178,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             probe.Request(elementsCount);
@@ -190,8 +191,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task Custom_partition_event_handling_Should_work()
         {
             int elementsCount = 100;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
