@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,6 +93,7 @@ namespace Akka.Streams.Kafka.Testkit.Fixture
 
         protected override async Task WaitUntilReady(CancellationToken token)
         {
+            /*
             var regex = new Regex("\\[KafkaServer id=[0-9]*\\] started \\(kafka.server.KafkaServer\\)");
             using (var stream = await Client.Containers.GetContainerLogsAsync(ContainerId, new ContainerLogsParameters
             {
@@ -109,7 +112,7 @@ namespace Akka.Streams.Kafka.Testkit.Fixture
                     }
                 }
             }
-            /*
+            */
             var address = IPAddress.Parse("127.0.0.1");
             using (var socket = new TcpClient(AddressFamily.InterNetwork))
             {
@@ -126,7 +129,6 @@ namespace Akka.Streams.Kafka.Testkit.Fixture
                         await Task.Delay(100, token);
                 }
             }
-            */
         }
     }
 }
