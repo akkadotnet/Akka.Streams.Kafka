@@ -6,6 +6,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Util;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -25,8 +26,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task CommittablePartitionedSource_Should_handle_exceptions_in_stream_without_commit_failures()
         {
             var partitionsCount = 3;
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
             var exceptionTriggered = new AtomicBoolean(false);
             var allTopicPartitions = Enumerable.Range(0, partitionsCount).Select(i => new TopicPartition(topic, i)).ToList();
@@ -43,7 +44,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     var (topicPartition, source) = tuple;
                     createdSubSources.TryAdd(topicPartition);
                     return source
-                        .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Value)
+                        .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Message.Value)
                         .SelectAsync(3, async message =>
                         {
                             // fail on first partition; otherwise delay slightly and emit

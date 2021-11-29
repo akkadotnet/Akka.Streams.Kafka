@@ -12,6 +12,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
@@ -32,8 +33,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_should_work()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
             var receivedMessages = new AtomicCounter(0); 
 
@@ -79,8 +80,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_Should_split_messages_by_partitions()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
 
             var consumerSettings = CreateConsumerSettings<string>(group);
@@ -115,8 +116,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_should_stop_partition_sources_when_stopped()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
             
             await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
@@ -127,7 +128,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(message =>
                 {
                     Log.Debug($"Consumed partition {message.Partition.Value}");
-                    return message.Value;
+                    return message.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
@@ -144,9 +145,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
+        public void PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
         {
-            var settings = CreateConsumerSettings<string>(CreateGroup(1))
+            var settings = CreateConsumerSettings<string>(CreateGroupId(1))
                 .WithBootstrapServers("localhost:1111"); // Bad address
 
             var result = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics("topic"))
@@ -158,8 +159,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_should_be_signalled_about_serialization_errors()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             
             await ProduceStrings(topic, new int[] { 0 }, ProducerSettings); // Produce "0" string
 
@@ -193,8 +194,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_is_cancelled()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
 
             await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
@@ -206,10 +207,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     var (topicPartition, source) = tuple;
                     return source
                         .MapMaterializedValue(notUsed => new NoopControl())
-                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Value})")
+                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Message.Value})")
                         .Take(10);
                 })
-                .Select(m => int.Parse(m.Value))
+                .Select(m => int.Parse(m.Message.Value))
                 .Log("Merged stream", m => m)
                 .Scan(0, (c, _) => c + 1)
                 .TakeWhile(m => m < totalMessages, inclusive: true)
@@ -223,8 +224,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedSource_should_not_leave_gaps_when_subsource_failed()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 105;
 
             var producerSettings = BuildProducerSettings<string, string>();
@@ -237,7 +238,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var queue = new ConcurrentQueue<int>();
             
             var consumerSettings = ConsumerSettings<string, string>.Create(Sys, null, null)
-                .WithBootstrapServers(Fixture.KafkaServer)
+                .WithBootstrapServers(Fixture.BootstrapServer)
                 .WithStopTimeout(TimeSpan.FromSeconds(1))
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
@@ -286,7 +287,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var producerConfig = new ProducerConfig
             {
-                BootstrapServers = Fixture.KafkaServer
+                BootstrapServers = Fixture.BootstrapServer
             };
 
             var producer = new ProducerBuilder<string, string>(producerConfig).Build();
@@ -304,7 +305,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var consumerConfig = new ConsumerConfig
             {
-                BootstrapServers = Fixture.KafkaServer,
+                BootstrapServers = Fixture.BootstrapServer,
                 GroupId = group,
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false

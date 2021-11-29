@@ -9,6 +9,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Akka.TestKit;
 using Akka.Util.Internal;
@@ -30,8 +31,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task ExternalPlainSource_with_external_consumer_Should_work()
         {
             var elementsCount = 10;
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             
             //Consumer is represented by actor
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
@@ -64,8 +65,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task ExternalPlainSource_should_be_stopped_on_serialization_error_only_when_requested_messages()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
 
             // Make consumer expect numeric messages
             var settings = CreateConsumerSettings<int>(group).WithValueDeserializer(Deserializers.Int32);
@@ -106,8 +107,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task ExternalPlainSource_verify_consuming_actor_pause_resume_partitions_works_fine()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
 
             // Create consumer actor
             var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));

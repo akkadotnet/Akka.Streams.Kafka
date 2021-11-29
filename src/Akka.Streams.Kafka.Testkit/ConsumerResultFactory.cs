@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
 
-namespace Akka.Streams.Kafka.Tests.TestKit.Internal
+namespace Akka.Streams.Kafka.Testkit
 {
     public static class ConsumerResultFactory
     {

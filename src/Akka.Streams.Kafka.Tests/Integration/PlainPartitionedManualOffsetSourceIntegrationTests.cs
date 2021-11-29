@@ -6,6 +6,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Akka.Streams.Util;
 using Akka.Util;
@@ -26,8 +27,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_from_beginning_of_the_topic()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var totalMessages = 100;
             var consumerSettings = CreateConsumerSettings<string>(group);
 
@@ -41,7 +42,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 getOffsetsOnAssign: _ => Task.FromResult(ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>),
                 onRevoke: _ => { }
                 ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(totalMessages);
@@ -52,8 +53,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_with_offset()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var consumerSettings = CreateConsumerSettings<string>(group);
 
             await ProduceStrings(topic, Enumerable.Range(0, 100), ProducerSettings);
@@ -70,7 +71,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     },
                     onRevoke: _ => { }
                 ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(99);
@@ -83,8 +84,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task PlainPartitionedManualOffsetSource_Should_call_the_OnRevoke_hook()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             var consumerSettings = CreateConsumerSettings<string>(group);
 
             var partitionsAssigned = false;
@@ -104,7 +105,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     revoked = new Option<IImmutableSet<TopicPartition>>(revokedPartitions);
                 })
                 .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value);
+                .Select(m => m.Message.Value);
             
             var (control1, firstConsumer) = source.ToMaterialized(this.SinkProbe<string>(), Keep.Both).Run(Materializer);
             

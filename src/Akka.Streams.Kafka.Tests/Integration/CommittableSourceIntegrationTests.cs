@@ -8,6 +8,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Xunit;
@@ -27,8 +28,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         public async Task CommitableSource_consumes_messages_from_Producer_without_commits()
         {
             int elementsCount = 100;
-            var topic1 = CreateTopic(1);
-            var group1 = CreateGroup(1);
+            var topic1 = CreateTopicName(1);
+            var group1 = CreateGroupId(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
             await GivenInitializedTopic(topicPartition1);
@@ -42,7 +43,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = KafkaConsumer
                 .CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
-                .Select(c => c.Record.Value)
+                .Select(c => c.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
@@ -55,10 +56,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task CommitableSource_resume_from_commited_offset()
         {
-            var topic1 = CreateTopic(1);
+            var topic1 = CreateTopicName(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
-            var group1 = CreateGroup(1);
-            var group2 = CreateGroup(2);
+            var group1 = CreateGroupId(1);
+            var group2 = CreateGroupId(2);
 
             await GivenInitializedTopic(topicPartition1);
 
@@ -74,7 +75,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .SelectAsync(10, async elem =>
                 {
                     await elem.CommitableOffset.Commit();
-                    committedElements.Enqueue(elem.Record.Value);
+                    committedElements.Enqueue(elem.Record.Message.Value);
                     return Done.Instance;
                 })
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
@@ -92,7 +93,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Record.Value)
+                .Select(_ => _.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             // Note that due to buffers and SelectAsync(10) the committed offset is more
@@ -112,7 +113,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             // another consumer should see all
             var probe3 = KafkaConsumer.CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Record.Value)
+                .Select(_ => _.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe3.Request(100);

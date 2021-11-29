@@ -5,6 +5,7 @@ using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
@@ -30,8 +31,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task CommitWithMetadataSource_Commit_metadata_in_message_Should_work()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
             
             string MetadataFromMessage<K, V>(ConsumeResult<K, V> message) => message.Offset.ToString();
 

@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Akka.Streams.Kafka.Testkit\Akka.Streams.Kafka.Testkit.csproj" />
     <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
   </ItemGroup>
 

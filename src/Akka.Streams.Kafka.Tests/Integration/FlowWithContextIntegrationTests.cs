@@ -9,6 +9,7 @@ using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -29,11 +30,11 @@ namespace Akka.Streams.Kafka.Tests.Integration
             bool Duplicate(string value) => value == "1";
             bool Ignore(string value) => value == "2";
 
-            var consumerSettings = CreateConsumerSettings<string, string>(CreateGroup(1));
-            var topic1 = CreateTopic(1);
-            var topic2 = CreateTopic(2);
-            var topic3 = CreateTopic(3);
-            var topic4 = CreateTopic(4);
+            var consumerSettings = CreateConsumerSettings<string, string>(CreateGroupId(1));
+            var topic1 = CreateTopicName(1);
+            var topic2 = CreateTopicName(2);
+            var topic3 = CreateTopicName(3);
+            var topic4 = CreateTopicName(4);
             var producerSettings = BuildProducerSettings<string, string>();
             var committerSettings = CommitterSettings;
             var totalMessages = 10;

@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
@@ -25,9 +26,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact(Skip = "Missing producer transactions support, see https://github.com/akkadotnet/Akka.Streams.Kafka/issues/85")]
         public async Task Transactional_source_with_sink_Should_work()
         {
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
-            var sourceTopic = CreateTopic(1);
-            var targetTopic = CreateTopic(2);
+            var settings = CreateConsumerSettings<string>(CreateGroupId(1));
+            var sourceTopic = CreateTopicName(1);
+            var targetTopic = CreateTopicName(2);
             var transactionalId = Guid.NewGuid().ToString();
             const int totalMessages = 10;
             
@@ -36,7 +37,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(message =>
                 {
                     return ProducerMessage.Single(
-                        new ProducerRecord<Null, string>(targetTopic, message.Record.Key, message.Record.Value),
+                        new ProducerRecord<Null, string>(targetTopic, message.Record.Message.Key, message.Record.Message.Value),
                         passThrough: message.PartitionOffset);
                 })
                 .ToMaterialized(KafkaProducer.TransactionalSink(ProducerSettings, transactionalId), Keep.Both)
@@ -57,7 +58,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
         private DrainingControl<IImmutableList<ConsumeResult<Null, string>>> ConsumeStrings(string topic, int count)
         {
-            return KafkaConsumer.PlainSource(CreateConsumerSettings<string>(CreateGroup(1)), Subscriptions.Topics(topic))
+            return KafkaConsumer.PlainSource(CreateConsumerSettings<string>(CreateGroupId(1)), Subscriptions.Topics(topic))
                 .Take(count)
                 .ToMaterialized(Sink.Seq<ConsumeResult<Null, string>>(), Keep.Both)
                 .MapMaterializedValue(DrainingControl<IImmutableList<ConsumeResult<Null, string>>>.Create)

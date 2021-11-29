@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Testkit.Fixture;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -22,13 +23,13 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact]
         public async Task AtMostOnceSource_Should_stop_consuming_actor_when_used_with_Take()
         {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+            var topic = CreateTopicName(1);
+            var group = CreateGroupId(1);
 
             await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
             
             var (control, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .Take(5)
                 .ToMaterialized(Sink.Seq<string>(), Keep.Both)
                 .Run(Materializer);
@@ -41,8 +42,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
         [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]
         public async Task AtMostOnceSource_Should_work()
         {
-            var topic = CreateTopic(1);
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
+            var topic = CreateTopicName(1);
+            var settings = CreateConsumerSettings<string>(CreateGroupId(1));
             var totalMessages = 10;
             var lastMessage = new TaskCompletionSource<Done>();
             
@@ -51,7 +52,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe) = KafkaConsumer.AtMostOnceSource(settings, Subscriptions.Topics(topic))
                 .SelectAsync(1, m =>
                 {
-                    if (m.Value == totalMessages.ToString())
+                    if (m.Message.Value == totalMessages.ToString())
                         lastMessage.SetResult(Done.Instance);
 
                     return Task.FromResult(Done.Instance);
