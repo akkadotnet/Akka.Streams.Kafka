@@ -9,6 +9,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
+using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.TestKit;
 using Akka.TestKit;
 using Akka.Util.Internal;
@@ -16,14 +17,18 @@ using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
+using Decider = Akka.Streams.Supervision.Decider;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
     public class ExternalPlainSourceIntegrationTests : KafkaIntegrationTests
     {
+        private readonly Decider _defaultDecider;
+        
         public ExternalPlainSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
             : base(nameof(ExternalPlainSourceIntegrationTests), output, fixture)
         {
+            _defaultDecider = new DefaultConsumerDecider(true).Decide;
         }
 
         [Fact]
@@ -34,7 +39,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group = CreateGroup(1);
             
             //Consumer is represented by actor
-            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
+            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group), _defaultDecider));
             
             //Manually assign topic partition to it
             var (control1, probe1) = CreateExternalPlainSourceProbe<string>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
@@ -69,7 +74,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             // Make consumer expect numeric messages
             var settings = CreateConsumerSettings<int>(group).WithValueDeserializer(Deserializers.Int32);
-            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(settings));
+            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(settings, _defaultDecider));
             
             // Subscribe to partitions
             var (control1, probe1) = CreateExternalPlainSourceProbe<int>(consumer, Subscriptions.Assignment(new TopicPartition(topic, 0)));
@@ -110,7 +115,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group = CreateGroup(1);
 
             // Create consumer actor
-            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group)));
+            var consumer = Sys.ActorOf(KafkaConsumerActorMetadata.GetProps(CreateConsumerSettings<string>(group), _defaultDecider));
             
             // Send one message per each partition
             await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 100), ProducerSettings);

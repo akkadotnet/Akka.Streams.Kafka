@@ -37,8 +37,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var totalMessages = 100;
             var receivedMessages = new AtomicCounter(0); 
 
-            var consumerSettings = CreateConsumerSettings<string>(group);
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
+            var consumerSettings = CreateConsumerSettings<string>(group);
             var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .GroupBy(3, tuple => tuple.Item1)
                 .SelectAsync(8, async tuple =>
@@ -64,8 +65,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .MapMaterializedValue(tuple => DrainingControl<long>.Create(tuple.Item1, tuple.Item2))
                 .Run(Materializer);
             
-            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
-
             for (var i = 0; i < totalMessages; ++i)
                 await AwaitConditionAsync(() => receivedMessages.Current > i, TimeSpan.FromSeconds(10));
 
@@ -83,8 +82,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group = CreateGroup(1);
             var totalMessages = 100;
 
-            var consumerSettings = CreateConsumerSettings<string>(group);
+            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
+            var consumerSettings = CreateConsumerSettings<string>(group);
             var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .SelectAsync(6, async tuple =>
                 {
@@ -102,8 +102,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .MapMaterializedValue(tuple => DrainingControl<bool>.Create(tuple.Item1, tuple.Item2))
                 .Run(Materializer);
             
-            await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
-
             // Give it some time to consume all messages
             await Task.Delay(5000);
 
