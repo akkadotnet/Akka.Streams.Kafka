@@ -1,3 +1,64 @@
+#### 1.2.1 January 25 2022 ####
+
+* [Bump Akka.NET to 1.4.32](https://github.com/akkadotnet/akka.net/releases/tag/1.4.32)
+* [Fix Kafka polling method](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/262)
+* [Fix excessively high CPU consumption](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/234)
+
+This is a minor version release that addresses a bug in the underlying `Confluent.Kafka` library. The `Confluent.Kafka.AdminClient` class have a very tight internal update loop that will consume a lot of CPU resource while it is instantiated.  
+
+The update fixed the high idle CPU consumption as shown in these CPU usage benchmark numbers: 
+
+``` ini
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19041.1415 (2004/May2020Update/20H1)
+AMD Ryzen 9 3900X, 1 CPU, 24 logical and 12 physical cores
+.NET SDK=6.0.100
+  [Host]     : .NET Core 3.1.20 (CoreCLR 4.700.21.47003, CoreFX 4.700.21.47101), X64 RyuJIT
+
+Sample duration: 5000 ms  
+```
+
+__Before:__
+
+| CPU Usage Mode |         Mean |    StdErr |    StdDev |       Median |      Maximum |
+|----------------|-------------:|----------:|----------:|-------------:|-------------:|
+| User           | 4,954.688 ms | 12.780 ms | 40.414 ms | 4,968.750 ms | 5,000.000 ms |
+| Kernel         |     9.375 ms |  2.421 ms |  7.655 ms |    15.625 ms |    15.625 ms |
+| Total          | 4,964.062 ms | 13.082 ms | 41.369 ms | 4,984.375 ms | 5,015.625 ms |
+
+__After:__
+
+| CPU Usage Mode |     Mean |   StdErr |   StdDev |   Median |  Maximum |
+|----------------|---------:|---------:|---------:|---------:|---------:|
+| User           | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms |
+| Kernel         | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms |
+| Total          | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms | 0.000 ms |
+
+These changes have no impact on throughput performance of the plugin as seen in these benchmark numbers: 
+
+``` ini
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19041.1415 (2004/May2020Update/20H1)
+AMD Ryzen 9 3900X, 1 CPU, 24 logical and 12 physical cores
+.NET SDK=6.0.100
+  [Host]     : .NET Core 3.1.20 (CoreCLR 4.700.21.47003, CoreFX 4.700.21.47101), X64 RyuJIT
+
+InvocationCount=2000  IterationCount=80  MinWarmupIterationCount=5  
+UnrollFactor=1  
+```
+
+__Before:__
+
+|                Method |     Mean |    Error |   StdDev |   Median |
+|---------------------- |---------:|---------:|---------:|---------:|
+|   PlainSinkThroughput | 128.9 μs | 12.04 μs | 31.30 μs | 112.5 μs |
+| KafkaClientThroughput | 120.7 μs | 17.21 μs | 45.03 μs | 111.0 μs |
+
+__After:__
+
+|                Method |     Mean |    Error |   StdDev |   Median |
+|---------------------- |---------:|---------:|---------:|---------:|
+|   PlainSinkThroughput | 123.3 μs |  6.30 μs | 14.36 μs | 129.4 μs |
+| KafkaClientThroughput | 117.5 μs | 18.61 μs | 48.70 μs | 110.0 μs |
+
 #### 1.2.0 November 17 2021 ####
 * [Bump Akka.NET to 1.4.28](https://github.com/akkadotnet/akka.net/releases/tag/1.4.28)
 * [Bump Confluent.Kafka to 1.8.2](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/234)
