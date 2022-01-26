@@ -4,8 +4,10 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Akka.Configuration;
+using Akka.Event;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
@@ -112,7 +114,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainSource_should_fail_stage_if_broker_unavailable()
+        public async Task PlainSource_should_resume_stage_if_broker_unavailable()
         {
             var topic1 = CreateTopic(1);
             var group1 = CreateGroup(1);
@@ -124,9 +126,20 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithBootstrapServers("localhost:10092")
                 .WithGroupId(group1);
 
+            var regex = new Regex("\\[localhost:10092\\/bootstrap: Connect to [a-zA-Z0-9#:.*]* failed:");
+            var logProbe = CreateTestProbe();
+            Sys.EventStream.Subscribe<Info>(logProbe.Ref);
+            
             var (control, probe) = CreateProbe(config, Subscriptions.Assignment(topicPartition1));
             probe.Request(1);
-            AwaitCondition(() => control.IsShutdown.IsCompleted, TimeSpan.FromSeconds(10));
+            
+            AwaitAssert(() =>
+            {
+                var info = logProbe.ExpectMsg<Info>();
+                regex.IsMatch(info.Message.ToString() ?? "").Should().BeTrue();
+                info.Message.ToString().Should().Contain("[Resume]");
+            });
+            //AwaitCondition(() => control.IsShutdown.IsCompleted, TimeSpan.FromSeconds(10));
         }
 
         [Fact]
@@ -146,14 +159,15 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(c => c.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
-            var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
-            error.Should().BeOfType<TestSubscriber.OnError>();
-            ((TestSubscriber.OnError)error).Cause.Should().BeOfType<ConsumeException>();
+            var @event = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
+            var error = (TestSubscriber.OnError) @event;
+            var exception = (ConsumeException) error.Cause;
+            exception.Error.Code.Should().Be(ErrorCode.Local_ValueDeserialization);
             probe.Cancel();
         }
 
         [Fact]
-        public async Task PlainSource_should_resume_on_deserialization_errors()
+        public async Task PlainSource_with_directive_override_should_resume_on_deserialization_errors()
         {
             var callCount = 0;
             Directive Decider(Exception cause)
@@ -182,7 +196,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             probe.Request(elementsCount);
             probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
-            callCount.Should().Be(elementsCount);
+            // this is twice elementCount because Decider is called twice on each exceptions
+            callCount.Should().Be(elementsCount * 2);
             probe.Cancel();
         }
 

@@ -36,6 +36,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var createdSubSources = new ConcurrentSet<TopicPartition>();
             var commitFailures = new ConcurrentSet<(TopicPartition, Exception)>();
             
+            await ProduceStrings(i => new TopicPartition(topic, i % partitionsCount), Enumerable.Range(1, totalMessages), ProducerSettings);
+            
             var control = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .GroupBy(partitionsCount, tuple => tuple.Item1)
                 .SelectAsync(6, tuple =>
@@ -89,8 +91,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .ToMaterialized(Sink.Last<int>(), Keep.Both)
                 .MapMaterializedValue(tuple => DrainingControl<int>.Create(tuple.Item1, tuple.Item2))
                 .Run(Materializer);
-            
-            await ProduceStrings(i => new TopicPartition(topic, i % partitionsCount), Enumerable.Range(1, totalMessages), ProducerSettings);
             
             AwaitCondition(() => exceptionTriggered.Value, TimeSpan.FromSeconds(10));
 

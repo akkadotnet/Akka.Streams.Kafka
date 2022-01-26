@@ -15,6 +15,8 @@ using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using Newtonsoft.Json;
+using Decider = Akka.Streams.Supervision.Decider;
+using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 {
@@ -69,12 +71,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing;
         private IConsumer<K, V> _consumer;
-        private IAdminClient _adminClient;
         private IActorRef _connectionCheckerActor;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
         private bool _delayedPoolInFlight = false;
         private IImmutableSet<TopicPartition> _resumedPartitions = ImmutableHashSet<TopicPartition>.Empty;
+        private readonly Decider _decider;
 
         /// <summary>
         /// While `true`, committing is delayed.
@@ -96,11 +98,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
         /// <param name="statisticsHandler">Statistics handler</param>
+        /// <param name="decider"></param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
+        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;
             _settings = settings;
+            _decider = decider;
             _statisticsHandler = statisticsHandler;
             _partitionEventHandler = partitionEventHandler;
             
@@ -290,6 +294,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     PartitionsRevokedHandler(evt.Partitions);
                     return true;
                 
+                case Status.Failure fail:
+                    ProcessExceptions(fail.Cause);
+                    return true;
+                
                 default:
                     return false;
             }
@@ -323,19 +331,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 var localSelf = Self;
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) =>
-                    {
-                        var exception = new KafkaException(e);
-                        ProcessError(exception);
-                        _pollCancellation?.Cancel();
-                        _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.ToString());
-                        Context.Stop(Self);
-                    },
+                    consumeErrorHandler: (c, e) => localSelf.Tell(new Status.Failure(new KafkaException(e))),
                     partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
                     partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
-
-                _adminClient = _consumer.Handle != null ? new DependentAdminClientBuilder(_consumer.Handle).Build() : null;
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
@@ -380,7 +379,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try { _consumer.Close(); }
                 catch (Exception) { /* no-op */ }
 
-                _adminClient?.Dispose();
                 _consumer.Dispose();
             }
         }
@@ -410,7 +408,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 case Metadata.ListTopics _:
                     return new Metadata.Topics(Try<List<TopicMetadata>>
-                        .From(() => _adminClient.GetMetadata(_settings.MetadataRequestTimeout).Topics));
+                        .From(() =>
+                        {
+                            using (var adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build())
+                            {
+                                return adminClient.GetMetadata(_settings.MetadataRequestTimeout).Topics;
+                            }
+                        }));
                 default:
                     throw new InvalidOperationException($"Unknown metadata request: {req}");
             }
@@ -475,67 +479,57 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var currentAssignment = _consumer.Assignment;
             var initialRebalanceInProcess = _rebalanceInProgress;
 
-            try
+            if (_requests.IsEmpty())
             {
-                if (_requests.IsEmpty())
+                if(_log.IsDebugEnabled)
+                    _log.Debug("Requests are empty - attempting to consume.");
+                PausePartitions(currentAssignment);
+                try
                 {
-                    if(_log.IsDebugEnabled)
-                        _log.Debug("Requests are empty - attempting to consume.");
-                    PausePartitions(currentAssignment);
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
                         throw new IllegalActorStateException("Consumed message should be null");
                 }
-                else
+                catch (Exception e)
                 {
-                    // Seek has to be done here because they can somehow fail.
-                    // Would need to see if we can move this somewhere else
-                    // because a seek can take up to 200ms to complete
-                    foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
-                    {
-                        try
-                        {
-                            if(_log.IsDebugEnabled)
-                                _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
-                            _consumer.Seek(tpo);
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
-                            throw;
-                        }
-                    }
-                    
-                    // resume partitions to fetch
-                    IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
-                    var pauseThese = currentAssignment.Except(resumeThese).ToList();
-                    PausePartitions(pauseThese);
-                    ResumePartitions(resumeThese);
-
-                    using (var cts = new CancellationTokenSource(_settings.PollTimeout))
-                    {
-                        ProcessResult(partitionsToFetch, PollKafka(cts.Token));
-                    }
+                    ProcessExceptions(e);
                 }
             }
-            // Workaroud for https://github.com/confluentinc/confluent-kafka-dotnet/issues/1366
-            catch (ConsumeException ex) when (ex.Message.Contains("Broker: Unknown topic or partition") && _settings.AutoCreateTopicsEnabled)
+            else
             {
-                // Trying to consume from not existing topics/partitions - assume that there are not messages to consume
+                // Seek has to be done here because they can somehow fail.
+                // Would need to see if we can move this somewhere else
+                // because a seek can take up to 200ms to complete
+                foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
+                {
+                    try
+                    {
+                        if(_log.IsDebugEnabled)
+                            _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
+                        _consumer.Seek(tpo);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
+                        throw;
+                    }
+                }
+                
+                // resume partitions to fetch
+                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
+                var pauseThese = currentAssignment.Except(resumeThese).ToList();
+                PausePartitions(pauseThese);
+                ResumePartitions(resumeThese);
+
+                using (var cts = new CancellationTokenSource(_settings.PollTimeout))
+                {
+                    var (polled, exception) = PollKafka(cts.Token);
+                    ProcessResult(partitionsToFetch, polled);
+                    ProcessExceptions(exception);
+                }
             }
-            catch (ConsumeException ex) when (ex.Error.IsSerializationError())
-            {
-                ProcessError(ex);
-            }
-            catch (Exception ex)
-            {
-                ProcessError(ex);
-                _pollCancellation?.Cancel();
-                _log.Error(ex, "Exception when polling from consumer, stopping actor: {0}", ex.ToString());
-                Context.Stop(Self);
-            }
-             
+            
             CheckRebalanceState(initialRebalanceInProcess);
 
             if (_stopInProgress)
@@ -545,22 +539,45 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private List<ConsumeResult<K, V>> PollKafka(CancellationToken token)
+        private void ProcessExceptions(Exception exception)
+        {
+            if (exception == null)
+                return;
+
+            var directive = _decider(exception);
+            ProcessError(exception);
+            if (directive == Directive.Resume)
+                return;
+            
+            _pollCancellation?.Cancel();
+            if(directive == Directive.Stop && _log.IsErrorEnabled)
+                _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.Message);
+            Context.Stop(Self);
+        }
+
+        private (List<ConsumeResult<K, V>>, Exception) PollKafka(CancellationToken token)
         {
             ConsumeResult<K, V> consumed = null;
             var i = 10; // 10 poll attempts
             var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
-            var pooled = new List<ConsumeResult<K, V>>();
+            var polled = new List<ConsumeResult<K, V>>();
             do
             {
-                // this would return immediately if there are messages waiting inside the client queue buffer
-                consumed = _consumer.Consume(timeout);
+                try
+                {
+                    // this would return immediately if there are messages waiting inside the client queue buffer
+                    consumed = _consumer.Consume(timeout);
+                }
+                catch (Exception e)
+                {
+                    return (polled, e);
+                }
                 if (consumed != null)
-                    pooled.Add(consumed);
+                    polled.Add(consumed);
                 i--;
-            } while (i > 0 && !token.IsCancellationRequested);
+            } while (i > 0 && consumed != null && !token.IsCancellationRequested);
 
-            return pooled;
+            return (polled, null);
         }
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)

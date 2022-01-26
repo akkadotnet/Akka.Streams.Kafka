@@ -151,8 +151,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 : new StatisticsHandlers.Empty();
 
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            ConsumerActor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, eventHandler, statisticsHandler),
-                                                              $"kafka-consumer-{_actorNumber}");
+            ConsumerActor = extendedActorSystem.SystemActorOf(
+                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, _decider, eventHandler, statisticsHandler), 
+                $"kafka-consumer-{_actorNumber}");
 
             SourceActor.Watch(ConsumerActor);
 
