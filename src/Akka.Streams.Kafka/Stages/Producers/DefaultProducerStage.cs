@@ -197,7 +197,7 @@ namespace Akka.Streams.Kafka.Stages
 
         private void OnProduceFailure(Exception ex)
         {
-            var cause = ex is KafkaException ke ? ke.Error.Reason : ex.Message; 
+            var cause = ex.GetCause();
             var directive = _decider(ex);
             switch (directive)
             {

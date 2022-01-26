@@ -5,6 +5,7 @@ using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
+using Decider = Akka.Streams.Supervision.Decider;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 {
@@ -25,20 +26,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Gets actor props
         /// </summary>
-        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, new PartitionEventHandlers.Empty(), new StatisticsHandlers.Empty())).WithDispatcher(settings.DispatcherId);
+        public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, Decider decider) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, decider, new PartitionEventHandlers.Empty(), new StatisticsHandlers.Empty())).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
+        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, decider, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
         
         /// <summary>
         /// Gets actor props
         /// </summary>
-        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
+        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, decider, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
 
 
         /// <summary>

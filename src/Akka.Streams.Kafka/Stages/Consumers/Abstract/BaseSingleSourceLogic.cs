@@ -32,7 +32,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
-        private readonly Decider _decider;
+        protected Decider Decider { get; }
 
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
@@ -57,8 +57,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
             
             // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
-            var supervisionStrategy = attributes.GetAttribute(new ActorAttributes.SupervisionStrategy(new DefaultConsumerDecider(autoCreateTopics).Decide));
-            _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
+            Decider = supervisionStrategy.Decider;
             
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
@@ -112,10 +112,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         protected virtual void MessageHandling((IActorRef, object) args)
         {
-            switch (args.Item2)
+            var (sender, message) = args;
+            switch (message)
             {
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
-                    Log.Debug("Received messages");
+                    if(Log.IsDebugEnabled)
+                        Log.Debug("Received {0} messages from {1}", msg.MessagesList.Count, sender);
+                    
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
                         _requested = false;
@@ -128,39 +131,37 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    var cause = exception is KafkaException ke ? ke.Error.Reason : exception.Message; 
-                    var directive = _decider(exception); 
-                    if (directive == Directive.Stop)
+                    var cause = exception.GetCause(); 
+                    switch (Decider(exception))
                     {
-                        if(Log.IsErrorEnabled)
-                            Log.Error(exception, "Source stage failed with exception: [{0}]. Decider directive: {1}", cause, directive);
-                        FailStage(failure.Cause);
-                        break;
-                    }
-
-                    if(Log.IsInfoEnabled)
-                        Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, directive);
-                    
-                    var isSerializationError = exception is ConsumeException cEx && cEx.Error.IsSerializationError();
-                    if (isSerializationError)
-                    {
-                        if (directive == Directive.Resume)
+                        case Directive.Stop:
+                            if(Log.IsErrorEnabled)
+                                Log.Error(exception, "Source stage failed with exception: [{0}]. Supervision directive: [{1}]", cause, nameof(Directive.Stop));
+                            FailStage(failure.Cause);
                             break;
-                        
-                        // ConsumerActor is still alive, we need to kill it.
-                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
+                        case Directive.Resume:
+                            if(Log.IsInfoEnabled)
+                                Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, nameof(Directive.Resume));
+                            break;
+                        case Directive.Restart:
+                            if(Log.IsInfoEnabled)
+                                Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, nameof(Directive.Restart));
+                            // Empty the buffer to make sure that messages does not get duplicated
+                            while (_buffer.TryDequeue(out _))
+                            { }
+                    
+                            // ConsumerActor are designed to suicide itself on Directive.Stop or Directive.Restart
+                            // to prevent any offset runaway. We will need to restart it.
+                            SourceActor.Unwatch(ConsumerActor);
+                            ConsumerActor = CreateConsumerActor();
+                            SourceActor.Watch(ConsumerActor);
+                            ConfigureSubscription();
+                            _requested = false;
+                            Pump();
+                            break;
+                        case var unknown:
+                            throw new IndexOutOfRangeException($"Unknown Supervision.Directive: [{unknown}]");
                     }
-                    
-                    // Empty the buffer to make sure that messages does not get duplicated
-                    while (_buffer.TryDequeue(out _))
-                    { }
-                    
-                    // ConsumerActor are designed to suicide itself on any error except for de/serialization error
-                    // to prevent any offset/commit runaway. We will need to restart it.
-                    SourceActor.Unwatch(ConsumerActor);
-                    ConsumerActor = CreateConsumerActor();
-                    SourceActor.Watch(ConsumerActor);
-                    ConfigureSubscription();
                     break;
                 
                 case Terminated terminated:

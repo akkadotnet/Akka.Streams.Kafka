@@ -38,10 +38,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             StageName = stageName;
             Shape = new SourceShape<TMessage>(Out);
+            InitialAttributes = Attributes.CreateName(StageName)
+                .And(ActorAttributes.CreateSupervisionStrategy(new DefaultConsumerDecider(true).Decide));
         }
 
         /// <inheritdoc />
-        protected override Attributes InitialAttributes => Attributes.CreateName(StageName);
+        protected override Attributes InitialAttributes { get; }
         
         /// <summary>
         /// Provides actual stage logic
