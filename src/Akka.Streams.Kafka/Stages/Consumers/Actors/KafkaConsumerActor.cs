@@ -71,7 +71,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing;
         private IConsumer<K, V> _consumer;
-        private IAdminClient _adminClient;
         private IActorRef _connectionCheckerActor;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
@@ -337,8 +336,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
-                _adminClient = _consumer.Handle != null ? new DependentAdminClientBuilder(_consumer.Handle).Build() : null;
-
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
                     _connectionCheckerActor = Context.ActorOf(ConnectionChecker.Props(_settings.ConnectionCheckerSettings));
@@ -382,7 +379,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try { _consumer.Close(); }
                 catch (Exception) { /* no-op */ }
 
-                _adminClient?.Dispose();
                 _consumer.Dispose();
             }
         }
@@ -412,7 +408,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 case Metadata.ListTopics _:
                     return new Metadata.Topics(Try<List<TopicMetadata>>
-                        .From(() => _adminClient.GetMetadata(_settings.MetadataRequestTimeout).Topics));
+                        .From(() =>
+                        {
+                            using (var adminClient = new DependentAdminClientBuilder(_consumer.Handle).Build())
+                            {
+                                return adminClient.GetMetadata(_settings.MetadataRequestTimeout).Topics;
+                            }
+                        }));
                 default:
                     throw new InvalidOperationException($"Unknown metadata request: {req}");
             }
