@@ -1,4 +1,5 @@
-﻿using Akka.Configuration;
+﻿using System;
+using Akka.Configuration;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 using FluentAssertions;
@@ -86,6 +87,63 @@ akka.kafka.producer.kafka-clients {{
             settings.GetProperty("client.id").Should().Be("client1");
             settings.GetProperty("enable.idempotence").Should().Be("True");
         }
-        
+
+        [Fact]
+        public void Missing_ConnectionChecker_config_must_return_Disabled()
+        {
+            var conf = ConfigurationFactory.ParseString(@"
+{ 
+  kafka-clients : {
+    enable.auto.commit : false
+  }
+
+  akka : {
+    kafka : {
+      consumer : {
+        poll-interval : 50ms
+        poll-timeout : 50ms
+        stop-timeout : 30s
+        commit-timeout : 15s
+        commit-time-warning : 1s
+        commit-refresh-interval : infinite
+        buffer-size : 128
+        use-dispatcher : akka.kafka.default-dispatcher
+        kafka-clients : {
+          enable : {
+            auto : {
+              commit : false
+            }
+          }
+          bootstrap : {
+            servers : ""localhost:9092""
+          }
+          client : {
+            id : client-1
+          }
+          group : {
+            id : group-1
+          }
+        }
+        wait-close-partition : 500ms
+        position-timeout : 5s
+        offset-for-times-timeout : 5s
+        metadata-request-timeout : 5s
+        eos-draining-check-interval : 30ms
+        partition-handler-warning : 5s
+      }
+    }
+  }
+}");
+            var consumerSettings = ConsumerSettings<Null, string>
+                .Create(conf, null, Deserializers.Utf8)
+                .WithBootstrapServers("localhost:9092")
+                .WithDispatcher("")
+                .WithGroupId("group1");
+
+            consumerSettings.ConnectionCheckerSettings.Enabled.Should().Be(false);
+            consumerSettings.ConnectionCheckerSettings.MaxRetries.Should().Be(3);
+            consumerSettings.ConnectionCheckerSettings.CheckInterval.Should().Be(TimeSpan.FromSeconds(15));
+            consumerSettings.ConnectionCheckerSettings.Factor.Should().Be(2.0);
+        }
     }
 }
