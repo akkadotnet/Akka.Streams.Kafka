@@ -15,13 +15,18 @@ namespace Akka.Streams.Kafka.Settings
             => new ConnectionCheckerSettings(true, maxRetries, checkInterval, factor);
 
         public static ConnectionCheckerSettings Create(Config config)
-            => config.GetBoolean("enabled", false)
+        {
+            if (config == default)
+                return Disabled;
+
+            return config.GetBoolean("enabled", false)
                 ? Create(
                     config.GetInt("max-retries", 3),
                     config.GetTimeSpan("check-interval", TimeSpan.FromSeconds(15)),
                     config.GetDouble("backoff-factor", 2.0)
                 )
                 : Disabled;
+        }
 
         public bool Enabled { get; }
         public int MaxRetries { get; }
