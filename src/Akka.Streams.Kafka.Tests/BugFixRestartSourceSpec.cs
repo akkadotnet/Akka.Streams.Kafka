@@ -29,6 +29,7 @@ namespace Akka.Streams.Kafka.Tests
         {
         }
 
+        // Note that this is NOT a spec, this is meant to hammer CommittablePartitionedSource and find possible bugs  
         [Fact]
         public async Task KafkaSourceShouldNotLeakActorsWhenRestartedUsingRestartSource()
         {
