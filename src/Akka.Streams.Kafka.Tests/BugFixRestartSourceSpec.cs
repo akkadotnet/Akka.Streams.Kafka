@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
@@ -9,6 +10,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.TestKit;
 using Akka.TestKit;
 using Akka.Util;
 using Akka.Util.Internal;
@@ -30,7 +32,7 @@ namespace Akka.Streams.Kafka.Tests
         }
 
         // Note that this is NOT a spec, this is meant to hammer CommittablePartitionedSource and find possible bugs  
-        [Fact]
+        [Fact(Skip = "Could not assert this while the underlying stream is suppressing failures")]
         public async Task KafkaSourceShouldNotLeakActorsWhenRestartedUsingRestartSource()
         {
             var topic = CreateTopic(1);
@@ -70,13 +72,13 @@ namespace Akka.Streams.Kafka.Tests
             var consumerSettings = CreateConsumerSettings<string>(group).WithStopTimeout(TimeSpan.FromSeconds(2));
             var committerSettings = CommitterSettings.Create(Sys);
             var restartSettings = RestartSettings.Create(
-                minBackoff: TimeSpan.FromSeconds(0.5),
-                maxBackoff: TimeSpan.FromSeconds(2),
+                minBackoff: TimeSpan.FromSeconds(1),
+                maxBackoff: TimeSpan.FromSeconds(3),
                 randomFactor: 0.02
             ).WithMaxRestarts(20, TimeSpan.FromMinutes(5));
 
             // Start Kafka partitioned source wrapped inside a RestartSource
-            var completed = new AtomicCounterLong(0);
+            var completed = new AtomicCounter(0);
             var failCounter = new AtomicCounter();
             var source = RestartSource.OnFailuresWithBackoff(() =>
             {
@@ -147,6 +149,100 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
 
+        [Fact]
+        public async Task KafkaSourceShouldNotLeakActorsWhenStageFailedWithAnException()
+        {
+            var topic = CreateTopic(1);
+            var group = CreateGroup(1);
+
+            await GivenInitializedTopic(topic);
+            await ProduceStrings(
+                i => new TopicPartition(topic, i % KafkaFixture.KafkaPartitions), 
+                Enumerable.Range(1, 600),
+                ProducerSettings);
+
+            var consumerSettings = CreateConsumerSettings<string>(group).WithStopTimeout(TimeSpan.FromSeconds(2));
+            var committerSettings = CommitterSettings.Create(Sys);
+
+            // Start Kafka partitioned source wrapped inside a RestartSource
+            var completed = new AtomicCounterLong(0);
+            var failCounter = new AtomicCounter();
+            var failCount = new AtomicCounter(0);
+            var source = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+                .GroupBy(KafkaFixture.KafkaPartitions, tuple => tuple.Item1)
+                .SelectAsync(3, async tuple =>
+                {
+                    var (topicPartition, source) = tuple;
+
+                    var sourceMessages = await source
+                        .WithAttributes(new Attributes(new Attributes.LogLevels(LogLevel.InfoLevel, LogLevel.InfoLevel, LogLevel.ErrorLevel)))
+                        .Log($"{topicPartition}: Sub-source started")
+                        .Select(message =>
+                        {
+                            // Fail at message 50
+                            var fail = failCounter.IncrementAndGet();
+                            if(fail % 50 == 0)
+                            {
+                                failCount.IncrementAndGet();
+                                throw new Exception("BOOM!");
+                            }
+                            
+                            completed.IncrementAndGet();
+                            return message;
+                        })
+                        .SelectAsync(5, async message =>
+                        {
+                            try
+                            {
+                                await message.CommitableOffset.Commit();
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error(ex, "Commit failure");
+                            }
+
+                            return message;
+                        })
+                        .Scan(0, (c, _) => c + 1)
+                        .RunWith(Sink.Last<int>(), Materializer);
+                    
+                    Log.Info($"{topicPartition}: Sub-source completed");
+
+                    return sourceMessages;
+                })
+                .MergeSubstreams()
+                .AsInstanceOf<Source<int, IControl>>();
+
+            var (control, last) = source.ToMaterialized(Sink.Last<int>(), Keep.Both)
+                .Run(Materializer);
+
+            await AwaitConditionAsync(() => failCount.Current > 0, TimeSpan.FromSeconds(10));
+            Log.Info($"Stream should be dead at this point. Fail count: [{failCount.Current}]");
+            
+            Sys.ActorSelection("/system").Tell(new Identify(0), TestActor);
+            var systemRef = (ActorRefWithCell) ExpectMsg<ActorIdentity>().Subject;
+
+            var lastFail = 1;
+            await AwaitAssertAsync(() =>
+            {
+                var fail = failCount.Current;
+                if(fail != lastFail)
+                {
+                    Log.Info($"Fail count: {fail}");
+                    lastFail = fail;
+                }
+                
+                var found = 0;
+                var cell = systemRef.Underlying;
+                foreach (var child in cell.ChildrenContainer.Children)
+                {
+                    if (child.Path.ToString().Contains("kafka-consumer"))
+                        found++;
+                }
+                found.Should().Be(0);
+            }, TimeSpan.FromSeconds(30));
+        }
+        
         private int _lastMsg = 1;
         private async Task ProduceContinually(string topic, int minMsg, int maxMsg, TimeSpan delay)
         {
