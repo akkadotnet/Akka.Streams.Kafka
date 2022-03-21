@@ -18,7 +18,8 @@ namespace Kafka.Partitioned.Consumer.Actors
         private readonly ILoggingAdapter _log;
         private readonly ConsumerSettings<TKey, TValue> _settings;
         private readonly ISubscription _subscription;
-        private DrainingControl<NotUsed>? _control;
+        private DrainingControl<NotUsed> _control;
+        private readonly Random _rnd = new Random();
         
         public ConsumerWorkerActor(ConsumerSettings<TKey, TValue> settings, ISubscription subscription)
         {
@@ -28,6 +29,9 @@ namespace Kafka.Partitioned.Consumer.Actors
 
             Receive<CommittableMessage<TKey, TValue>>(msg =>
             {
+                if (_rnd.Next(0, 100) == 0)
+                    throw new Exception("BOOM!");
+                
                 var record = msg.Record;
                 _log.Info($"{record.Topic}[{record.Partition}][{record.Offset}]: {record.Message.Value}");
                 Sender.Tell(msg.CommitableOffset);

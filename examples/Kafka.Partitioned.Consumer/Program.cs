@@ -20,7 +20,8 @@ namespace Kafka.Partitioned.Consumer
             var system = ActorSystem.Create("TestKafka", config);
             var consumerSettings = ConsumerSettings<string, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092")
-                .WithGroupId("group1");
+                .WithGroupId("group1")
+                .WithProperty("session.timeout.ms", "6000");
             var subscription = Subscriptions.Topics("akka100");
             system.ActorOf(KafkaConsumerSupervisor<string, string>.Props(consumerSettings, subscription, 3), "kafka");
 
