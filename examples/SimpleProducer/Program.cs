@@ -27,21 +27,23 @@ namespace SimpleProducer
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
 
-            var producerSettings = ProducerSettings<Null, string>.Create(system, null, null)
+            var producerSettings = ProducerSettings<string, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092");
             
             Source
-                .Cycle(() => Enumerable.Range(1, 100).GetEnumerator())
+                .Cycle(() => Enumerable.Range(1, 1000).GetEnumerator())
+                .Throttle(1, TimeSpan.FromMilliseconds(200), 1, ThrottleMode.Shaping)
                 .Select(c => c.ToString())
-                .Select(elem => ProducerMessage.Single(new ProducerRecord<Null, string>("akka100", elem)))
-                .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(producerSettings))
+                .Select(elem => ProducerMessage.Single(new ProducerRecord<string, string>("akka100", $"key-{elem}", elem)))
+                .Via(KafkaProducer.FlexiFlow<string, string, NotUsed>(producerSettings))
                 .Select(result =>
                 {
-                    var response = result as Result<Null, string, NotUsed>;
-                    Console.WriteLine($"Producer: {response.Metadata.Topic}/{response.Metadata.Partition} {response.Metadata.Offset}: {response.Metadata.Value}");
+                    var response = (Result<string, string, NotUsed>)result;
+                    var meta = response.Metadata;
+                    Console.WriteLine($"Producer: {meta.Topic}/{meta.Partition} {meta.Offset}: {meta.Value}");
                     return result;
                 })
-                .RunWith(Sink.Ignore<IResults<Null, string, NotUsed>>(), materializer);
+                .RunWith(Sink.Ignore<IResults<string, string, NotUsed>>(), materializer);
 
             // TODO: producer as a Commitable Sink
 
