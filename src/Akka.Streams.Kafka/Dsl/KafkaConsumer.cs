@@ -98,7 +98,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
         /// </summary>
         [ApiMayChange]
-        public static SourceWithContext<ICommittableOffset, ConsumeResult<K, V>, IControl> SourceWithOffsetContext<K, V>(
+        public static SourceWithContext<ConsumeResult<K, V>, ICommittableOffset, IControl> SourceWithOffsetContext<K, V>(
             ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
         {
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))

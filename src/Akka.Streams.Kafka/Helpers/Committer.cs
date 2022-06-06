@@ -41,7 +41,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// but keeps the committed <see cref="ICommittableOffsetBatch"/> as context
         /// </summary>
         [ApiMayChange]
-        public static FlowWithContext<ICommittableOffset, E, ICommittableOffsetBatch, NotUsed, NotUsed> FlowWithOffsetContext<E>(CommitterSettings settings)
+        public static FlowWithContext<E, ICommittableOffset, NotUsed, ICommittableOffsetBatch, NotUsed> FlowWithOffsetContext<E>(CommitterSettings settings)
         {
             var value = Akka.Streams.Dsl.Flow.Create<(E, ICommittableOffset)>()
                 .Select(m => m.Item2 as ICommittable)
