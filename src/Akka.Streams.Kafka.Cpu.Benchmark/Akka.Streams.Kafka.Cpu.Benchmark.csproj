@@ -8,7 +8,7 @@
     <ItemGroup>
         <PackageReference Include="Docker.DotNet" Version="3.125.10" />
         <PackageReference Include="NDesk.Options.Core" Version="1.2.5" />
-        <PackageReference Include="Tmds.ExecFunction" Version="0.5.0" />
+        <PackageReference Include="Tmds.ExecFunction" Version="0.6.0" />
         <PackageReference Include="Universe.CpuUsage" Version="2.2.497.598" />
     </ItemGroup>
 
