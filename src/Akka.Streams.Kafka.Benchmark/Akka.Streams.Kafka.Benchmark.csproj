@@ -7,8 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
-        <PackageReference Include="Docker.DotNet" Version="3.125.5" />
+      <PackageReference Include="BenchmarkDotNet" Version="0.13.2" />
+        <PackageReference Include="Docker.DotNet" Version="3.125.12" />
     </ItemGroup>
 
     <ItemGroup>

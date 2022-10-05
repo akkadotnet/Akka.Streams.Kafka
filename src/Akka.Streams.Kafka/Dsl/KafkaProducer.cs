@@ -165,9 +165,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// <typeparam name="V">Values type</typeparam>
         /// <typeparam name="C">Flow context type</typeparam>
         [ApiMayChange]
-        public static FlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings)
+        public static FlowWithContext<IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, C, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings)
         {
-            return FlexiFlow<K, V, C>(settings).AsFlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed, IEnvelope<K, V, C>>(
+            return FlexiFlow<K, V, C>(settings).AsFlowWithContext<IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, C, NotUsed, IEnvelope<K, V, C>>(
                 collapseContext: (env, c) => env.WithPassThrough(c), 
                 extractContext: res => res.PassThrough);
         }
@@ -203,9 +203,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// <typeparam name="V">Values type</typeparam>
         /// <typeparam name="C">Flow context type</typeparam>
         [ApiMayChange]
-        public static FlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings, IProducer<K, V> producer)
+        public static FlowWithContext<IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, C, NotUsed> FlowWithContext<K, V, C>(ProducerSettings<K, V> settings, IProducer<K, V> producer)
         {
-            return FlexiFlow<K, V, C>(settings, producer).AsFlowWithContext<C, IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, NotUsed, IEnvelope<K, V, C>>(
+            return FlexiFlow<K, V, C>(settings, producer).AsFlowWithContext<IEnvelope<K, V, NotUsed>, C, IResults<K, V, C>, C, NotUsed, IEnvelope<K, V, C>>(
                 collapseContext: (env, c) => env.WithPassThrough(c), 
                 extractContext: res => res.PassThrough);
         }

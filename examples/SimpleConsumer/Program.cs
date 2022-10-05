@@ -22,7 +22,7 @@ namespace SimpleConsumer
             var system = ActorSystem.Create("TestKafka", fallbackConfig);
             var materializer = system.Materializer();
 
-            var consumerSettings = ConsumerSettings<Null, string>.Create(system, null, null)
+            var consumerSettings = ConsumerSettings<string, string>.Create(system, null, null)
                 .WithBootstrapServers("localhost:29092")
                 .WithGroupId("group1");
 
@@ -31,7 +31,7 @@ namespace SimpleConsumer
             KafkaConsumer.PlainSource(consumerSettings, subscription)
                 .RunForeach(result =>
                 {
-                    Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Value}");
+                    Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Message.Value}");
                 }, materializer);
 
 
