@@ -525,7 +525,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 using (var cts = new CancellationTokenSource(_settings.PollTimeout))
                 {
                     var (polled, exception) = PollKafka(cts.Token);
-                    ProcessResult(partitionsToFetch, polled);
+                    try
+                    {
+                        ProcessResult(partitionsToFetch, polled);
+                    }
+                    catch (Exception e)
+                    {
+                        exception = e;
+                    }
+
                     ProcessExceptions(exception);
                 }
             }
