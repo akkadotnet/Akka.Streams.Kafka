@@ -531,7 +531,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     }
                     catch (Exception e)
                     {
-                        exception = e;
+                        ProcessExceptions(e);
                     }
 
                     ProcessExceptions(exception);
