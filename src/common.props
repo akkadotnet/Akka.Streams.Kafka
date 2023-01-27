@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Copyright>Copyright © 2015-2020 .NET Foundation</Copyright>
+    <Copyright>Copyright © 2015-2023 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
     <VersionPrefix>1.1.5</VersionPrefix>
     <PackageReleaseNotes>Placeholder for nightlies**</PackageReleaseNotes>
@@ -20,7 +20,7 @@
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.4.48</AkkaVersion>
+    <AkkaVersion>1.4.49</AkkaVersion>
     <KafkaVersion>1.9.3</KafkaVersion>
     <!-- Unit test Nuget package versions -->
     <XunitVersion>2.4.2</XunitVersion>
