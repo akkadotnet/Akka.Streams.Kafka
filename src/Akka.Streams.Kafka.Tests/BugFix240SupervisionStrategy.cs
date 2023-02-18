@@ -216,7 +216,7 @@ namespace Akka.Streams.Kafka.Tests
                 .SelectAsync(1, async elem =>
                 {
                     await elem.CommitableOffset.Commit();
-                    return elem.Record.Value;
+                    return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)
                 .Run(Materializer);
@@ -243,7 +243,7 @@ namespace Akka.Streams.Kafka.Tests
                 .SelectAsync(1, async elem =>
                 {
                     await elem.CommitableOffset.Commit();
-                    return elem.Record.Value;
+                    return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)
                 .Run(Materializer);
@@ -382,7 +382,7 @@ namespace Akka.Streams.Kafka.Tests
             var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(10);
@@ -423,7 +423,7 @@ namespace Akka.Streams.Kafka.Tests
             var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(10);
@@ -465,7 +465,7 @@ namespace Akka.Streams.Kafka.Tests
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             probe.Request(elementsCount);
@@ -494,7 +494,7 @@ namespace Akka.Streams.Kafka.Tests
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(decider.Decide))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             probe.Request(elementsCount);
@@ -520,7 +520,7 @@ namespace Akka.Streams.Kafka.Tests
             // Stage produce Error with ErrorCode.Local_UnknownPartition because we're trying to subscribe to partition 5, which does not exist.
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 5)))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
@@ -543,7 +543,7 @@ namespace Akka.Streams.Kafka.Tests
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Deciders.StoppingDecider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(5));

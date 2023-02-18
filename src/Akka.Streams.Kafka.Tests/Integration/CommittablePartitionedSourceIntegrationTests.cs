@@ -45,7 +45,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     var (topicPartition, source) = tuple;
                     createdSubSources.TryAdd(topicPartition);
                     return source
-                        .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Value)
+                        .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Message.Value)
                         .SelectAsync(3, async message =>
                         {
                             // fail on first partition; otherwise delay slightly and emit

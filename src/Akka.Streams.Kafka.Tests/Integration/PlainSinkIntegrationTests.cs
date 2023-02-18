@@ -134,7 +134,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var settings = CreateConsumerSettings<Null, string>(group1).WithValueDeserializer(new StringDeserializer());
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
