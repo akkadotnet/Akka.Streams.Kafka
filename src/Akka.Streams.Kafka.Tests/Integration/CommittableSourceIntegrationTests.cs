@@ -74,7 +74,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .SelectAsync(10, async elem =>
                 {
                     await elem.CommitableOffset.Commit();
-                    committedElements.Enqueue(elem.Record.Value);
+                    committedElements.Enqueue(elem.Record.Message.Value);
                     return Done.Instance;
                 })
                 .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
@@ -89,10 +89,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 
             probe1.Cancel();
 
-            AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
+            await AwaitConditionAsync(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Record.Value)
+                .Select(_ => _.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             // Note that due to buffers and SelectAsync(10) the committed offset is more
@@ -112,7 +112,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             // another consumer should see all
             var probe3 = KafkaConsumer.CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Record.Value)
+                .Select(_ => _.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe3.Request(100);

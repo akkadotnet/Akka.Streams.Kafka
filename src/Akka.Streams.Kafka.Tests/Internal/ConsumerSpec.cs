@@ -202,7 +202,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
         [Fact(DisplayName =
             "CommittableSource should complete out and keep underlying client open when control.stop called")]
-        public async Task ShouldKeepClientOpenOnStop()
+        public void ShouldKeepClientOpenOnStop()
         {
             this.AssertAllStagesStopped(() =>
             {

@@ -125,7 +125,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(message =>
                 {
                     Log.Debug($"Consumed partition {message.Partition.Value}");
-                    return message.Value;
+                    return message.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
@@ -142,7 +142,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public async Task PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
+        public void PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
         {
             var settings = CreateConsumerSettings<string>(CreateGroup(1))
                 .WithBootstrapServers("localhost:1111"); // Bad address
@@ -204,10 +204,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     var (topicPartition, source) = tuple;
                     return source
                         .MapMaterializedValue(notUsed => new NoopControl())
-                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Value})")
+                        .Log(topicPartition.ToString(), m => $"Consumed offset {m.Offset} (value: {m.Message.Value})")
                         .Take(10);
                 })
-                .Select(m => int.Parse(m.Value))
+                .Select(m => int.Parse(m.Message.Value))
                 .Log("Merged stream", m => m)
                 .Scan(0, (c, _) => c + 1)
                 .TakeWhile(m => m < totalMessages, inclusive: true)
@@ -240,8 +240,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
             
+#pragma warning disable CS4014 // meant to run as detatched task
             KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .RunForeach(tuple =>
+#pragma warning restore CS4014
                 {
                     var (topicPartition, source) = tuple;
                     

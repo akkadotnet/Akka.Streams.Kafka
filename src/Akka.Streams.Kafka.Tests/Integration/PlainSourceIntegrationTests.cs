@@ -156,7 +156,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Deciders.StoppingDecider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             var @event = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
@@ -191,7 +191,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var probe = KafkaConsumer
                 .PlainSource(settings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
                 .WithAttributes(ActorAttributes.CreateSupervisionStrategy(Decider))
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .RunWith(this.SinkProbe<int>(), Materializer);
 
             probe.Request(elementsCount);

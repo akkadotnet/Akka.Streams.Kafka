@@ -41,7 +41,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 getOffsetsOnAssign: _ => Task.FromResult(ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>),
                 onRevoke: _ => { }
                 ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(totalMessages);
@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     },
                     onRevoke: _ => { }
                 ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(99);
@@ -104,7 +104,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                     revoked = new Option<IImmutableSet<TopicPartition>>(revokedPartitions);
                 })
                 .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Value);
+                .Select(m => m.Message.Value);
             
             var (control1, firstConsumer) = source.ToMaterialized(this.SinkProbe<string>(), Keep.Both).Run(Materializer);
             
