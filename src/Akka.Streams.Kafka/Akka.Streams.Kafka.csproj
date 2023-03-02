@@ -1,11 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\common.props" />
   <PropertyGroup>
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
     <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-      <LangVersion>8.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

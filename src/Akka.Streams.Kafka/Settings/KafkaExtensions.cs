@@ -1,6 +1,7 @@
 ﻿using Akka.Configuration;
 using Confluent.Kafka;
 using Config = Akka.Configuration.Config;
+using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Settings
 {

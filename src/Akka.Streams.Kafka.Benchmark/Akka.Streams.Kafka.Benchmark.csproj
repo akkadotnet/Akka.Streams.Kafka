@@ -1,6 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <Import Project="..\common.props" />
-
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>netcoreapp3.1</TargetFramework>
@@ -14,17 +12,4 @@
     <ItemGroup>
       <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
     </ItemGroup>
-
-    <ItemGroup>
-      <Compile Remove="BenchmarkDotNet.Artifacts\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Remove="BenchmarkDotNet.Artifacts\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Remove="BenchmarkDotNet.Artifacts\**" />
-    </ItemGroup>
-
 </Project>

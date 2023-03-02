@@ -2,8 +2,8 @@
   <PropertyGroup>
     <Copyright>Copyright © 2015-2023 .NET Foundation</Copyright>
     <Authors>Akka</Authors>
-    <VersionPrefix>1.1.5</VersionPrefix>
-    <PackageReleaseNotes>Placeholder for nightlies**</PackageReleaseNotes>
+    <VersionPrefix>1.5.0</VersionPrefix>
+    <PackageReleaseNotes>[Upgraded to Akka.NET v1.5.0](https://github.com/akkadotnet/akka.net/releases/tag/1.5.0)</PackageReleaseNotes>
     <PackageIconUrl>http://getakka.net/images/akkalogo.png</PackageIconUrl>
     <PackageProjectUrl>
       https://github.com/akkadotnet/Akka.Streams.Kafka
@@ -13,6 +13,7 @@
     </PackageLicenseUrl>
     <Tags>akka streams kafka alpakka</Tags>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <LangVersion>11.0</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Visual Studio C# settings -->
@@ -20,11 +21,14 @@
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.4.49</AkkaVersion>
+    <AkkaVersion>1.5.0</AkkaVersion>
     <KafkaVersion>2.0.2</KafkaVersion>
     <!-- Unit test Nuget package versions -->
     <XunitVersion>2.4.2</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>17.4.1</TestSdkVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Akka.Event" />
+  </ItemGroup>
 </Project>

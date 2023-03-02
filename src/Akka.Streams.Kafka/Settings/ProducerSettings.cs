@@ -5,6 +5,7 @@ using Akka.Actor;
 using Akka.Streams.Kafka.Internal;
 using Akka.Util.Internal;
 using Confluent.Kafka;
+using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Settings
 {

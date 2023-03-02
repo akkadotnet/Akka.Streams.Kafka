@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using Newtonsoft.Json;
+using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Settings
 {

@@ -10,6 +10,7 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
 using Akka.Streams.Supervision;
 using Confluent.Kafka;
+using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Stages
 {
