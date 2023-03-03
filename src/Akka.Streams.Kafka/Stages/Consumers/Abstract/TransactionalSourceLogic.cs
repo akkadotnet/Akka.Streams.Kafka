@@ -180,14 +180,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private sealed class CommittingFailure { }
         
         /// <summary>
-        /// Message for check drailnng state
+        /// Message for check draining state
         /// </summary>
         private sealed class Drained { }
 
         /// <summary>
         /// Drain
         /// </summary>
-        /// <typeparam name="T">Drain message type</typeparam>
         private sealed class Drain
         {
             public Drain(IImmutableSet<TopicPartition> partitions, Option<IActorRef> drainedConfirmationRef, object drainedConfirmationMessage)

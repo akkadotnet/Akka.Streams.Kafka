@@ -4,6 +4,7 @@ using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 
+#nullable enable
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
@@ -37,6 +38,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected override void ConfigureSubscription() => ConfigureManualSubscription(_subscription);
 
         /// <inheritdoc />
-        protected override void PerformShutdown() => CompleteStage();
+        protected override void PerformShutdown(Exception? ex)
+        {
+            if (ex is { } and not SubscriptionWithCancelException.NonFailureCancellation)
+                Log.Info(ex, $"{nameof(ExternalSingleSourceLogic<K, V, TMessage>)} was shutdown due to exception");
+            CompleteStage();
+        }
     }
 }

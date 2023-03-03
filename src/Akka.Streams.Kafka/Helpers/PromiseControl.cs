@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Util;
 
+#nullable enable
 namespace Akka.Streams.Kafka.Helpers
 {
     /// <summary>
@@ -18,17 +19,21 @@ namespace Akka.Streams.Kafka.Helpers
         private readonly TaskCompletionSource<Done> _shutdownTaskSource = new TaskCompletionSource<Done>();
         private readonly TaskCompletionSource<Done> _stopTaskSource = new TaskCompletionSource<Done>();
         private readonly Action _stopCallback;
-        private readonly Action _shutdownCallback;
+        private readonly Action<Exception?> _shutdownCallback;
 
-        public PromiseControl(SourceShape<TSourceOut> shape, Action<Outlet<TSourceOut>> completeStageOutlet, 
-                              Action<bool> setStageKeepGoing,  Func<Action, Action> asyncCallbackFactory)
+        public PromiseControl(
+            SourceShape<TSourceOut> shape, 
+            Action<Outlet<TSourceOut>> completeStageOutlet, 
+            Action<bool> setStageKeepGoing,  
+            Func<Action, Action> asyncCallbackFactory,
+            Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory)
         {
             _shape = shape;
             _completeStageOutlet = completeStageOutlet;
             _setStageKeepGoing = setStageKeepGoing;
 
             _stopCallback = asyncCallbackFactory(PerformStop);
-            _shutdownCallback = asyncCallbackFactory(PerformShutdown);
+            _shutdownCallback = asyncShutdownCallbackFactory(PerformShutdown);
         }
 
         /// <inheritdoc />
@@ -39,9 +44,9 @@ namespace Akka.Streams.Kafka.Helpers
         }
 
         /// <inheritdoc />
-        public Task Shutdown()
+        public Task Shutdown(Exception? ex)
         {
-            _shutdownCallback();
+            _shutdownCallback(ex);
             return _shutdownTaskSource.Task;
         }
 
@@ -64,7 +69,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Performs source logic shutdown
         /// </summary>
-        public abstract void PerformShutdown();
+        public abstract void PerformShutdown(Exception? ex);
 
         /// <summary>
         /// Executed on source logic stop

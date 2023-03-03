@@ -18,6 +18,7 @@ using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
 
+#nullable enable
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
@@ -54,7 +55,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _shape = shape;
             _messageBuilder = messageBuilderFactory(this);
-            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
+            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback, PerformShutdown);
             
             // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
@@ -193,20 +194,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
-        protected abstract void PerformShutdown();
+        protected abstract void PerformShutdown(Exception? ex);
 
         protected class BaseSingleSourceControl : PromiseControl<TMessage>
         {
-            private readonly Action _performShutdown;
+            private readonly Action<Exception?> _performShutdown;
 
-            public BaseSingleSourceControl(SourceShape<TMessage> shape, Action<Outlet<TMessage>> completeStageOutlet, Action<bool> setStageKeepGoing, 
-                                           Func<Action, Action> asyncCallbackFactory, Action performShutdown) 
-                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory)
+            public BaseSingleSourceControl(
+                SourceShape<TMessage> shape,
+                Action<Outlet<TMessage>> completeStageOutlet,
+                Action<bool> setStageKeepGoing, 
+                Func<Action, Action> asyncCallbackFactory,
+                Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
+                Action<Exception?> performShutdown) 
+                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory, asyncShutdownCallbackFactory)
             {
                 _performShutdown = performShutdown;
             }
 
-            public override void PerformShutdown() => _performShutdown();
+            public override void PerformShutdown(Exception? ex) => _performShutdown(ex);
         }
     }
 }

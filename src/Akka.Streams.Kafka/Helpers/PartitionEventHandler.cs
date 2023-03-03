@@ -62,7 +62,7 @@ namespace Akka.Streams.Kafka.Helpers
         }
         
         /// <summary>
-        /// Handler allowing to pass custom stage callbacks. Also <see cref="IPartitionEventHandler{K,V}"/>
+        /// Handler allowing to pass custom stage callbacks.
         /// </summary>
         internal class AsyncCallbacks : IPartitionEventHandler
         {

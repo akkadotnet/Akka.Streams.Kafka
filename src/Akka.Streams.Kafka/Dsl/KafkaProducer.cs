@@ -157,7 +157,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// </list>
         /// </para>
         /// <para>
-        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// This flow is intended to be used with Akka's 
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V})"/> or
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V}, IProducer{K,V})"/>
         /// </para>
         /// </summary>
         /// <param name="settings"></param>
@@ -194,7 +196,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// </list>
         /// </para>
         /// <para>
-        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// This flow is intended to be used with Akka's 
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V})"/> or
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V}, IProducer{K,V})"/>
         /// </para>
         /// </summary>
         /// <param name="settings">Producer settings</param>
