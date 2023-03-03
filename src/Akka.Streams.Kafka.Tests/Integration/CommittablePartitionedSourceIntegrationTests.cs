@@ -97,7 +97,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var shutdown = control.DrainAndShutdown();
             AwaitCondition(() => shutdown.IsCompleted);
             createdSubSources.Should().Contain(allTopicPartitions);
-            shutdown.Exception.GetBaseException().Message.Should().Be("FAIL");
+            shutdown.Exception.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
 
             // commits will fail if we shut down the consumer too early
             commitFailures.Should().BeEmpty();

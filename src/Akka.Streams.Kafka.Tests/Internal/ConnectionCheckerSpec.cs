@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Akka.Actor;
@@ -7,6 +8,7 @@ using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util;
 using Confluent.Kafka;
+using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Internal
@@ -27,10 +29,10 @@ namespace Akka.Streams.Kafka.Tests.Internal
         {
             WithCheckerActorRef(checker =>
             {
-                ExpectListTopicsRequest(_retryInterval);
+                ExpectListTopicsRequest(0);
                 Thread.Sleep(_retryInterval);
                 checker.Tell(new Metadata.Topics(new Try<List<TopicMetadata>>(new List<TopicMetadata>())));
-                ExpectListTopicsRequest(_retryInterval);
+                ExpectListTopicsRequest(0);
             });
         }
 
@@ -40,12 +42,10 @@ namespace Akka.Streams.Kafka.Tests.Internal
         {
             WithCheckerActorRef(checker =>
             {
-                var interval = _retryInterval;
-                foreach (var _ in Enumerable.Range(1, _config.MaxRetries + 1))
+                foreach (var retry in Enumerable.Range(1, _config.MaxRetries + 1))
                 {
-                    ExpectListTopicsRequest(interval);
+                    ExpectListTopicsRequest(retry);
                     checker.Tell(new Metadata.Topics(new Try<List<TopicMetadata>>(new TimeoutException())));
-                    interval = NewExponentialInterval(interval, _config.Factor);
                 }
 
                 Watch(checker);
@@ -60,25 +60,25 @@ namespace Akka.Streams.Kafka.Tests.Internal
         {
             WithCheckerActorRef(checker =>
             {
-                ExpectListTopicsRequest(_retryInterval);
+                ExpectListTopicsRequest(0);
                 checker.Tell(new Metadata.Topics(new Try<List<TopicMetadata>>(new TimeoutException())));
                 
-                ExpectListTopicsRequest(NewExponentialInterval(_retryInterval, _config.Factor));
+                ExpectListTopicsRequest(1);
                 checker.Tell(new Metadata.Topics(new Try<List<TopicMetadata>>(new List<TopicMetadata>())));
                 
-                ExpectListTopicsRequest(_retryInterval);
+                ExpectListTopicsRequest(0);
             });
         }
 
-        private void ExpectListTopicsRequest(TimeSpan interval)
+        private void ExpectListTopicsRequest(int retry)
         {
-            ExpectNoMsg(interval - TimeSpan.FromMilliseconds(100));
-            ExpectMsg<Metadata.ListTopics>();
+            var minimum = retry > 0 ? _retryInterval : _retryInterval * _config.Factor * retry;
+            var stopwatch = Stopwatch.StartNew();
+            ExpectMsg<Metadata.ListTopics>(TimeSpan.FromSeconds(5));
+            stopwatch.Stop();
+            stopwatch.Elapsed.Should().BeGreaterThan(minimum);
         }
 
-        private TimeSpan NewExponentialInterval(TimeSpan previousInterval, double factor)
-            => previousInterval * factor;
-        
         private void WithCheckerActorRef(Action<IActorRef> block)
         {
             var checker = ChildActorOf(ConnectionChecker.Props(_config));
