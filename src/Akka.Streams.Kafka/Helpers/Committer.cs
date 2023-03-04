@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Batches offsets and commits them to Kafka.
         /// </summary>
-        public static Sink<ICommittable, Task> Sink(CommitterSettings settings)
+        public static Sink<ICommittable, Task<Done>> Sink(CommitterSettings settings)
         {
             return Flow(settings).ToMaterialized(Streams.Dsl.Sink.Ignore<Done>(), Keep.Right);
         }
@@ -66,7 +66,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         /// <typeparam name="E">Incoming flow elements type</typeparam>
         [ApiMayChange]
-        public static Sink<(E, ICommittableOffset), Task> SinkWithOffsetContext<E>(CommitterSettings settings)
+        public static Sink<(E, ICommittableOffset), Task<Done>> SinkWithOffsetContext<E>(CommitterSettings settings)
         {
             return Akka.Streams.Dsl.Flow.Create<(E, ICommittableOffset)>()
                 .Via(FlowWithOffsetContext<E>(settings))

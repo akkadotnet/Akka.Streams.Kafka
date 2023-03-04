@@ -33,7 +33,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// KafkaSourceStage
         /// </summary>
         /// <param name="stageName">Stage name</param>
-        /// <param name="autoCreateTopics">Kafka source should auto create topics</param>
         protected KafkaSourceStage(string stageName)
         {
             StageName = stageName;

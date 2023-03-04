@@ -25,7 +25,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// partition number, and an optional key and value.
         /// </para>
         /// </summary>
-        public static Sink<ProducerRecord<TKey, TValue>, Task> PlainSink<TKey, TValue>(ProducerSettings<TKey, TValue> settings)
+        public static Sink<ProducerRecord<TKey, TValue>, Task<Done>> PlainSink<TKey, TValue>(ProducerSettings<TKey, TValue> settings)
         {
             return Flow
                 .Create<ProducerRecord<TKey, TValue>>()
@@ -48,7 +48,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// Supports sharing a Kafka Producer instance.
         /// </para>
         /// </summary>
-        public static Sink<ProducerRecord<TKey, TValue>, Task> PlainSink<TKey, TValue>(ProducerSettings<TKey, TValue> settings, IProducer<TKey, TValue> producer)
+        public static Sink<ProducerRecord<TKey, TValue>, Task<Done>> PlainSink<TKey, TValue>(ProducerSettings<TKey, TValue> settings, IProducer<TKey, TValue> producer)
         {
             return Flow
                 .Create<ProducerRecord<TKey, TValue>>()
@@ -157,7 +157,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// </list>
         /// </para>
         /// <para>
-        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// This flow is intended to be used with Akka's 
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V})"/> or
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V}, IProducer{K,V})"/>
         /// </para>
         /// </summary>
         /// <param name="settings"></param>
@@ -194,7 +196,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// </list>
         /// </para>
         /// <para>
-        /// This flow is intended to be used with Akka's <see cref="FlowWithContext"/>
+        /// This flow is intended to be used with Akka's 
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V})"/> or
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V}, IProducer{K,V})"/>
         /// </para>
         /// </summary>
         /// <param name="settings">Producer settings</param>
@@ -243,7 +247,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// It will initialize, begin, produce, and commit the consumer offset as part of a transaction.
         /// </summary>
         [InternalApi]
-        public static Sink<IEnvelope<K, V, GroupTopicPartitionOffset>, Task> TransactionalSink<K, V>(
+        public static Sink<IEnvelope<K, V, GroupTopicPartitionOffset>, Task<Done>> TransactionalSink<K, V>(
             ProducerSettings<K, V> settings, 
             string transactionalId)
         {

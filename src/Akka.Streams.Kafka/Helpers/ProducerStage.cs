@@ -4,6 +4,7 @@ using Akka.Annotations;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages;
 using Confluent.Kafka;
+using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Helpers
 {

@@ -17,6 +17,6 @@ namespace Akka.Streams.Kafka.Extensions
         /// <summary>
         /// Wraps object to the option
         /// </summary>
-        public static Option<T> AsOption<T>(this T obj) => new Option<T>(obj);
+        public static Option<T> AsOption<T>(this T obj) => Option<T>.Create(obj);
     }
 }

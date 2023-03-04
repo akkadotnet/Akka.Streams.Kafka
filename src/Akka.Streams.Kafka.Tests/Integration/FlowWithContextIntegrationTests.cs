@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Implementation.Fusing;
@@ -89,7 +90,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 Log.Info($"Waiting for {consumedExpect} to be consumed...");
                 try
                 {
-                    await AwaitConditionAsync(() => totalConsumed >= consumedExpect, TimeSpan.FromSeconds(30));
+                    await AwaitConditionAsync(async () => totalConsumed >= consumedExpect, TimeSpan.FromSeconds(30));
                 }
                 finally
                 {
@@ -99,7 +100,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
 
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown(null));
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
         }
     }

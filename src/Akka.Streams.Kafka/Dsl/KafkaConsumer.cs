@@ -95,7 +95,9 @@ namespace Akka.Streams.Kafka.Dsl
         /// delivered one time but in failure cases could be duplicated.
         ///
         /// It is intended to be used with Akka's [flow with context](https://doc.akka.io/docs/akka/current/stream/operators/Flow/asFlowWithContext.html),
-        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}"/> and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V})"/>,
+        /// <see cref="KafkaProducer.FlowWithContext{K,V,C}(ProducerSettings{K,V}, IProducer{K,V})"/>
+        /// and/or <see cref="Committer.SinkWithOffsetContext{E}"/>
         /// </summary>
         [ApiMayChange]
         public static SourceWithContext<ConsumeResult<K, V>, ICommittableOffset, IControl> SourceWithOffsetContext<K, V>(
@@ -153,10 +155,10 @@ namespace Akka.Streams.Kafka.Dsl
         /// <summary>
         /// The <see cref="PlainPartitionedManualOffsetSource{K,V}"/> is similar to <see cref="PlainPartitionedSource{K,V}"/>
         /// but allows the use of an offset store outside of Kafka, while retaining the automatic partition assignment.
-        /// When a topic-partition is assigned to a consumer, the <see cref="getOffsetsOnAssign"/>
+        /// When a topic-partition is assigned to a consumer, the <paramref name="getOffsetsOnAssign"/>
         /// function will be called to retrieve the offset, followed by a seek to the correct spot in the partition.
         ///
-        /// The <see cref="onRevoke"/> function gives the consumer a chance to store any uncommitted offsets, and do any other cleanup
+        /// The <paramref name="onRevoke"/> function gives the consumer a chance to store any uncommitted offsets, and do any other cleanup
         /// that is required. Also allows the user access to the `onPartitionsRevoked` hook, useful for cleaning up any
         /// partition-specific resources being used by the consumer.
         /// </summary>
@@ -169,7 +171,7 @@ namespace Akka.Streams.Kafka.Dsl
             return Source.FromGraph(new PlainSubSourceStage<K, V>(
                 settings, 
                 subscription, 
-                new Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>(getOffsetsOnAssign), 
+                Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>.Create(getOffsetsOnAssign), 
                 onRevoke));
         }
 

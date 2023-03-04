@@ -59,7 +59,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
+            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
             return this;
         }
 
@@ -69,7 +69,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler);
+            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler);
             return this;
         }
     }
@@ -102,7 +102,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
+            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
             return this;
         }
 
@@ -112,7 +112,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = new Option<IPartitionEventHandler>(partitionEventHandler); 
+            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler); 
             return this;
         }
     }
@@ -145,7 +145,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
+            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
             return this;
         }
     }
@@ -161,14 +161,14 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// AssignmentWithOffset
         /// </summary>
-        /// <param name="topicPartitions">List of topic paritions with offsets to subscribe</param>
+        /// <param name="topicPartitions">List of topic partitions with offsets to subscribe</param>
         public AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> topicPartitions)
         {
             TopicPartitions = topicPartitions;
         }
 
         /// <summary>
-        /// List of topic paritions with offsets to subscribe
+        /// List of topic partitions with offsets to subscribe
         /// </summary>
         public IImmutableSet<TopicPartitionOffset> TopicPartitions { get; }
 
@@ -178,7 +178,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <inheritdoc />
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = new Option<IStatisticsHandler>(statisticsHandler);
+            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
             return this;
         }
     }
@@ -205,14 +205,14 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Generates <see cref="Assignment"/>
         /// </summary>
-        /// <param name="topicPartitions">Topic parititions to subscribe</param>
+        /// <param name="topicPartitions">Topic partitions to subscribe</param>
         public static IManualSubscription Assignment(params TopicPartition[] topicPartitions) =>
             new Assignment(topicPartitions.ToImmutableHashSet());
 
         /// <summary>
         /// Generates <see cref="AssignmentWithOffset"/>
         /// </summary>
-        /// <param name="topicPartitions">Topic parititions with offsets to subscribe</param>
+        /// <param name="topicPartitions">Topic partitions with offsets to subscribe</param>
         public static IManualSubscription AssignmentWithOffset(params TopicPartitionOffset[] topicPartitions) =>
             new AssignmentWithOffset(topicPartitions.ToImmutableHashSet());
     }

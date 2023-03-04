@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
 using Confluent.Kafka;
 
+#nullable enable
 namespace Akka.Streams.Kafka.Helpers
 {
     /// <summary>
@@ -22,7 +23,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// Shutdown the consumer `Source`. It will wait for outstanding offset
         /// commit requests to finish before shutting down.
         /// </summary>
-        Task Shutdown();
+        Task Shutdown(Exception? ex = null);
 
         /// <summary>
         /// Shutdown status. The task will be completed when the stage has been shut down
@@ -66,7 +67,7 @@ namespace Akka.Streams.Kafka.Helpers
         public Task Stop() => Control.Stop();
 
         /// <inheritdoc />
-        public Task Shutdown() => Control.Shutdown();
+        public Task Shutdown(Exception? ex = null) => Control.Shutdown(ex);
 
         /// <inheritdoc />
         public Task IsShutdown => Control.IsShutdown;
@@ -100,7 +101,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// one, so that the stream can be stopped in a controlled way without losing
         /// commits.
         /// </summary>
-        public static DrainingControl<NotUsed> Create((IControl, Task) tuple)
+        public static DrainingControl<NotUsed> Create((IControl, Task<Done>) tuple)
         {
             return new DrainingControl<NotUsed>(tuple.Item1, tuple.Item2.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
         }
@@ -123,7 +124,7 @@ namespace Akka.Streams.Kafka.Helpers
         public Task Stop() => Task.FromException(Exception);
 
         /// <inheritdoc />
-        public Task Shutdown() => Task.FromException(Exception);
+        public Task Shutdown(Exception? ex) => Task.FromException(new Exception("The correct Consumer.Control has not been assigned, yet.", ex));
 
         /// <inheritdoc />
         public Task IsShutdown => Task.FromException(Exception);

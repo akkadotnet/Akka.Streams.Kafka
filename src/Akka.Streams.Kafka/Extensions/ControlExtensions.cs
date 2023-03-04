@@ -22,24 +22,22 @@ namespace Akka.Streams.Kafka.Extensions
             try
             {
                 await control.Stop();
-
                 result = await streamCompletion;
             }
             catch (Exception completionError)
             {
                 try
                 {
-                    await control.Shutdown();
-
+                    await control.Shutdown(completionError);
                     return await streamCompletion;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    throw completionError;
+                    throw new AggregateException("Failed to shutdown IControl", ex, completionError);
                 }
             }
 
-            await control.Shutdown();
+            await control.Shutdown(SubscriptionWithCancelException.StageWasCompleted.Instance);
 
             return result;
         }

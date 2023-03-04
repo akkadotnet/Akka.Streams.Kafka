@@ -89,8 +89,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             base.PostStop();
         }
 
-        protected override void PerformShutdown()
+        protected override void PerformShutdown(Exception ex)
         {
+            if (ex is { } and not SubscriptionWithCancelException.NonFailureCancellation)
+                Log.Info(ex, $"{nameof(SingleSourceStageLogic<K, V, TMessage>)} was shutdown due to exception");
+            
             SetKeepGoing(true);
             
             if (!IsClosed(_shape.Outlet))
