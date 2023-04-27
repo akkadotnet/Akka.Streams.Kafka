@@ -21,7 +21,7 @@
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
     <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.5.3</AkkaVersion>
+    <AkkaVersion>1.5.4</AkkaVersion>
     <KafkaVersion>2.0.2</KafkaVersion>
     <!-- Unit test Nuget package versions -->
     <XunitVersion>2.4.2</XunitVersion>
