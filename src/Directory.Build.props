@@ -26,7 +26,7 @@
     <!-- Unit test Nuget package versions -->
     <XunitVersion>2.5.0</XunitVersion>
     <NBenchVersion>1.2.2</NBenchVersion>
-    <TestSdkVersion>17.6.3</TestSdkVersion>
+    <TestSdkVersion>17.7.2</TestSdkVersion>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="Akka.Event" />
