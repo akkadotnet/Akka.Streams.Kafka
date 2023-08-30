@@ -6,7 +6,7 @@
 
     <ItemGroup>
       <PackageReference Include="BenchmarkDotNet" Version="0.13.7" />
-        <PackageReference Include="Docker.DotNet" Version="3.125.14" />
+        <PackageReference Include="Docker.DotNet" Version="3.125.15" />
     </ItemGroup>
 
     <ItemGroup>
