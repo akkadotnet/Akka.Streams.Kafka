@@ -4,6 +4,8 @@
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
     <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,19 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka.Streams" Version="$(AkkaVersion)" />
-    <PackageReference Include="Confluent.Kafka" Version="$(KafkaVersion)" />
+    <PackageReference Include="Akka.Streams" />
+    <PackageReference Include="Confluent.Kafka" />
   </ItemGroup>
-   <PropertyGroup>
-    <!-- Optional: Publish the repository URL in the built .nupkg (in the NuSpec <Repository> element) -->
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <!-- Optional: Embed source files that are not tracked by the source control manager in the PDB -->
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <!-- Optional: Build symbol package (.snupkg) to distribute the PDB containing Source Link -->
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-  </PropertyGroup>
+    
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <None Include="../../docs/images/icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

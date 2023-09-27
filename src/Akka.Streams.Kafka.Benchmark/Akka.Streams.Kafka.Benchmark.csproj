@@ -1,12 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <TargetFramework>$(NetCoreTestVersion)</TargetFramework>
+        <IsPackable>false</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="BenchmarkDotNet" Version="0.13.7" />
-        <PackageReference Include="Docker.DotNet" Version="3.125.15" />
+      <PackageReference Include="BenchmarkDotNet" />
+      <PackageReference Include="Docker.DotNet" />
     </ItemGroup>
 
     <ItemGroup>
