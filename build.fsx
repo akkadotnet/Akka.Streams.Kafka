@@ -59,11 +59,14 @@ Target "Clean" (fun _ ->
     CleanDir outputPerfTests
     CleanDir outputNuGet
     CleanDir "docs/_site"
+
+    CleanDirs !! "./**/bin"
+    CleanDirs !! "./**/obj"
 )
 
 Target "AssemblyInfo" (fun _ ->
-    XmlPokeInnerText "./src/Directory.Build.props" "//Project/PropertyGroup/VersionPrefix" releaseNotes.AssemblyVersion    
-    XmlPokeInnerText "./src/Directory.Build.props" "//Project/PropertyGroup/PackageReleaseNotes" (releaseNotes.Notes |> String.concat "\n")
+    XmlPokeInnerText "./src/Directory.Generated.props" "//Project/PropertyGroup/VersionPrefix" releaseNotes.AssemblyVersion    
+    XmlPokeInnerText "./src/Directory.Generated.props" "//Project/PropertyGroup/PackageReleaseNotes" (releaseNotes.Notes |> String.concat "\n")
 )
 
 Target "RestorePackages" (fun _ ->
@@ -226,30 +229,32 @@ Target "CreateNuget" (fun _ ->
 )
 
 Target "PublishNuget" (fun _ ->
-    let projects = !! "./bin/nuget/*.nupkg" -- "./bin/nuget/*.symbols.nupkg"
-    let apiKey = getBuildParamOrDefault "nugetkey" ""
-    let source = getBuildParamOrDefault "nugetpublishurl" ""
-    let symbolSource = getBuildParamOrDefault "symbolspublishurl" ""
-    let shouldPublishSymbolsPackages = not (symbolSource = "")
-
-    if (not (source = "") && not (apiKey = "") && shouldPublishSymbolsPackages) then
-        let runSingleProject project =
-            DotNetCli.RunCommand
-                (fun p -> 
-                    { p with 
-                        TimeOut = TimeSpan.FromMinutes 10. })
-                (sprintf "nuget push %s --api-key %s --source %s --symbol-source %s" project apiKey source symbolSource)
-
-        projects |> Seq.iter (runSingleProject)
-    else if (not (source = "") && not (apiKey = "") && not shouldPublishSymbolsPackages) then
-        let runSingleProject project =
-            DotNetCli.RunCommand
-                (fun p -> 
-                    { p with 
-                        TimeOut = TimeSpan.FromMinutes 10. })
-                (sprintf "nuget push %s --api-key %s --source %s" project apiKey source)
-
-        projects |> Seq.iter (runSingleProject)
+    let shouldPushNugetPackages = hasBuildParam "nugetkey"
+    if not shouldPushNugetPackages then ()
+    else
+        let apiKey = getBuildParam "nugetkey"
+        let sourceUrl = getBuildParamOrDefault "nugetpublishurl" "https://api.nuget.org/v3/index.json"
+        
+        let rec publishPackage retryLeft packageFile =
+            tracefn "Pushing %s Attempts left: %d" (FullName packageFile) retryLeft
+            let tracing = ProcessHelper.enableProcessTracing
+            try
+                try
+                    ProcessHelper.enableProcessTracing <- false
+                    DotNetCli.RunCommand
+                        (fun p ->
+                            { p with
+                                TimeOut = TimeSpan.FromMinutes 10. })
+                        (sprintf "nuget push %s --api-key %s --source %s --no-service-endpoint" packageFile apiKey sourceUrl)
+                with exn ->
+                    if (retryLeft > 0) then (publishPackage (retryLeft-1) packageFile)
+            finally
+                ProcessHelper.enableProcessTracing <- tracing
+                
+        printfn "Pushing nuget packages"
+        let normalPackages = !! (outputNuGet @@ "*.nupkg") |> Seq.sortBy(fun x -> x.ToLower())
+        for package in normalPackages do
+            publishPackage 3 package
 )
 
 //--------------------------------------------------------------------------------
