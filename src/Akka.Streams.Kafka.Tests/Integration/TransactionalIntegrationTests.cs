@@ -8,8 +8,10 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.TestKit.Extensions;
 using Confluent.Kafka;
 using FluentAssertions;
+using FluentAssertions.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -50,7 +52,8 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), consumer.IsShutdown);
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), control.DrainAndShutdown());
 
-            consumer.DrainAndShutdown().Result.Should().HaveCount(totalMessages);
+            var consumedMessages = await consumer.DrainAndShutdown().ShouldCompleteWithin(10.Seconds());
+            consumedMessages.Should().HaveCount(totalMessages);
         }
 
         private Flow<T, T, NotUsed> Business<T>() => Flow.Create<T>();
