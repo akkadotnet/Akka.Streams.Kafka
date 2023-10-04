@@ -29,7 +29,7 @@
     <PackageVersion Include="Tmds.ExecFunction" Version="0.6.0" />
     <PackageVersion Include="Universe.CpuUsage" Version="2.2.497.598" />
     <PackageVersion Include="FakeItEasy" Version="7.3.1" />
-    <PackageVersion Include="FluentAssertions" Version="6.10.0" />
+    <PackageVersion Include="FluentAssertions" Version="6.12.0" />
   </ItemGroup>
 
   <!-- SourceLink support for all Akka.NET projects -->
