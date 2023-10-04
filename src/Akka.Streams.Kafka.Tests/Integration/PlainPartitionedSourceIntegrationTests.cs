@@ -14,11 +14,14 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
+using Akka.TestKit.Extensions;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
+using FluentAssertions.Extensions;
 using Xunit;
 using Xunit.Abstractions;
+using static FluentAssertions.FluentActions;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {
@@ -70,9 +73,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await Task.Delay(1000); // Wait for message handling finished after all messages received
 
-            var shutdown = control.DrainAndShutdown();
-            AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
-            shutdown.Result.Should().Be(totalMessages);
+            var shutdownTask = control.DrainAndShutdown();
+            var shutdownResult = await shutdownTask.ShouldCompleteWithin(10.Seconds());
+            shutdownResult.Should().Be(totalMessages);
         }
 
         [Fact]
@@ -105,9 +108,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             // Give it some time to consume all messages
             await Task.Delay(5000);
 
-            var shutdown = control.DrainAndShutdown();
-            AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
-            shutdown.Result.Should().BeTrue();
+            var shutdownTask = control.DrainAndShutdown();
+            var shutdownResult = await shutdownTask.ShouldCompleteWithin(10.Seconds());
+            shutdownResult.Should().BeTrue();
         }
 
         [Fact]
@@ -142,15 +145,15 @@ namespace Akka.Streams.Kafka.Tests.Integration
         }
 
         [Fact]
-        public void PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
+        public async Task PlainPartitionedSource_should_be_signalled_the_stream_by_partitioned_sources()
         {
             var settings = CreateConsumerSettings<string>(CreateGroup(1))
                 .WithBootstrapServers("localhost:1111"); // Bad address
 
-            var result = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics("topic"))
+            var resultTask = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics("topic"))
                 .RunWith(Sink.First<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Materializer);
 
-            result.Invoking(r => r.Wait()).Should().Throw<KafkaException>();
+            await Awaiting(() => resultTask).Should().ThrowAsync<KafkaException>();
         }
          
         [Fact]
@@ -212,10 +215,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Scan(0, (c, _) => c + 1)
                 .TakeWhile(m => m < totalMessages, inclusive: true)
                 .RunWith(Sink.Last<int>(), Materializer);
-            
-            AwaitCondition(() => consumedMessagesTask.IsCompleted, TimeSpan.FromSeconds(10));
 
-            consumedMessagesTask.Result.Should().Be(totalMessages);
+            var consumedMessages = await consumedMessagesTask.ShouldCompleteWithin(10.Seconds());
+            consumedMessages.Should().Be(totalMessages);
         }
 
         [Fact]

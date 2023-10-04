@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
             
-            var (control, result) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
+            var (control, task) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
                 .Select(m => m.Value)
                 .Take(5)
                 .ToMaterialized(Sink.Seq<string>(), Keep.Both)
@@ -35,7 +35,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
             
-            result.Result.Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
+            (await task).Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
         }
 
         [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]

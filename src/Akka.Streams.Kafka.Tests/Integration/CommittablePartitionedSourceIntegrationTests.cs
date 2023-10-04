@@ -40,11 +40,11 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             var control = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
                 .GroupBy(partitionsCount, tuple => tuple.Item1)
-                .SelectAsync(6, tuple =>
+                .SelectAsync(6, async tuple =>
                 {
                     var (topicPartition, source) = tuple;
                     createdSubSources.TryAdd(topicPartition);
-                    return source
+                    var result = await source
                         .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Message.Value)
                         .SelectAsync(3, async message =>
                         {
@@ -78,12 +78,10 @@ namespace Akka.Streams.Kafka.Tests.Integration
                             return message;
                         })
                         .Scan(0, (c, _) => c + 1)
-                        .RunWith(Sink.Last<int>(), Materializer)
-                        .ContinueWith(t =>
-                        {
-                            Log.Info($"sub-source for {topicPartition} completed: Received {t.Result} messages in total.");
-                            return t.Result;
-                        });
+                        .RunWith(Sink.Last<int>(), Materializer);
+                        
+                    Log.Info($"sub-source for {topicPartition} completed: Received {result} messages in total.");
+                    return result;
                 })
                 .MergeSubstreams()
                 .As<Source<int, IControl>>()
@@ -95,9 +93,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => exceptionTriggered.Value, TimeSpan.FromSeconds(10));
 
             var shutdown = control.DrainAndShutdown();
-            AwaitCondition(() => shutdown.IsCompleted);
+            await AwaitConditionAsync(() => shutdown.IsCompleted);
             createdSubSources.Should().Contain(allTopicPartitions);
-            shutdown.Exception.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
+            shutdown.Exception!.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
 
             // commits will fail if we shut down the consumer too early
             commitFailures.Should().BeEmpty();
