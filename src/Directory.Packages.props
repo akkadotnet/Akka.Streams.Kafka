@@ -11,7 +11,7 @@
   <!-- App dependencies -->
   <ItemGroup>
     <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
-    <PackageVersion Include="Confluent.Kafka" Version="2.0.2" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.2.0" />
   </ItemGroup>
 
   <!-- Test dependencies -->
