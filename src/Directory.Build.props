@@ -11,7 +11,7 @@
     <!-- Visual Studio C# settings -->
     <NetFrameworkTestVersion>net472</NetFrameworkTestVersion>
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
-    <NetCoreTestVersion>netcoreapp3.1</NetCoreTestVersion>
+    <NetCoreTestVersion>net6.0</NetCoreTestVersion>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="Akka.Event" />
