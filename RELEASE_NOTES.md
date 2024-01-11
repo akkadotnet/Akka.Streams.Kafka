@@ -1,3 +1,7 @@
+#### 1.5.15 January 11 2024 ####
+
+* [Upgraded to Akka.NET v1.5.15](https://github.com/akkadotnet/akka.net/releases/tag/1.5.15)
+
 #### 1.5.13.1 October 4 2023 ####
 
 * Publish NuGet package symbol file
