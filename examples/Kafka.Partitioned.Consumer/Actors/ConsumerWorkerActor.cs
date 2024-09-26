@@ -54,7 +54,7 @@ namespace Kafka.Partitioned.Consumer.Actors
             _control = KafkaConsumer.CommittableSource(_settings, _subscription)
                 .Ask<ICommittable>(Self, TimeSpan.FromSeconds(1), 1)
                 .ToMaterialized(Committer.Sink(committerDefaults), DrainingControl<NotUsed>.Create)
-                .Run(Context.System.Materializer());
+                .Run(Context.Materializer());
             _log.Info("Worker started");
         }
 
