@@ -1,3 +1,8 @@
+#### 1.5.29 October 1st 2024 ####
+
+* [Upgraded to Akka.NET v1.5.29](https://github.com/akkadotnet/akka.net/releases/tag/1.5.29)
+* [Bump Confluent.Kafka to 2.4.0](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/402)
+
 #### 1.5.15 January 11 2024 ####
 
 * [Upgraded to Akka.NET v1.5.15](https://github.com/akkadotnet/akka.net/releases/tag/1.5.15)
