@@ -165,7 +165,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             try
             {
-                StageActor.Ref.Ask(new Drain(partitions, Option<IActorRef>.None, new Drained()), _settings.CommitTimeout);
+                StageActor.Ref.Ask(new Drain(partitions, Option<IActorRef>.None, new Drained()), _settings.CommitTimeout)
+                    .GetAwaiter().GetResult();
                 return true;
             }
             catch
