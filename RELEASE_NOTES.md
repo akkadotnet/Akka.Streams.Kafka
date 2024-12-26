@@ -1,3 +1,8 @@
+#### 1.5.33 December 26th 2024 ####
+
+* [Upgraded to Akka.NET v1.5.33](https://github.com/akkadotnet/akka.net/releases/tag/1.5.33)
+* [Fix TransactionalSourceLogic partition drain bug](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/410)
+
 #### 1.5.30 October 3rd 2024 ####
 
 * [Upgraded to Akka.NET v1.5.30](https://github.com/akkadotnet/akka.net/releases/tag/1.5.30)
