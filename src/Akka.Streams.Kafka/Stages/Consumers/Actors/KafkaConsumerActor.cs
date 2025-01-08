@@ -74,7 +74,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IActorRef _connectionCheckerActor;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
-        private bool _delayedPoolInFlight = false;
+        private bool _delayedPollInFlight = false;
         private IImmutableSet<TopicPartition> _resumedPartitions = ImmutableHashSet<TopicPartition>.Empty;
         private readonly Decider _decider;
 
@@ -246,9 +246,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         Poll();
                     }
-                    else if (!_delayedPoolInFlight)
+                    else if (!_delayedPollInFlight)
                     {
-                        _delayedPoolInFlight = true;
+                        _delayedPollInFlight = true;
                         Self.Tell(_delayedPollMessage);
                     }
                     return true;
@@ -423,10 +423,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void ScheduleFirstPoolTask()
         {
             if (_pollCancellation == null || _pollCancellation.IsCancellationRequested)
-                SchedulePoolTask();
+                SchedulePollTask();
         }
 
-        private void SchedulePoolTask()
+        private void SchedulePollTask()
         {
             _pollCancellation?.Cancel(); // Stop existing scheduling, if any
             
@@ -463,9 +463,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 Poll();
                
                 if (poll.Periodic)
-                    SchedulePoolTask();
+                    SchedulePollTask();
                 else
-                    _delayedPoolInFlight = false;
+                    _delayedPollInFlight = false;
             }
             else
             {
@@ -670,9 +670,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 Poll();
             }
-            else if (!_delayedPoolInFlight)
+            else if (!_delayedPollInFlight)
             {
-                _delayedPoolInFlight = true;
+                _delayedPollInFlight = true;
                 Self.Tell(_delayedPollMessage);
             }
         }
