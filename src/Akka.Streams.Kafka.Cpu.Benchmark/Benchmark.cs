@@ -25,7 +25,6 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
         public static async Task SetupKafkaAsync()
         {
             await Docker.SetupContainersAsync();
-            await Docker.WaitForKafkaServerAsync();
         }
 
         public static async Task SetupAkkaAsync()

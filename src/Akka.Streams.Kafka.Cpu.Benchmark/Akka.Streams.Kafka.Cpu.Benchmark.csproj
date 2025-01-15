@@ -8,6 +8,7 @@
     <ItemGroup>
         <PackageReference Include="Docker.DotNet" />
         <PackageReference Include="NDesk.Options.Core" />
+        <PackageReference Include="Testcontainers.Kafka" />
         <PackageReference Include="Tmds.ExecFunction" />
         <PackageReference Include="Universe.CpuUsage" />
     </ItemGroup>
