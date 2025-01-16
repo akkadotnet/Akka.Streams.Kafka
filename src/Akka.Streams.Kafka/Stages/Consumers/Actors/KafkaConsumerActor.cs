@@ -659,6 +659,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void PausePartitions(List<TopicPartition> partitions)
         {
+            if (partitions.Count == 0)
+                return;
+            
             if(_log.IsDebugEnabled)
                 _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
             _consumer.Pause(partitions);
@@ -667,6 +670,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ResumePartitions(List<TopicPartition> partitions)
         {
+            if (partitions.Count == 0)
+                return;
+            
             var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
             if(_log.IsDebugEnabled)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
