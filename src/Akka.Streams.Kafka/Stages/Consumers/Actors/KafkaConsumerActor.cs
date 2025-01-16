@@ -329,11 +329,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 if (_log.IsDebugEnabled)
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
-                var localSelf = Self;
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) => localSelf.Tell(new Status.Failure(new KafkaException(e))),
-                    partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
-                    partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
+                    consumeErrorHandler: (c, e) => ProcessExceptions(new KafkaException(e)),
+                    partitionAssignedHandler: (c, tp) => PartitionsAssignedHandler(tp.ToImmutableHashSet()),
+                    partitionRevokedHandler: (c, tp) => PartitionsRevokedHandler(tp.ToImmutableHashSet()),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
