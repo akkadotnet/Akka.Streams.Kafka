@@ -118,27 +118,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         }
 
         #region Rebalance listener
-        
-        internal sealed class PartitionAssigned
-        {
-            public PartitionAssigned(IImmutableSet<TopicPartition> partitions)
-            {
-                Partitions = partitions;
-            }
-
-            public IImmutableSet<TopicPartition> Partitions { get; }
-        }
-        
-        internal sealed class PartitionRevoked
-        {
-            public PartitionRevoked(IImmutableSet<TopicPartitionOffset> partitions)
-            {
-                Partitions = partitions;
-            }
-
-            public IImmutableSet<TopicPartitionOffset> Partitions { get; }
-        }
-    
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
@@ -283,19 +262,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case Metadata.IRequest req:
                     Sender.Tell(HandleMetadataRequest(req));
-                    return true;
-                
-                // Rebalance callbacks
-                case PartitionAssigned evt:
-                    PartitionsAssignedHandler(evt.Partitions);
-                    return true;
-                
-                case PartitionRevoked evt:
-                    PartitionsRevokedHandler(evt.Partitions);
-                    return true;
-                
-                case Status.Failure fail:
-                    ProcessExceptions(fail.Cause);
                     return true;
                 
                 default:
