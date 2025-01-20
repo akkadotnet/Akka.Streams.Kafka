@@ -25,6 +25,11 @@ namespace Akka.Streams.Kafka.Helpers
         void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer);
 
         /// <summary>
+        /// Called when partitions are lost
+        /// </summary>
+        void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer);
+
+        /// <summary>
         /// Called when partitions are assigned
         /// </summary>
         void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer);
@@ -50,6 +55,11 @@ namespace Akka.Streams.Kafka.Helpers
             {
             }
 
+            /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+            }
+            
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
@@ -83,6 +93,12 @@ namespace Akka.Streams.Kafka.Helpers
             }
 
             /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                OnRevoke(revokedTopicPartitions, consumer);
+            }
+            
+            /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
                 _partitionAssignedCallback(assignedTopicPartitions);
@@ -115,6 +131,13 @@ namespace Akka.Streams.Kafka.Helpers
                 _handler2?.OnRevoke(revokedTopicPartitions, consumer);
             }
 
+            /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                _handler1?.OnLost(revokedTopicPartitions, consumer);
+                _handler2?.OnLost(revokedTopicPartitions, consumer);
+            }
+            
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {

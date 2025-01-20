@@ -394,6 +394,7 @@ namespace Akka.Streams.Kafka.Settings
         public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
         {
             RebalanceListener = new RebalanceListener<TKey, TValue>(
@@ -409,6 +410,7 @@ namespace Akka.Streams.Kafka.Settings
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
+                .SetPartitionsLostHandler((c, partitions) => partitionLostHandler?.Invoke(c, partitions))
                 .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
                 .Build();
         }

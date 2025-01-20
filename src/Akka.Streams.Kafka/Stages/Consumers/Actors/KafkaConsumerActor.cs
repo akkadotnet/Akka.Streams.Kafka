@@ -147,6 +147,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _rebalanceInProgress.GetAndSet(true);
         }
 
+        // This is RebalanceListener.OnPartitionsLost on JVM
+        private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
+        {
+            var watch = Stopwatch.StartNew();
+            _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
+            watch.Stop();
+            CheckDuration(watch, "onLost");
+            
+            _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
+        }
+
         private void RebalancePostStop()
         {
             var currentTopicPartitions = _consumer.Assignment.ToImmutableList();
@@ -490,17 +501,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 using (var cts = new CancellationTokenSource(_settings.PollTimeout))
                 {
-                    var (polled, exception) = PollKafka(cts.Token);
                     try
                     {
+                        var polled = PollKafka(cts.Token);
                         ProcessResult(partitionsToFetch, polled);
                     }
                     catch (Exception e)
                     {
                         ProcessExceptions(e);
                     }
-
-                    ProcessExceptions(exception);
                 }
             }
             
@@ -529,7 +538,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             Context.Stop(Self);
         }
 
-        private (List<ConsumeResult<K, V>>, Exception) PollKafka(CancellationToken token)
+        private List<ConsumeResult<K, V>> PollKafka(CancellationToken token)
         {
             ConsumeResult<K, V> consumed = null;
             var i = 10; // 10 poll attempts
@@ -537,21 +546,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var polled = new List<ConsumeResult<K, V>>();
             do
             {
-                try
-                {
-                    // this would return immediately if there are messages waiting inside the client queue buffer
-                    consumed = _consumer.Consume(timeout);
-                }
-                catch (Exception e)
-                {
-                    return (polled, e);
-                }
-                if (consumed != null)
-                    polled.Add(consumed);
+                // this would return immediately if there are messages waiting inside the client queue buffer
+                consumed = _consumer.Consume(timeout);
                 i--;
             } while (i > 0 && consumed != null && !token.IsCancellationRequested);
 
-            return (polled, null);
+            return polled;
         }
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
