@@ -82,7 +82,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// While `true`, committing is delayed.
         /// Changed by `onPartitionsRevoked` and `onPartitionsAssigned` callbacks
         /// </summary>
-        private bool _rebalanceInProgress = false;
+        private AtomicBoolean _rebalanceInProgress = new();
         /// <summary>
         /// Keeps commit offsets during rebalances for later commit.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
             var assignment = _consumer.Assignment;
-            var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToList();
+            var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToImmutableList();
             PausePartitions(partitionsToPause);
             
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
@@ -132,7 +132,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             watch.Stop();
             CheckDuration(watch, "onAssign");
             
-            _rebalanceInProgress = false;
+            _rebalanceInProgress.GetAndSet(false);
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -144,12 +144,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onRevoke");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
+            _rebalanceInProgress.GetAndSet(true);
         }
 
         private void RebalancePostStop()
         {
-            var currentTopicPartitions = _consumer.Assignment;
+            var currentTopicPartitions = _consumer.Assignment.ToImmutableList();
             PausePartitions(currentTopicPartitions);
             
             var watch = Stopwatch.StartNew();
@@ -299,6 +299,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     consumeErrorHandler: (c, e) => ProcessExceptions(new KafkaException(e)),
                     partitionAssignedHandler: (c, tp) => PartitionsAssignedHandler(tp.ToImmutableHashSet()),
                     partitionRevokedHandler: (c, tp) => PartitionsRevokedHandler(tp.ToImmutableHashSet()),
+                    partitionLostHandler: (c, tp) => PartitionsLostHandler(tp.ToImmutableHashSet()),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
@@ -441,8 +442,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void Poll()
         {
-            var currentAssignment = _consumer.Assignment;
-            var initialRebalanceInProcess = _rebalanceInProgress;
+            var currentAssignment = _consumer.Assignment.ToImmutableList();
+            var initialRebalanceInProcess = _rebalanceInProgress.Value;
 
             if (_requests.IsEmpty())
             {
@@ -482,8 +483,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 
                 // resume partitions to fetch
                 IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToList();
-                var pauseThese = currentAssignment.Except(resumeThese).ToList();
+                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToImmutableList();
+                var pauseThese = currentAssignment.Except(resumeThese).ToImmutableList();
                 PausePartitions(pauseThese);
                 ResumePartitions(resumeThese);
 
@@ -647,7 +648,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private void CheckRebalanceState(bool initialRebalanceInProgress)
         {
-            if (initialRebalanceInProgress && !_rebalanceInProgress && _rebalanceCommitSenders.Any())
+            if (initialRebalanceInProgress && !_rebalanceInProgress.Value && _rebalanceCommitSenders.Any())
             {
                 _log.Debug($"Comitting stash {string.Join(", ", _rebalanceCommitStash)} replying to {string.Join(", ", _rebalanceCommitSenders)}");
                 var replyTo = _rebalanceCommitSenders;
@@ -657,7 +658,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void PausePartitions(List<TopicPartition> partitions)
+        private void PausePartitions(IImmutableList<TopicPartition> partitions)
         {
             if (partitions.Count == 0)
                 return;
@@ -668,7 +669,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _resumedPartitions = _resumedPartitions.Except(partitions);
         }
 
-        private void ResumePartitions(List<TopicPartition> partitions)
+        private void ResumePartitions(IImmutableList<TopicPartition> partitions)
         {
             if (partitions.Count == 0)
                 return;
