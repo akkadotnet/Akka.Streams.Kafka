@@ -25,6 +25,11 @@ namespace Akka.Streams.Kafka.Helpers
         void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer);
 
         /// <summary>
+        /// Called when partitions are lost
+        /// </summary>
+        void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer);
+
+        /// <summary>
         /// Called when partitions are assigned
         /// </summary>
         void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer);
@@ -51,6 +56,11 @@ namespace Akka.Streams.Kafka.Helpers
             }
 
             /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+            }
+
+            /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
             }
@@ -68,18 +78,27 @@ namespace Akka.Streams.Kafka.Helpers
         {
             private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
             private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
+            private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
 
             public AsyncCallbacks(Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
-                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback)
+                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback, 
+                Action<IImmutableSet<TopicPartitionOffset>> partitionLostCallback)
             {
                 _partitionAssignedCallback = partitionAssignedCallback;
                 _partitionRevokedCallback = partitionRevokedCallback;
+                _partitionLostCallback = partitionLostCallback;
             }
 
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
                 _partitionRevokedCallback(revokedTopicPartitions);
+            }
+
+            /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                _partitionLostCallback(revokedTopicPartitions);
             }
 
             /// <inheritdoc />
@@ -113,6 +132,13 @@ namespace Akka.Streams.Kafka.Helpers
             {
                 _handler1?.OnRevoke(revokedTopicPartitions, consumer);
                 _handler2?.OnRevoke(revokedTopicPartitions, consumer);
+            }
+
+            /// <inheritdoc />
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                _handler1?.OnLost(revokedTopicPartitions, consumer);
+                _handler2?.OnLost(revokedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />

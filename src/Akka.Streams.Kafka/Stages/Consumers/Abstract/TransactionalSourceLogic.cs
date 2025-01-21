@@ -144,21 +144,24 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             var blockingRevokedCall = new PartitionEventHandlers.AsyncCallbacks(
                 partitionAssignedCallback: _ => { },
-                partitionRevokedCallback: revokedTopicPartitions =>
-                {
-                    var topicPartitions = revokedTopicPartitions.Select(tp => tp.TopicPartition).ToImmutableHashSet();
-                    if (WaitForDraining(topicPartitions))
-                    {
-                        SourceActor.Ref.Tell(new KafkaConsumerActorMetadata.Internal.Revoked(topicPartitions));
-                    }
-                    else
-                    {
-                        SourceActor.Ref.Tell(new Status.Failure(new Exception("Timeout while drailing")));
-                        ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
-                    }
-                });
+                partitionRevokedCallback: OnRevoke,
+                partitionLostCallback: OnRevoke);
             
             return new PartitionEventHandlers.Chain(handler, blockingRevokedCall);
+
+            void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions)
+            {
+                var topicPartitions = revokedTopicPartitions.Select(tp => tp.TopicPartition).ToImmutableHashSet();
+                if (WaitForDraining(topicPartitions))
+                {
+                    SourceActor.Ref.Tell(new KafkaConsumerActorMetadata.Internal.Revoked(topicPartitions));
+                }
+                else
+                {
+                    SourceActor.Ref.Tell(new Status.Failure(new Exception("Timeout while drailing")));
+                    ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
+                }
+            }
         }
 
         private bool WaitForDraining(IImmutableSet<TopicPartition> partitions)

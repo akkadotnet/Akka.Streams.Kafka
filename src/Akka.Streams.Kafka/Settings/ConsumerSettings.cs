@@ -394,11 +394,13 @@ namespace Akka.Streams.Kafka.Settings
         public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
+                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
                                                                            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
         {
             RebalanceListener = new RebalanceListener<TKey, TValue>(
                 onPartitionAssigned: partitionAssignedHandler,
-                onPartitionRevoked: partitionRevokedHandler);
+                onPartitionRevoked: partitionRevokedHandler,
+                onPartitionLost: partitionLostHandler);
 
             if (this.ConsumerFactory != null)
                 return this.ConsumerFactory(this);
@@ -409,6 +411,7 @@ namespace Akka.Streams.Kafka.Settings
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
+                .SetPartitionsLostHandler((c, partitions) => partitionLostHandler?.Invoke(c, partitions))
                 .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
                 .Build();
         }
@@ -416,13 +419,18 @@ namespace Akka.Streams.Kafka.Settings
 
     internal sealed class RebalanceListener<TKey, TValue>
     {
-        public RebalanceListener(Action<IConsumer<TKey, TValue>, List<TopicPartition>> onPartitionAssigned, Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionRevoked)
+        public RebalanceListener(
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>> onPartitionAssigned, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionRevoked, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionLost)
         {
             OnPartitionAssigned = onPartitionAssigned;
             OnPartitionRevoked = onPartitionRevoked;
+            OnPartitionLost = onPartitionLost;
         }
 
         public Action<IConsumer<TKey, TValue>, List<TopicPartition>> OnPartitionAssigned { get; } 
         public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionRevoked { get; }
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionLost { get; }
     }
 }
