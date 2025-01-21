@@ -244,13 +244,6 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
 
             /// <inheritdoc />
-            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
-                IRestrictedConsumer consumer)
-            {
-                RevokeEventsCounter.IncrementAndGet();
-            }
-
-            /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
                 AssignmentEventsCounter.IncrementAndGet();
