@@ -1,3 +1,8 @@
+#### 1.5.35 January 20th 2025 ####
+
+* [Upgraded to Akka.NET v1.5.35](https://github.com/akkadotnet/akka.net/releases/tag/1.5.35)
+* [Downgrade Confluent.Kafka from 2.4.0 to 2.2.0](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/420)
+
 #### 1.5.33 December 26th 2024 ####
 
 * [Upgraded to Akka.NET v1.5.33](https://github.com/akkadotnet/akka.net/releases/tag/1.5.33)

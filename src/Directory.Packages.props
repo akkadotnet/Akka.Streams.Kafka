@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.5.33</AkkaVersion>
+    <AkkaVersion>1.5.35</AkkaVersion>
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>17.4.1</TestSdkVersion>
@@ -11,7 +11,7 @@
   <!-- App dependencies -->
   <ItemGroup>
     <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
-    <PackageVersion Include="Confluent.Kafka" Version="2.4.0" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.2.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="4.1.0" />
   </ItemGroup>
 
