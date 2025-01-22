@@ -687,6 +687,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 return;
             
             var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
+            if(partitionsToResume.Count == 0 && _log.IsDebugEnabled)
+            {
+                _log.Debug("Requested partitions already resumed. Resume request: [{0}], already resumed: [{1}]", string.Join(",", partitions), string.Join(",", _resumedPartitions));
+                return;
+            }
+            
             if(_log.IsDebugEnabled)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
             _consumer.Resume(partitionsToResume);
