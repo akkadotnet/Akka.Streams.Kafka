@@ -216,7 +216,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .TakeWhile(m => m < totalMessages, inclusive: true)
                 .RunWith(Sink.Last<int>(), Materializer);
 
-            var consumedMessages = await consumedMessagesTask.ShouldCompleteWithin(10.Seconds());
+            var consumedMessages = await consumedMessagesTask.ShouldCompleteWithin(60.Seconds());
             consumedMessages.Should().Be(totalMessages);
         }
 

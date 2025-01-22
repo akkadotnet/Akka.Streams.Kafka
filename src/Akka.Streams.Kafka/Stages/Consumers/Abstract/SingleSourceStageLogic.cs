@@ -58,8 +58,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             var partitionsAssignedHandler = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
             var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
+            var partitionsLostHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsLost);
 
-            IPartitionEventHandler internalHandler = new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler);
+            IPartitionEventHandler internalHandler = new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
 
             // If custom partition events handler specified - add it to the chain
             var eventHandler = _subscription is IAutoSubscription autoSubscription && autoSubscription.PartitionEventsHandler.HasValue
@@ -144,6 +145,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
             Log.Debug("Partitions were revoked");
+        }
+        
+        private void PartitionsLost(IEnumerable<TopicPartitionOffset> partitions)
+        {
+            TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
+            Log.Debug("Partitions were lost");
         }
     }
 }
