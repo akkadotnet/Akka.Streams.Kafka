@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
     <Description>Apache Kafka adapter for Akka.NET Streams</Description>
-    <TargetFramework>$(NetStandardLibVersion)</TargetFramework>
+    <TargetFrameworks>$(NetStandardLibVersion);$(NetLibVersion)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
