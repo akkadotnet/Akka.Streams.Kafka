@@ -11,6 +11,7 @@
     <!-- Visual Studio C# settings -->
     <NetFrameworkTestVersion>net472</NetFrameworkTestVersion>
     <NetStandardLibVersion>netstandard2.0</NetStandardLibVersion>
+    <NetLibVersion>net6.0</NetLibVersion>
     <NetCoreTestVersion>net6.0</NetCoreTestVersion>
   </PropertyGroup>
   <ItemGroup>
