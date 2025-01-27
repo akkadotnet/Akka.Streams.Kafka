@@ -495,8 +495,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 
                 // resume partitions to fetch
                 IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                var resumeThese = currentAssignment.Where(partitionsToFetch.Contains).ToImmutableList();
-                var pauseThese = currentAssignment.Except(resumeThese).ToImmutableList();
+                var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
                 PausePartitions(pauseThese);
                 ResumePartitions(resumeThese);
 
