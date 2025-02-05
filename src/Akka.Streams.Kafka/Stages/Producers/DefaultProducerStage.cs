@@ -153,10 +153,30 @@ namespace Akka.Streams.Kafka.Stages
                     CheckForCompletion();
                 });
 
-            SetHandler(_stage.Out, onPull: () =>
-            {
-                TryPull(_stage.In);
-            });
+            SetHandler(
+                outlet: _stage.Out, 
+                onPull: () =>
+                {
+                    TryPull(_stage.In);
+                }, 
+                onDownstreamFinish: ex =>
+                {
+                    if (ex is null)
+                    {
+                        try
+                        {
+                            throw new DownstreamFinishedWithNoCauseException();
+                        }
+                        catch(DownstreamFinishedWithNoCauseException e)
+                        {
+                            InternalOnDownstreamFinish(e);
+                        }
+                    }
+                    else
+                    {
+                        InternalOnDownstreamFinish(ex);
+                    }
+                });
         }
 
         public override void PreStart()
