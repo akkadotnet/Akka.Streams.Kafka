@@ -1,3 +1,15 @@
+#### 1.5.37 February 6th 2025 ####
+
+* [Upgraded to Akka.NET v1.5.37](https://github.com/akkadotnet/akka.net/releases/tag/1.5.37)
+* [Refactor KafkaConsumerActor event handling](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/418)
+* [Implement missing OnPartitionsLost event handler](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/418)
+* [Introduce Partition extension to optimize LINQ](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/425)
+* [Prevent null exceptions propagation from downstream stage](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/427)
+
+**Breaking Change**
+
+There's a breaking public API inside `IPartitionEventHandler` interface. If you have a custom partition event handler, you will now need to implement the `OnLost` partition event handler delegate. 
+
 #### 1.5.35 January 20th 2025 ####
 
 * [Upgraded to Akka.NET v1.5.35](https://github.com/akkadotnet/akka.net/releases/tag/1.5.35)
