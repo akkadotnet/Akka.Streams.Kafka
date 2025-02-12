@@ -391,11 +391,12 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Creates new kafka consumer, using event handlers provided
         /// </summary>
-        public Confluent.Kafka.IConsumer<TKey, TValue> CreateKafkaConsumer(Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
-                                                                           Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
+        public IConsumer<TKey, TValue> CreateKafkaConsumer(
+            Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
+            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
         {
             RebalanceListener = new RebalanceListener<TKey, TValue>(
                 onPartitionAssigned: partitionAssignedHandler,

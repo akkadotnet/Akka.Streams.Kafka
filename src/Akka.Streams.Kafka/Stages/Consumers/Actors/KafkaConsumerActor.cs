@@ -39,7 +39,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private readonly IPartitionEventHandler _partitionEventHandler;
         
-        private readonly RestrictedConsumer<K, V> _restrictedConsumer;
         private readonly TimeSpan _warningDuration;
         
         private ICancelable _pollCancellation;
@@ -71,6 +70,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing;
         private IConsumer<K, V> _consumer;
+        private RestrictedConsumer<K, V> _restrictedConsumer;
         private IActorRef _connectionCheckerActor;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
@@ -108,8 +108,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _statisticsHandler = statisticsHandler;
             _partitionEventHandler = partitionEventHandler;
             
-            var restrictedConsumerTimeoutMs = Math.Round(_settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
-            _restrictedConsumer = new RestrictedConsumer<K, V>(_consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
             _warningDuration = _settings.PartitionHandlerWarning;
             
             _pollMessage = new Internal.Poll<K, V>(this, periodic: true);
@@ -314,6 +312,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     partitionLostHandler: (c, tp) => PartitionsLostHandler(tp.ToImmutableHashSet()),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
+                var restrictedConsumerTimeoutMs = Math.Round(_settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
+                _restrictedConsumer = new RestrictedConsumer<K, V>(_consumer, TimeSpan.FromMilliseconds(restrictedConsumerTimeoutMs));
+                
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
                     _connectionCheckerActor = Context.ActorOf(ConnectionChecker.Props(_settings.ConnectionCheckerSettings));
