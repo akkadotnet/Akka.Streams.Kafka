@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
@@ -35,43 +36,10 @@ namespace Akka.Streams.Kafka.Tests.Internal
             Mock = A.Fake<IConsumer<TKey, TValue>>();
 
             A.CallTo(() => Mock.Consume(A<int>.Ignored))
-                .ReturnsLazily(() =>
-                {
-                    lock (_lock)
-                    {
-                        if (_pendingSubscriptions.Count > 0)
-                        {
-                            var tps = _pendingSubscriptions.Select(topic => new TopicPartition(topic, 1)).ToList();
-                            foreach (var tp in tps)
-                            {
-                                if(!_paused.ContainsKey(tp))
-                                    _paused[tp] = false;
-                                _assignment = _assignment.Add(tp);
-                            }
+                .ReturnsLazily(Consume);
 
-                            Settings.RebalanceListener?.OnPartitionAssigned(Mock, tps);
-                            _pendingSubscriptions = ImmutableList<string>.Empty;
-                            return null;
-                        }
-
-                        ConsumeResult<TKey, TValue> result = null;
-                        foreach (var response in _responses)
-                        {
-                            var contained = _assignment.Contains(response.TopicPartition);
-                            var exists = _paused.TryGetValue(response.TopicPartition, out var paused);
-                            if ( contained && exists && !paused)
-                            {
-                                result = response;
-                                break;
-                            }
-                        }
-
-                        if (result != null)
-                            _responses.Remove(result);
-                        
-                        return result;
-                    }
-                });
+            A.CallTo(() => Mock.Consume(A<CancellationToken>.Ignored))
+                .ReturnsLazily(Consume);
 
             A.CallTo(() => Mock.Commit(A<IEnumerable<TopicPartitionOffset>>._))
                 .Invokes(tpos =>
@@ -128,6 +96,46 @@ namespace Akka.Streams.Kafka.Tests.Internal
 
             A.CallTo(() => Mock.Handle)
                 .Returns(null);
+            
+            return;
+
+            ConsumeResult<TKey, TValue> Consume()
+            {
+                lock (_lock)
+                {
+                    if (_pendingSubscriptions.Count > 0)
+                    {
+                        var tps = _pendingSubscriptions.Select(topic => new TopicPartition(topic, 1)).ToList();
+                        foreach (var tp in tps)
+                        {
+                            if(!_paused.ContainsKey(tp))
+                                _paused[tp] = false;
+                            _assignment = _assignment.Add(tp);
+                        }
+
+                        Settings.RebalanceListener?.OnPartitionAssigned(Mock, tps);
+                        _pendingSubscriptions = ImmutableList<string>.Empty;
+                        return null;
+                    }
+
+                    ConsumeResult<TKey, TValue> result = null;
+                    foreach (var response in _responses)
+                    {
+                        var contained = _assignment.Contains(response.TopicPartition);
+                        var exists = _paused.TryGetValue(response.TopicPartition, out var paused);
+                        if ( contained && exists && !paused)
+                        {
+                            result = response;
+                            break;
+                        }
+                    }
+
+                    if (result != null)
+                        _responses.Remove(result);
+                        
+                    return result;
+                }
+            }
         }
 
         public void Enqueue(List<ConsumeResult<TKey, TValue>> records)
