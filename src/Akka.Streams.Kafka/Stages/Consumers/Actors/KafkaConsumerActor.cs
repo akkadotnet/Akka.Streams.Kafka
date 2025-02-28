@@ -504,68 +504,62 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void Poll()
         {
-            var currentAssignment = _consumer.Assignment;
-            var initialRebalanceInProcess = _rebalanceInProgress;
-
-            if (_requests.IsEmpty())
+            try
             {
-                if(_log.IsDebugEnabled)
-                    _log.Debug("Requests are empty - attempting to consume.");
-                PausePartitions(currentAssignment);
-                try
+                var currentAssignment = _consumer.Assignment;
+                var initialRebalanceInProcess = _rebalanceInProgress;
+
+                if (_requests.IsEmpty())
                 {
+                    if (_log.IsDebugEnabled)
+                        _log.Debug("Requests are empty - attempting to consume.");
+                    PausePartitions(currentAssignment);
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
                         throw new IllegalActorStateException("Consumed message should be null");
                 }
-                catch (Exception e)
+                else
                 {
-                    ProcessExceptions(e);
-                }
-            }
-            else
-            {
-                // Seek has to be done here because they can somehow fail.
-                // Would need to see if we can move this somewhere else
-                // because a seek can take up to 200ms to complete
-                foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
-                {
-                    try
+                    // Seek has to be done here because they can somehow fail.
+                    // Would need to see if we can move this somewhere else
+                    // because a seek can take up to 200ms to complete
+                    foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
                     {
-                        if(_log.IsDebugEnabled)
-                            _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
-                        _consumer.Seek(tpo);
+                        try
+                        {
+                            if (_log.IsDebugEnabled)
+                                _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset,
+                                    tpo.Partition, tpo.Topic);
+                            _consumer.Seek(tpo);
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
+                            throw;
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
-                        throw;
-                    }
-                }
-                
-                // resume partitions to fetch
-                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
-                PausePartitions(pauseThese);
-                ResumePartitions(resumeThese);
 
-                using (var cts = new CancellationTokenSource(_settings.PollTimeout))
-                {
-                    var (polled, exception) = PollKafka(cts.Token);
-                    try
+                    // resume partitions to fetch
+                    IImmutableSet<TopicPartition> partitionsToFetch =
+                        _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                    var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
+                    PausePartitions(pauseThese);
+                    ResumePartitions(resumeThese);
+
+                    using (var cts = new CancellationTokenSource(_settings.PollTimeout))
                     {
+                        var (polled, exception) = PollKafka(cts.Token);
                         ProcessResult(partitionsToFetch, polled);
-                    }
-                    catch (Exception e)
-                    {
-                        ProcessExceptions(e);
+                        ProcessExceptions(exception);
                     }
 
-                    ProcessExceptions(exception);
+                    CheckRebalanceState(initialRebalanceInProcess);
                 }
             }
-            
-            CheckRebalanceState(initialRebalanceInProcess);
+            catch (Exception e)
+            {
+                ProcessExceptions(e);
+            }
 
             if (_stopInProgress)
             {
