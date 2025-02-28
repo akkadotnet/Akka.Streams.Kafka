@@ -161,7 +161,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             watch.Stop();
             CheckDuration(watch, "onAssign");
             
+            var initialRebalanceInProcess = _rebalanceInProgress; 
             _rebalanceInProgress = false;
+            CheckRebalanceState(initialRebalanceInProcess);
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -552,8 +554,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         ProcessResult(partitionsToFetch, polled);
                         ProcessExceptions(exception);
                     }
-
-                    CheckRebalanceState(initialRebalanceInProcess);
                 }
             }
             catch (Exception e)
