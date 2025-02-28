@@ -168,6 +168,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _rebalanceInProgress = true;
         }
 
+        // This is RebalanceListener.OnPartitionLost on JVM
+        private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
+        {
+            var watch = Stopwatch.StartNew();
+            _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
+            watch.Stop();
+            CheckDuration(watch, "onLost");
+            
+            _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
+            _rebalanceInProgress = true;
+        }
+
         private void RebalancePostStop()
         {
             var currentTopicPartitions = _consumer.Assignment;
@@ -334,6 +346,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     consumeErrorHandler: (c, e) => localSelf.Tell(new Status.Failure(new KafkaException(e))),
                     partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
                     partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
+                    partitionLostHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 if (_settings.ConnectionCheckerSettings.Enabled)
@@ -694,6 +707,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void PausePartitions(List<TopicPartition> partitions)
         {
+            if (partitions.Count == 0)
+                return;
+            
             if(_log.IsDebugEnabled)
                 _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
             _consumer.Pause(partitions);
@@ -702,7 +718,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ResumePartitions(List<TopicPartition> partitions)
         {
+            if (partitions.Count == 0)
+                return;
+            
             var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
+            if(partitionsToResume.Count == 0)
+                return;
+            
             if(_log.IsDebugEnabled)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
             _consumer.Resume(partitionsToResume);

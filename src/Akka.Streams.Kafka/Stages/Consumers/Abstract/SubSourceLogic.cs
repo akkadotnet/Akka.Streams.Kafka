@@ -63,6 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
         private readonly Action<IImmutableSet<TopicPartition>> _updatePendingPartitionsAndEmitSubSourcesCallback;
         private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
+        private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
         private readonly Action<(TopicPartition, ISubSourceCancellationStrategy)> _subsourceCancelledCallback;
         private readonly Action<(TopicPartition, IControl)> _subsourceStartedCallback;
         private readonly Action<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)> _offsetsFromExternalResponseCb;
@@ -115,6 +116,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _updatePendingPartitionsAndEmitSubSourcesCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(UpdatePendingPartitionsAndEmitSubSources);
             _partitionAssignedCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(HandlePartitionsAssigned);
             _partitionRevokedCallback = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(HandlePartitionsRevoked);
+            _partitionLostCallback = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(HandlePartitionsLost);
             _stageFailCallback = GetAsyncCallback<ConsumerFailed>(FailStage);
             _subsourceCancelledCallback = GetAsyncCallback<(TopicPartition, ISubSourceCancellationStrategy)>(HandleSubsourceCancelled);
             _subsourceStartedCallback = GetAsyncCallback<(TopicPartition, IControl)>(HandleSubsourceStarted);
@@ -144,7 +146,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             if (!(Materializer is ActorMaterializer actorMaterializer))
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
 
-            var eventHandler = new PartitionEventHandlers.AsyncCallbacks(_partitionAssignedCallback, _partitionRevokedCallback);
+            var eventHandler = new PartitionEventHandlers.AsyncCallbacks(_partitionAssignedCallback, _partitionRevokedCallback, _partitionLostCallback);
 
             var statisticsHandler = _subscription.StatisticsHandler.HasValue
                 ? _subscription.StatisticsHandler.Value
@@ -269,6 +271,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         private void HandlePartitionsRevoked(IImmutableSet<TopicPartitionOffset> revoked)
+        {
+            _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
+
+            ScheduleOnce(new CloseRevokedPartitions(), _settings.WaitClosePartition);
+        }
+
+        private void HandlePartitionsLost(IImmutableSet<TopicPartitionOffset> revoked)
         {
             _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
 
