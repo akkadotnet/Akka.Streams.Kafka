@@ -166,18 +166,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _rebalanceInProgress = true;
         }
 
-        // This is RebalanceListener.OnPartitionLost on JVM
-        private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
-        {
-            var watch = Stopwatch.StartNew();
-            _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
-            watch.Stop();
-            CheckDuration(watch, "onLost");
-            
-            _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
-        }
-
         private void RebalancePostStop()
         {
             var currentTopicPartitions = _consumer.Assignment;
