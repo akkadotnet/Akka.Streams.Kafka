@@ -136,6 +136,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             public IImmutableSet<TopicPartitionOffset> Partitions { get; }
         }
+        
+        internal sealed class PartitionLost
+        {
+            public PartitionLost(IImmutableSet<TopicPartitionOffset> partitions)
+            {
+                Partitions = partitions;
+            }
+
+            public IImmutableSet<TopicPartitionOffset> Partitions { get; }
+        }
     
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
@@ -161,6 +171,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
             CheckDuration(watch, "onRevoke");
+            
+            _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
+            _rebalanceInProgress = true;
+        }
+
+        // This is RebalanceListener.OnPartitionRevoked on JVM
+        private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
+        {
+            var watch = Stopwatch.StartNew();
+            _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
+            watch.Stop();
+            CheckDuration(watch, "onLost");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
             _rebalanceInProgress = true;
@@ -292,6 +314,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     PartitionsRevokedHandler(evt.Partitions);
                     return true;
                 
+                case PartitionLost evt:
+                    PartitionsLostHandler(evt.Partitions);
+                    return true;
+                
                 case Status.Failure fail:
                     ProcessExceptions(fail.Cause);
                     return true;
@@ -332,7 +358,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     consumeErrorHandler: (c, e) => localSelf.Tell(new Status.Failure(new KafkaException(e))),
                     partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
                     partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
-                    partitionLostHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
+                    partitionLostHandler: (c, tp) => localSelf.Tell(new PartitionLost(tp.ToImmutableHashSet())),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 var restrictedConsumerTimeoutMs = Math.Round(_settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
