@@ -508,14 +508,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             try
             {
-                var currentAssignment = _consumer.Assignment;
-                var initialRebalanceInProcess = _rebalanceInProgress;
-
-                if (_requests.IsEmpty())
+                if (_rebalanceInProgress || _requests.IsEmpty())
                 {
                     if (_log.IsDebugEnabled)
                         _log.Debug("Requests are empty - attempting to consume.");
-                    PausePartitions(currentAssignment);
+                    PausePartitions(_consumer.Assignment);
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
                         throw new IllegalActorStateException("Consumed message should be null");
@@ -544,7 +541,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     // resume partitions to fetch
                     IImmutableSet<TopicPartition> partitionsToFetch =
                         _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
+                    var (resumeThese, pauseThese) = _consumer.Assignment.Partition(partitionsToFetch.Contains);
                     PausePartitions(pauseThese);
                     ResumePartitions(resumeThese);
 
