@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -38,5 +39,23 @@ namespace Akka.Streams.Kafka.Extensions
         {
             return collection.ToImmutableHashSet();
         }
+        
+        /// <summary>
+        /// Split a list into two list depending on the boolean return value of the predicate.
+        /// </summary>
+        public static (List<T> True, List<T> False) Partition<T>(this List<T> list, Predicate<T> predicate)
+        {
+            var left = new List<T>();
+            var right = new List<T>();
+            foreach (var t in list)
+            {
+                if(predicate(t))
+                    left.Add(t);
+                else
+                    right.Add(t);
+            }
+        
+            return (left, right);
+        }        
     }
 }
