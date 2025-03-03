@@ -139,6 +139,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionRevoked on JVM
         private void PartitionsRevokedHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            Timers.Cancel(PollTimerKey);
+            
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
@@ -151,6 +153,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionLost on JVM
         private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            Timers.Cancel(PollTimerKey);
+            
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
