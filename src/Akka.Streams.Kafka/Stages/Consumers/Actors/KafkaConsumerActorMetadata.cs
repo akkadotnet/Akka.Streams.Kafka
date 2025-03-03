@@ -162,7 +162,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
 
             /// <summary>
-            /// Assign
+            /// Manual assignment of a partition - only used in conjunction with <see cref="IManualSubscription"/>
             /// </summary>
             public class Assign
             {
@@ -182,7 +182,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
             
             /// <summary>
-            /// AssignWithOffset
+            /// Manual assignment of a partition with a specific offset - only used in conjunction
+            /// with <see cref="IManualSubscription"/>
             /// </summary>
             public class AssignWithOffset
             {
