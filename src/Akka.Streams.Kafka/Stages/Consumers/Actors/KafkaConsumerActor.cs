@@ -541,13 +541,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     // resume partitions to fetch
                     IImmutableSet<TopicPartition> partitionsToFetch =
                         _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    var (resumeThese, pauseThese) = _consumer.Assignment.Partition(partitionsToFetch.Contains);
-                    PausePartitions(pauseThese);
-                    ResumePartitions(resumeThese);
 
                     using (var cts = new CancellationTokenSource(_settings.PollTimeout))
                     {
-                        var (polled, exception) = PollKafka(cts.Token);
+                        var (polled, exception) = PollKafka(partitionsToFetch, cts.Token);
                         ProcessResult(partitionsToFetch, polled);
                         if (exception != null)
                             ExceptionDispatchInfo.Capture(exception).Throw();
@@ -582,7 +579,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             Context.Stop(Self);
         }
 
-        private (List<ConsumeResult<K, V>>, Exception) PollKafka(CancellationToken token)
+        private (List<ConsumeResult<K, V>>, Exception) PollKafka(IImmutableSet<TopicPartition> partitionsToFetch, CancellationToken token)
         {
             var i = 10; // 10 poll attempts
             var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
@@ -591,6 +588,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 try
                 {
+                    var (resumeThese, pauseThese) = _consumer.Assignment.Partition(partitionsToFetch.Contains);
+                    PausePartitions(pauseThese);
+                    ResumePartitions(resumeThese);
+                    
                     // this would return immediately if there are messages waiting inside the client queue buffer
                     var consumed = _consumer.Consume(timeout);
                     if (consumed is not null)
