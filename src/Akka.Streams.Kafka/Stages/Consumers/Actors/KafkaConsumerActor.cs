@@ -25,8 +25,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
     /// </summary>
     /// <typeparam name="K">Message key type</typeparam>
     /// <typeparam name="V">Message value type</typeparam>
-    internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive
+    internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
     {
+        private const string PollTimerKey = "PollTimer";
+        
         private readonly IActorRef _owner;
         private ConsumerSettings<K, V> _settings;
         /// <summary>
@@ -41,7 +43,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         
         private readonly TimeSpan _warningDuration;
         
-        private ICancelable _pollCancellation;
         private readonly Internal.Poll<K, V> _pollMessage;
         private readonly Internal.Poll<K, V> _delayedPollMessage;
 
@@ -115,6 +116,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _log = Context.GetLogger();
         }
 
+        public ITimerScheduler Timers { get; set; } = null!;
+        
         #region Rebalance listener
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
@@ -332,7 +335,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             base.PostStop();
             try
             {
-                _pollCancellation?.Cancel(); // Stop existing scheduling, if any
+                Timers.CancelAll(); // Stop existing scheduling, if any
                 
                 if (_settings.ConnectionCheckerSettings.Enabled)
                 {
@@ -401,15 +404,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ScheduleFirstPollTask()
         {
-            if (_pollCancellation == null || _pollCancellation.IsCancellationRequested)
+            if(!Timers.IsTimerActive(PollTimerKey))
                 SchedulePollTask();
         }
 
         private void SchedulePollTask()
         {
-            _pollCancellation?.Cancel(); // Stop existing scheduling, if any
-            
-            _pollCancellation = Context.System.Scheduler.ScheduleTellOnceCancelable(_settings.PollInterval, Self, _pollMessage, Self);
+            Timers.CancelAll();
+            Timers.StartSingleTimer(PollTimerKey, _pollMessage, _settings.PollInterval);
         }
 
         private void CheckOverlappingRequests(string updateType, IActorRef fromStage, IImmutableSet<TopicPartition> topics)
@@ -430,7 +432,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ReceivePoll(Internal.Poll<K, V> poll)
         {
-            if (poll.Target == this)
+            // We overloaded `==`, we need to use `ReferenceEquals` to do this
+            if (ReferenceEquals(poll.Target, this))
             {
                 var refreshOffsets = _commitRefreshing.RefreshOffsets;
                 if (refreshOffsets.Any())
@@ -535,7 +538,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (directive == Directive.Resume)
                 return;
             
-            _pollCancellation?.Cancel();
+            Timers.CancelAll();
             if(directive == Directive.Stop && _log.IsErrorEnabled)
                 _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.Message);
             Context.Stop(Self);
