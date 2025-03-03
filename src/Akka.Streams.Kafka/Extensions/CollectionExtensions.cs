@@ -43,7 +43,7 @@ namespace Akka.Streams.Kafka.Extensions
         /// <summary>
         /// Split a list into two list depending on the boolean return value of the predicate.
         /// </summary>
-        public static (List<T> True, List<T> False) Partition<T>(this List<T> list, Predicate<T> predicate)
+        public static (IImmutableList<T> True, IImmutableList<T> False) Partition<T>(this IImmutableList<T> list, Predicate<T> predicate)
         {
             var left = new List<T>();
             var right = new List<T>();
@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Extensions
                     right.Add(t);
             }
         
-            return (left, right);
+            return (left.ToImmutableList(), right.ToImmutableList());
         }        
     }
 }
