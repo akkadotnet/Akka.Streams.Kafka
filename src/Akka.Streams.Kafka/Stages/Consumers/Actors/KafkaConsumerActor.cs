@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Threading;
 using Akka.Actor;
@@ -512,10 +513,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     if (_log.IsDebugEnabled)
                         _log.Debug("Requests are empty - attempting to consume.");
-                    PausePartitions(_consumer.Assignment);
-                    var consumed = _consumer.Consume(0);
-                    if (consumed != null)
-                        throw new IllegalActorStateException("Consumed message should be null");
+
+                    using var cts = new CancellationTokenSource(_settings.PollTimeout);
+                    PollNull(cts.Token);
                 }
                 else
                 {
@@ -549,7 +549,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         var (polled, exception) = PollKafka(cts.Token);
                         ProcessResult(partitionsToFetch, polled);
-                        ProcessExceptions(exception);
+                        if (exception != null)
+                            ExceptionDispatchInfo.Capture(exception).Throw();
                     }
                 }
             }
@@ -583,7 +584,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private (List<ConsumeResult<K, V>>, Exception) PollKafka(CancellationToken token)
         {
-            ConsumeResult<K, V> consumed = null;
             var i = 10; // 10 poll attempts
             var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
             var polled = new List<ConsumeResult<K, V>>();
@@ -592,20 +592,36 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try
                 {
                     // this would return immediately if there are messages waiting inside the client queue buffer
-                    consumed = _consumer.Consume(timeout);
+                    var consumed = _consumer.Consume(timeout);
+                    if (consumed is not null)
+                        polled.Add(consumed);
+                    else
+                        return (polled, null);
+                    i--;
                 }
                 catch (Exception e)
                 {
                     return (polled, e);
                 }
-                if (consumed != null)
-                    polled.Add(consumed);
-                i--;
-            } while (i > 0 && consumed != null && !token.IsCancellationRequested);
+            } while (i > 0 && !token.IsCancellationRequested);
 
             return (polled, null);
         }
 
+        private void PollNull(CancellationToken token)
+        {
+            _resumedPartitions = ImmutableHashSet<TopicPartition>.Empty;
+            var i = 10; // 10 poll attempts
+            do
+            {
+                _consumer.Pause(_consumer.Assignment);
+                var consumed = _consumer.Consume(0);
+                if (consumed is not null)
+                    throw new IllegalActorStateException("Consumed message should be null");
+                i--;
+            } while (i > 0 && !token.IsCancellationRequested);
+        }
+        
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
             if(_log.IsDebugEnabled)
