@@ -215,7 +215,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 case KafkaConsumerActorMetadata.Internal.Assign assign:
                 {
-                    ScheduleFirstPoolTask();
+                    ScheduleFirstPollTask();
                     CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
                     var previousAssigned = _consumer.Assignment;
                     _consumer.Assign(assign.TopicPartitions.Union(previousAssigned));
@@ -225,7 +225,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
                 {
-                    ScheduleFirstPoolTask();
+                    ScheduleFirstPollTask();
                     var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
                     CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
                     var previousAssigned = _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
@@ -422,7 +422,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 else
                     throw new NotSupportedException($"Unsupported subscription type: {subscriptionRequest.GetType()}");
                 
-                ScheduleFirstPoolTask();
+                ScheduleFirstPollTask();
             }
             catch (Exception ex)
             {
@@ -448,7 +448,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void ScheduleFirstPoolTask()
+        private void ScheduleFirstPollTask()
         {
             if (_pollCancellation == null || _pollCancellation.IsCancellationRequested)
                 SchedulePollTask();
@@ -644,6 +644,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         messages.Add(message);
                     }
                 }
+                
                 if(!messages.IsEmpty())
                 {
                     stageActorRef.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId, messages.ToImmutableList()));
