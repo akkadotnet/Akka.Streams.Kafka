@@ -10,8 +10,8 @@ using Decider = Akka.Streams.Supervision.Decider;
 namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 {
     /// <summary>
-    /// Containes metadata for <see cref="KafkaConsumerActor{K,V}"/>.
-    /// Generally this should not be used from outside of the library.
+    /// Contains metadata for <see cref="KafkaConsumerActor{K,V}"/>.
+    /// Generally this should not be used from outside the library.
     /// </summary>
     [InternalApi]
     public static class KafkaConsumerActorMetadata
@@ -44,7 +44,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         /// <summary>
         /// Contains <see cref="KafkaConsumerActor{K,V}"/>  message definitions.
-        /// Generally this should not be used from outside of the library.
+        /// Generally this should not be used from outside the library.
         /// </summary>
         [InternalApi]
         public class Internal
