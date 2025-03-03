@@ -82,7 +82,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// While `true`, committing is delayed.
         /// Changed by `onPartitionsRevoked` and `onPartitionsAssigned` callbacks
         /// </summary>
-        private bool _rebalanceInProgress = false;
+        private AtomicBoolean _rebalanceInProgress = new();
         /// <summary>
         /// Keeps commit offsets during rebalances for later commit.
         /// </summary>
@@ -116,42 +116,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         }
 
         #region Rebalance listener
-        
-        internal sealed class PartitionAssigned
-        {
-            public PartitionAssigned(IImmutableSet<TopicPartition> partitions)
-            {
-                Partitions = partitions;
-            }
-
-            public IImmutableSet<TopicPartition> Partitions { get; }
-        }
-        
-        internal sealed class PartitionRevoked
-        {
-            public PartitionRevoked(IImmutableSet<TopicPartitionOffset> partitions)
-            {
-                Partitions = partitions;
-            }
-
-            public IImmutableSet<TopicPartitionOffset> Partitions { get; }
-        }
-        
-        internal sealed class PartitionLost
-        {
-            public PartitionLost(IImmutableSet<TopicPartitionOffset> partitions)
-            {
-                Partitions = partitions;
-            }
-
-            public IImmutableSet<TopicPartitionOffset> Partitions { get; }
-        }
-    
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
             var assignment = _consumer.Assignment;
-            var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToList();
+            var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToImmutableList();
             PausePartitions(partitionsToPause);
             
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
@@ -161,7 +130,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             watch.Stop();
             CheckDuration(watch, "onAssign");
             
-            _rebalanceInProgress = false;
+            _rebalanceInProgress.GetAndSet(false);
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -173,10 +142,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onRevoke");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
+            _rebalanceInProgress.GetAndSet(true);
         }
 
-        // This is RebalanceListener.OnPartitionRevoked on JVM
+        // This is RebalanceListener.OnPartitionLost on JVM
         private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
             var watch = Stopwatch.StartNew();
@@ -185,12 +154,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onLost");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
+            _rebalanceInProgress.GetAndSet(true);
         }
-
+        
         private void RebalancePostStop()
         {
-            var currentTopicPartitions = _consumer.Assignment;
+            var currentTopicPartitions = _consumer.Assignment.ToImmutableList();
             PausePartitions(currentTopicPartitions);
             
             var watch = Stopwatch.StartNew();
@@ -305,23 +274,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     Sender.Tell(HandleMetadataRequest(req));
                     return true;
                 
-                // Rebalance callbacks
-                case PartitionAssigned evt:
-                    PartitionsAssignedHandler(evt.Partitions);
-                    return true;
-                
-                case PartitionRevoked evt:
-                    PartitionsRevokedHandler(evt.Partitions);
-                    return true;
-                
-                case PartitionLost evt:
-                    PartitionsLostHandler(evt.Partitions);
-                    return true;
-                
-                case Status.Failure fail:
-                    ProcessExceptions(fail.Cause);
-                    return true;
-                
                 default:
                     return false;
             }
@@ -353,12 +305,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 if (_log.IsDebugEnabled)
                     _log.Debug($"Creating Kafka consumer with settings: {JsonConvert.SerializeObject(_settings)}");
 
-                var localSelf = Self;
                 _consumer = _settings.CreateKafkaConsumer(
-                    consumeErrorHandler: (c, e) => localSelf.Tell(new Status.Failure(new KafkaException(e))),
-                    partitionAssignedHandler: (c, tp) => localSelf.Tell(new PartitionAssigned(tp.ToImmutableHashSet())),
-                    partitionRevokedHandler: (c, tp) => localSelf.Tell(new PartitionRevoked(tp.ToImmutableHashSet())),
-                    partitionLostHandler: (c, tp) => localSelf.Tell(new PartitionLost(tp.ToImmutableHashSet())),
+                    consumeErrorHandler: (c, e) => ProcessExceptions(new KafkaException(e)),
+                    partitionAssignedHandler: (c, tp) => PartitionsAssignedHandler(tp.ToImmutableHashSet()),
+                    partitionRevokedHandler: (c, tp) => PartitionsRevokedHandler(tp.ToImmutableHashSet()),
+                    partitionLostHandler: (c, tp) => PartitionsLostHandler(tp.ToImmutableHashSet()),
                     statisticHandler: (c, json) => _statisticsHandler.OnStatistics(c, json));
 
                 var restrictedConsumerTimeoutMs = Math.Round(_settings.PartitionHandlerWarning.TotalMilliseconds * 0.95);
@@ -504,62 +455,68 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void Poll()
         {
-            try
-            {
-                var currentAssignment = _consumer.Assignment;
-                var initialRebalanceInProcess = _rebalanceInProgress;
+            var currentAssignment = _consumer.Assignment.ToImmutableList();
+            var initialRebalanceInProcess = _rebalanceInProgress.Value;
 
-                if (_requests.IsEmpty())
+            if (_requests.IsEmpty())
+            {
+                if(_log.IsDebugEnabled)
+                    _log.Debug("Requests are empty - attempting to consume.");
+                PausePartitions(currentAssignment);
+                try
                 {
-                    if (_log.IsDebugEnabled)
-                        _log.Debug("Requests are empty - attempting to consume.");
-                    PausePartitions(currentAssignment);
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
                         throw new IllegalActorStateException("Consumed message should be null");
                 }
-                else
+                catch (Exception e)
                 {
-                    // Seek has to be done here because they can somehow fail.
-                    // Would need to see if we can move this somewhere else
-                    // because a seek can take up to 200ms to complete
-                    foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
-                    {
-                        try
-                        {
-                            if (_log.IsDebugEnabled)
-                                _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset,
-                                    tpo.Partition, tpo.Topic);
-                            _consumer.Seek(tpo);
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
-                            throw;
-                        }
-                    }
-
-                    // resume partitions to fetch
-                    IImmutableSet<TopicPartition> partitionsToFetch =
-                        _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
-                    var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
-                    PausePartitions(pauseThese);
-                    ResumePartitions(resumeThese);
-
-                    using (var cts = new CancellationTokenSource(_settings.PollTimeout))
-                    {
-                        var (polled, exception) = PollKafka(cts.Token);
-                        ProcessResult(partitionsToFetch, polled);
-                        ProcessExceptions(exception);
-                    }
-
-                    CheckRebalanceState(initialRebalanceInProcess);
+                    ProcessExceptions(e);
                 }
             }
-            catch (Exception e)
+            else
             {
-                ProcessExceptions(e);
+                // Seek has to be done here because they can somehow fail.
+                // Would need to see if we can move this somewhere else
+                // because a seek can take up to 200ms to complete
+                foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
+                {
+                    try
+                    {
+                        if(_log.IsDebugEnabled)
+                            _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition, tpo.Topic);
+                        _consumer.Seek(tpo);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
+                        throw;
+                    }
+                }
+                
+                // resume partitions to fetch
+                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
+                var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
+                PausePartitions(pauseThese);
+                ResumePartitions(resumeThese);
+
+                using (var cts = new CancellationTokenSource(_settings.PollTimeout))
+                {
+                    var (polled, exception) = PollKafka(cts.Token);
+                    try
+                    {
+                        ProcessResult(partitionsToFetch, polled);
+                    }
+                    catch (Exception e)
+                    {
+                        ProcessExceptions(e);
+                    }
+
+                    ProcessExceptions(exception);
+                }
             }
+            
+            CheckRebalanceState(initialRebalanceInProcess);
 
             if (_stopInProgress)
             {
@@ -704,7 +661,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private void CheckRebalanceState(bool initialRebalanceInProgress)
         {
-            if (initialRebalanceInProgress && !_rebalanceInProgress && _rebalanceCommitSenders.Any())
+            if (initialRebalanceInProgress && !_rebalanceInProgress.Value && _rebalanceCommitSenders.Any())
             {
                 _log.Debug($"Comitting stash {string.Join(", ", _rebalanceCommitStash)} replying to {string.Join(", ", _rebalanceCommitSenders)}");
                 var replyTo = _rebalanceCommitSenders;
@@ -714,7 +671,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void PausePartitions(List<TopicPartition> partitions)
+        private void PausePartitions(IImmutableList<TopicPartition> partitions)
         {
             if (partitions.Count == 0)
                 return;
@@ -725,14 +682,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _resumedPartitions = _resumedPartitions.Except(partitions);
         }
 
-        private void ResumePartitions(List<TopicPartition> partitions)
+        private void ResumePartitions(IImmutableList<TopicPartition> partitions)
         {
             if (partitions.Count == 0)
                 return;
             
             var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
-            if(partitionsToResume.Count == 0)
+            if(partitionsToResume.Count == 0 && _log.IsDebugEnabled)
+            {
+                _log.Debug("Requested partitions already resumed. Resume request: [{0}], already resumed: [{1}]", string.Join(",", partitions), string.Join(",", _resumedPartitions));
                 return;
+            }
             
             if(_log.IsDebugEnabled)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
