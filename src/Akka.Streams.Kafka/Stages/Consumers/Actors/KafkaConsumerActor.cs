@@ -83,7 +83,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// While `true`, committing is delayed.
         /// Changed by `onPartitionsRevoked` and `onPartitionsAssigned` callbacks
         /// </summary>
-        private AtomicBoolean _rebalanceInProgress = new();
+        private bool _rebalanceInProgress;
         /// <summary>
         /// Keeps commit offsets during rebalances for later commit.
         /// </summary>
@@ -133,7 +133,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             watch.Stop();
             CheckDuration(watch, "onAssign");
             
-            _rebalanceInProgress.GetAndSet(false);
+            _rebalanceInProgress = false;
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -147,7 +147,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onRevoke");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress.GetAndSet(true);
+            _rebalanceInProgress = true;
         }
 
         // This is RebalanceListener.OnPartitionLost on JVM
@@ -161,7 +161,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onLost");
             
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress.GetAndSet(true);
+            _rebalanceInProgress = true;
         }
         
         private void RebalancePostStop()
@@ -463,9 +463,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void Poll()
         {
             var currentAssignment = _consumer.Assignment.ToImmutableList();
-            var initialRebalanceInProcess = _rebalanceInProgress.Value;
+            var initialRebalanceInProcess = _rebalanceInProgress;
 
-            if (_requests.IsEmpty())
+            if (_rebalanceInProgress || _requests.IsEmpty())
             {
                 if(_log.IsDebugEnabled)
                     _log.Debug("Requests are empty - attempting to consume.");
@@ -668,7 +668,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private void CheckRebalanceState(bool initialRebalanceInProgress)
         {
-            if (initialRebalanceInProgress && !_rebalanceInProgress.Value && _rebalanceCommitSenders.Any())
+            if (initialRebalanceInProgress && !_rebalanceInProgress && _rebalanceCommitSenders.Any())
             {
                 _log.Debug($"Comitting stash {string.Join(", ", _rebalanceCommitStash)} replying to {string.Join(", ", _rebalanceCommitSenders)}");
                 var replyTo = _rebalanceCommitSenders;
