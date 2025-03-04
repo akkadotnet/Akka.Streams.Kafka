@@ -103,7 +103,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             return CreateKillableStream(topic, settings, probe1.Ref);
         }
 
-        const int restartAttempts = 10;
+        const int restartAttempts = 100;
         for (var i = 0; i < restartAttempts; i++)
         {
             killSwitch1 = await KillAndRelaunchFirstConsumer(killSwitch1);
