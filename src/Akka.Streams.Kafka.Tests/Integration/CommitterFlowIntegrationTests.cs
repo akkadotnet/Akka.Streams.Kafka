@@ -33,7 +33,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var topicPartition1 = new TopicPartition(topic1, 0);
             var group1 = CreateGroup(1);
 
-            await GivenInitializedTopic(topicPartition1);
+            await GivenInitializedTopicAsync(topicPartition1);
 
             await Source
                 .From(Enumerable.Range(1, 100))

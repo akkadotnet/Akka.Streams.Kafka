@@ -135,7 +135,7 @@ namespace Akka.Streams.Kafka.Tests
             }
         }
         
-        protected async Task GivenInitializedTopic(TopicPartition topicPartition)
+        protected async Task GivenInitializedTopicAsync(TopicPartition topicPartition, int partitions = KafkaFixture.KafkaPartitions)
         {
             var builder = new AdminClientBuilder(new AdminClientConfig
             {
@@ -143,12 +143,14 @@ namespace Akka.Streams.Kafka.Tests
             });
             using (var client = builder.Build())
             {
-                await client.CreateTopicsAsync(new[] {new TopicSpecification
+                await client.CreateTopicsAsync([
+                    new TopicSpecification
                 {
                     Name = topicPartition.Topic,
-                    NumPartitions = KafkaFixture.KafkaPartitions,
+                    NumPartitions = partitions,
                     ReplicationFactor = KafkaFixture.KafkaReplicationFactor
-                }});
+                }
+                ]);
             }
         }
         
