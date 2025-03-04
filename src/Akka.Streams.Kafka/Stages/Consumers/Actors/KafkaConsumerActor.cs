@@ -76,7 +76,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
         private bool _delayedPollInFlight = false;
-        private IImmutableSet<TopicPartition> _resumedPartitions = ImmutableHashSet<TopicPartition>.Empty;
         private readonly Decider _decider;
 
         /// <summary>
@@ -500,7 +499,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 // resume partitions to fetch
                 IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                 var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
-                PausePartitions(pauseThese);
+                PausePartitions(pauseThese); // SHOULD PAUSE ANY PARTITIONS THAT HAVE BEEN ASSIGNED BUT ARE NOT REQUESTED
                 ResumePartitions(resumeThese);
 
                 using (var cts = new CancellationTokenSource(_settings.PollTimeout))
@@ -682,7 +681,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if(_log.IsDebugEnabled)
                 _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
             _consumer.Pause(partitions);
-            _resumedPartitions = _resumedPartitions.Except(partitions);
         }
 
         private void ResumePartitions(IImmutableList<TopicPartition> partitions)
@@ -690,17 +688,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (partitions.Count == 0)
                 return;
             
-            var partitionsToResume = partitions.Except(_resumedPartitions).ToList();
-            if(partitionsToResume.Count == 0 && _log.IsDebugEnabled)
-            {
-                _log.Debug("Requested partitions already resumed. Resume request: [{0}], already resumed: [{1}]", string.Join(",", partitions), string.Join(",", _resumedPartitions));
-                return;
-            }
-            
             if(_log.IsDebugEnabled)
-                _log.Debug("Resuming partitions [{0}]", string.Join(",", partitionsToResume));
-            _consumer.Resume(partitionsToResume);
-            _resumedPartitions = _resumedPartitions.Union(partitionsToResume);
+                _log.Debug("Resuming partitions [{0}]", string.Join(",", partitions));
+            _consumer.Resume(partitions);
         }
 
         static class Internal
