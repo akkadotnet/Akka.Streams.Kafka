@@ -81,6 +81,32 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         var killSwitch3 = CreateKillableStream(topic, settings, probe1.Ref);
 
         // make sure all 10 messages got processed
-        var msgs = await probe1.ReceiveNAsync(10).Cast<ConsumeResult<Null, string>>().ToListAsync();
+        var msgs1 = await probe1.ReceiveNAsync(10).Cast<ConsumeResult<Null, string>>().ToListAsync();
+        
+        // act
+
+        async Task<IKillSwitch> KillAndRelaunchFirstConsumer(IKillSwitch ks)
+        {
+            // kill the first consumer
+            ks.Shutdown();
+        
+            // produce more messages
+            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings);
+        
+            var msg2 = await probe1.FishForMessageAsync(c => c is StreamCompleted or StreamFailed);
+            if (msg2 is StreamFailed failure)
+            {
+                throw new Exception("Stream failed", failure.Ex);
+            }
+            
+            // relaunch the first consumer
+            return CreateKillableStream(topic, settings, probe1.Ref);
+        }
+
+        const int restartAttempts = 10;
+        for (var i = 0; i < restartAttempts; i++)
+        {
+            killSwitch1 = await KillAndRelaunchFirstConsumer(killSwitch1);
+        }
     }
 }
