@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
+using FluentAssertions.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -87,7 +88,11 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         var killSwitch3 = CreateKillableStream(topic, settings, probe1.Ref, "consumer3");
 
         // make sure all 10 messages got processed
-        var msgs1 = await probe1.ReceiveNAsync(10).Cast<ConsumeResult<Null, string>>().ToListAsync();
+        await foreach (var msg in probe1.ReceiveNAsync(10))
+        {
+            if(msg is StreamFailed failed)
+                throw failed.Ex;
+        }
         
         // act
 
@@ -108,18 +113,18 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             ks.Shutdown();
             
             // produce more messages
-            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
+            _ = ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
             
             // relaunch the first consumer
             var newKs = CreateKillableStream(topic, settings, probe1.Ref, $"consumer1-{attemptCount}");
         
             // produce more messages
-            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
+            _ = ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
         
-            var msg2 = await probe1.FishForMessageAsync(c => c is StreamCompleted or StreamFailed);
-            if (msg2 is StreamFailed failure)
+            await foreach (var msg in probe1.ReceiveNAsync(60, 30.Seconds()))
             {
-                throw new Exception($"Stream failed due to {failure.Ex.Message}", failure.Ex);
+                if(msg is StreamFailed failed)
+                    throw failed.Ex;
             }
 
             return newKs;
