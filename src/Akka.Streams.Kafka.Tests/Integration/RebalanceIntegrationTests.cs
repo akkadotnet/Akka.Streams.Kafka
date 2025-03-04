@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
@@ -111,6 +112,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             
             // kill the first consumer
             ks.Shutdown();
+            await probe1.FishForMessageAsync(o => o is StreamCompleted);
             
             // produce more messages
             _ = ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
@@ -121,7 +123,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             await foreach (var msg in probe1.ReceiveNAsync(30, 30.Seconds()))
             {
                 if(msg is StreamFailed failed)
-                    throw failed.Ex;
+                    ExceptionDispatchInfo.Throw(failed.Ex);
             }
 
             return newKs;

@@ -183,7 +183,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _requested = true;
             _requestId += 1;
             if (Log.IsDebugEnabled)
-                Log.Debug("Requesting messages, requestId: {0}, partitions: {1}", _requestId, string.Join(", ", TopicPartitions));
+                Log.Debug("[{0}] Requesting messages, requestId: {1}, partitions: {2}", ConsumerActor.Path.Name, _requestId, string.Join(", ", TopicPartitions));
             ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
