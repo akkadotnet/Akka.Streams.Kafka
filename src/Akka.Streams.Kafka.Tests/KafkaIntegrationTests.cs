@@ -118,24 +118,7 @@ namespace Akka.Streams.Kafka.Tests
             return task.Result;
         }
 
-        protected async Task GivenInitializedTopic(string topic)
-        {
-            var builder = new AdminClientBuilder(new AdminClientConfig
-            {
-                BootstrapServers = Fixture.KafkaServer
-            });
-            using (var client = builder.Build())
-            {
-                await client.CreateTopicsAsync(new[] {new TopicSpecification
-                {
-                    Name = topic,
-                    NumPartitions = KafkaFixture.KafkaPartitions,
-                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
-                }});
-            }
-        }
-        
-        protected async Task GivenInitializedTopicAsync(TopicPartition topicPartition, int partitions = KafkaFixture.KafkaPartitions)
+        protected async Task GivenInitializedTopicAsync(string topic, int partitions = KafkaFixture.KafkaPartitions)
         {
             var builder = new AdminClientBuilder(new AdminClientConfig
             {
@@ -146,19 +129,24 @@ namespace Akka.Streams.Kafka.Tests
                 await client.CreateTopicsAsync([
                     new TopicSpecification
                 {
-                    Name = topicPartition.Topic,
-                    NumPartitions = partitions,
+                    Name = topic,
+                    NumPartitions = KafkaFixture.KafkaPartitions,
                     ReplicationFactor = KafkaFixture.KafkaReplicationFactor
                 }
                 ]);
             }
         }
         
+        protected Task GivenInitializedTopicAsync(TopicPartition topicPartition, int partitions = KafkaFixture.KafkaPartitions)
+        {
+            return GivenInitializedTopicAsync(topicPartition.Topic, partitions);
+        }
+        
         protected (IControl, TestSubscriber.Probe<TValue>) CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub, true)
-                .Select(c => c.Value)
+                .Select(c => c.Message.Value)
                 .ToMaterialized(this.SinkProbe<TValue>(), Keep.Both)
                 .Run(Materializer);
         }
