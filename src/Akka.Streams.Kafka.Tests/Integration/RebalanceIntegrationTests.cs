@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
@@ -19,7 +20,8 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
     {
     }
 
-    private static Source<CommittableMessage<Null, string>, IControl> GetConsumer(ConsumerSettings<Null, string> settings,
+    private static Source<CommittableMessage<Null, string>, IControl> GetConsumer(
+        ConsumerSettings<Null, string> settings,
         string topic)
     {
         return KafkaConsumer.CommittableSource(settings, Subscriptions.Topics(topic));
@@ -50,7 +52,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
                 Sink.ActorRef<ConsumeResult<Null, string>>(sinkRef, StreamCompleted.Instance,
                     exception => new StreamFailed(exception)), Keep.Left)
             .Run(Materializer);
-        
+
         return killSwitch;
     }
 
@@ -60,13 +62,25 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         // arrange
         var topic = CreateTopic(1);
         var group = CreateGroup(1);
-        var partitions = 10;
-        
+        const int partitions = 10;
+        const int totalMessages = 100;
+
         // initialize the topic with 10 partitions
         await GivenInitializedTopicAsync(topic, partitions);
-        
+
         var settings = CreateConsumerSettings<Null, string>(group);
-        
-        
+
+        // Produce some messages
+        await ProduceStrings(topic, Enumerable.Range(0, 10), ProducerSettings);
+
+        // Spin up 3 consumers
+        var probe1 = CreateTestProbe();
+
+        var killSwitch1 = CreateKillableStream(topic, settings, probe1.Ref);
+        var killSwitch2 = CreateKillableStream(topic, settings, probe1.Ref);
+        var killSwitch3 = CreateKillableStream(topic, settings, probe1.Ref);
+
+        // make sure all 10 messages got processed
+        var msgs = await probe1.ReceiveNAsync(10).Cast<ConsumeResult<Null, string>>().ToListAsync();
     }
 }

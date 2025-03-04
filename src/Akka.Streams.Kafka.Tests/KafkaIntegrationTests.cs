@@ -130,7 +130,7 @@ namespace Akka.Streams.Kafka.Tests
                     new TopicSpecification
                 {
                     Name = topic,
-                    NumPartitions = KafkaFixture.KafkaPartitions,
+                    NumPartitions = partitions,
                     ReplicationFactor = KafkaFixture.KafkaReplicationFactor
                 }
                 ]);
