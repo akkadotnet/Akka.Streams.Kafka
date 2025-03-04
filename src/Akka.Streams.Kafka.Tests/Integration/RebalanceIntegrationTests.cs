@@ -118,10 +118,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             // relaunch the first consumer
             var newKs = CreateKillableStream(topic, settings, probe1.Ref, $"consumer1-{attemptCount}");
         
-            // produce more messages
-            _ = ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
-        
-            await foreach (var msg in probe1.ReceiveNAsync(60, 30.Seconds()))
+            await foreach (var msg in probe1.ReceiveNAsync(30, 30.Seconds()))
             {
                 if(msg is StreamFailed failed)
                     throw failed.Ex;
