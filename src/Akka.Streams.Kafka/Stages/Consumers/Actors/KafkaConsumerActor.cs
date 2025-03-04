@@ -123,6 +123,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
             _pausedPartitions = partitions.ToImmutableList();
             
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
@@ -138,6 +140,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionRevoked on JVM
         private void PartitionsRevokedHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were revoked: {string.Join(", ", partitions)}");
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
@@ -150,6 +154,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionLost on JVM
         private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
@@ -225,6 +231,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
+                    if(_log.IsDebugEnabled)
+                        _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
                     _requests = _requests.SetItem(Sender, requestMessages);
