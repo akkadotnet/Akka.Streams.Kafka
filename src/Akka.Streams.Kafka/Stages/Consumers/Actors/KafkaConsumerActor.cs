@@ -123,7 +123,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
-            _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
             _pausedPartitions = partitions.ToImmutableList();
             
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
@@ -139,8 +140,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionRevoked on JVM
         private void PartitionsRevokedHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
-            _log.Debug($"Partitions were revoked: {string.Join(", ", partitions)}");
-            
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were revoked: {string.Join(", ", partitions)}");
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
@@ -153,8 +154,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionLost on JVM
         private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
-            _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
-            
+            if(_log.IsDebugEnabled)
+                _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
@@ -230,8 +231,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
-                    _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
-                    
+                    if(_log.IsDebugEnabled)
+                        _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
                     _requests = _requests.SetItem(Sender, requestMessages);
@@ -587,12 +588,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            if(rawResult.IsEmpty())
-                return;
-            
             if(_log.IsDebugEnabled)
                 _log.Debug("Processing poll result with {0} records", rawResult.Count);
 
+            if(rawResult.IsEmpty())
+                return;
+            
             var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
             if (!fetchedTps.Except(partitionsToFetch).IsEmpty())
                 throw new ArgumentException(
