@@ -31,7 +31,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group1 = CreateGroup(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
-            await GivenInitializedTopic(topicPartition1);
+            await GivenInitializedTopicAsync(topicPartition1);
 
             var consumerSettings = CreateConsumerSettings<string>(group1);
             var consumer = consumerSettings.ConsumerFactory != null 

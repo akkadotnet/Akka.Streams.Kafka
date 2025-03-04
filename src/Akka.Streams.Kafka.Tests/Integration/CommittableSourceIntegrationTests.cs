@@ -31,7 +31,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group1 = CreateGroup(1);
             var topicPartition1 = new TopicPartition(topic1, 0);
 
-            await GivenInitializedTopic(topicPartition1);
+            await GivenInitializedTopicAsync(topicPartition1);
 
             await Source
                 .From(Enumerable.Range(1, elementsCount))
@@ -60,7 +60,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var group1 = CreateGroup(1);
             var group2 = CreateGroup(2);
 
-            await GivenInitializedTopic(topicPartition1);
+            await GivenInitializedTopicAsync(topicPartition1);
 
             await Source
                 .From(Enumerable.Range(1, 100))
