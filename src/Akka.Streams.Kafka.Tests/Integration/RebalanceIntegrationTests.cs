@@ -38,16 +38,19 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
 
     private sealed record StreamFailed(Exception Ex);
 
-    private IKillSwitch CreateKillableStream(string topic, ConsumerSettings<Null, string> settings, IActorRef sinkRef)
+    private IKillSwitch CreateKillableStream(string topic, ConsumerSettings<Null, string> settings, IActorRef sinkRef, string consumerName)
     {
         var source = GetConsumer(settings, topic);
-        var killSwitch = source.ViaMaterialized(KillSwitches.Single<CommittableMessage<Null, string>>(), Keep.Right)
+        var killSwitch = source
+            .WithAttributes(Attributes.CreateName(consumerName))
+            .ViaMaterialized(KillSwitches.Single<CommittableMessage<Null, string>>(), Keep.Right)
             .SelectAsync(1, async msg =>
             {
                 // commit the offset
                 await msg.CommitableOffset.Commit();
                 return msg.Record;
             })
+            .WithAttributes(Attributes.CreateName($"selectAsync-{consumerName}"))
             .ToMaterialized(
                 Sink.ActorRef<ConsumeResult<Null, string>>(sinkRef, StreamCompleted.Instance,
                     exception => new StreamFailed(exception)), Keep.Left)
@@ -79,9 +82,9 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         // Spin up 3 consumers
         var probe1 = CreateTestProbe();
 
-        var killSwitch1 = CreateKillableStream(topic, settings, probe1.Ref);
-        var killSwitch2 = CreateKillableStream(topic, settings, probe1.Ref);
-        var killSwitch3 = CreateKillableStream(topic, settings, probe1.Ref);
+        var killSwitch1 = CreateKillableStream(topic, settings, probe1.Ref, "consumer1");
+        var killSwitch2 = CreateKillableStream(topic, settings, probe1.Ref, "consumer2");
+        var killSwitch3 = CreateKillableStream(topic, settings, probe1.Ref, "consumer3");
 
         // make sure all 10 messages got processed
         var msgs1 = await probe1.ReceiveNAsync(10).Cast<ConsumeResult<Null, string>>().ToListAsync();
@@ -108,7 +111,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
             
             // relaunch the first consumer
-            var newKs = CreateKillableStream(topic, settings, probe1.Ref);
+            var newKs = CreateKillableStream(topic, settings, probe1.Ref, $"consumer1-{attemptCount}");
         
             // produce more messages
             await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
