@@ -92,6 +92,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private IImmutableList<IActorRef> _rebalanceCommitSenders = ImmutableArray<IActorRef>.Empty;
 
+        private ImmutableList<TopicPartition> _pausedPartitions = ImmutableList<TopicPartition>.Empty;
+        
         /// <summary>
         /// KafkaConsumerActor
         /// </summary>
@@ -121,9 +123,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionAssigned on JVM
         private void PartitionsAssignedHandler(IImmutableSet<TopicPartition> partitions)
         {
-            var assignment = _consumer.Assignment;
-            var partitionsToPause = partitions.Where(p => assignment.Contains(p)).ToImmutableList();
-            PausePartitions(partitionsToPause);
+            _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
+            _pausedPartitions = partitions.ToImmutableList();
             
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
 
@@ -138,6 +139,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionRevoked on JVM
         private void PartitionsRevokedHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            _log.Debug($"Partitions were revoked: {string.Join(", ", partitions)}");
+            
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
@@ -150,6 +153,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         // This is RebalanceListener.OnPartitionLost on JVM
         private void PartitionsLostHandler(IImmutableSet<TopicPartitionOffset> partitions)
         {
+            _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
+            
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
@@ -225,6 +230,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
+                    _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
+                    
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
                     _requests = _requests.SetItem(Sender, requestMessages);
@@ -460,7 +467,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             var currentAssignment = _consumer.Assignment.ToImmutableList();
             var initialRebalanceInProcess = _rebalanceInProgress.Value;
 
-            if (_requests.IsEmpty())
+            var partitionsToFetch = _requests.Values.SelectMany(v => v.Topics)
+                .Where(p => currentAssignment.Contains(p))
+                .ToImmutableHashSet();
+            
+            if (partitionsToFetch.IsEmpty || _requests.IsEmpty())
             {
                 if(_log.IsDebugEnabled)
                     _log.Debug("Requests are empty - attempting to consume.");
@@ -470,6 +481,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
                         throw new IllegalActorStateException("Consumed message should be null");
+                    PausePartitions(_pausedPartitions);
+                    _pausedPartitions = ImmutableList<TopicPartition>.Empty;
                 }
                 catch (Exception e)
                 {
@@ -497,7 +510,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
                 
                 // resume partitions to fetch
-                IImmutableSet<TopicPartition> partitionsToFetch = _requests.Values.SelectMany(v => v.Topics).ToImmutableHashSet();
                 var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
                 PausePartitions(pauseThese); // SHOULD PAUSE ANY PARTITIONS THAT HAVE BEEN ASSIGNED BUT ARE NOT REQUESTED
                 ResumePartitions(resumeThese);
@@ -555,25 +567,31 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     // this would return immediately if there are messages waiting inside the client queue buffer
                     consumed = _consumer.Consume(timeout);
+                    if (consumed is null)
+                    {
+                        PausePartitions(_pausedPartitions);
+                        _pausedPartitions = ImmutableList<TopicPartition>.Empty;
+                        return (polled, null);
+                    }
+                    polled.Add(consumed);
+                    i--;
                 }
                 catch (Exception e)
                 {
                     return (polled, e);
                 }
-                if (consumed != null)
-                    polled.Add(consumed);
-                i--;
-            } while (i > 0 && consumed != null && !token.IsCancellationRequested);
+            } while (i > 0 && !token.IsCancellationRequested);
 
             return (polled, null);
         }
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            if(_log.IsDebugEnabled)
-                _log.Debug("Processing poll result with {0} records", rawResult.Count);
             if(rawResult.IsEmpty())
                 return;
+            
+            if(_log.IsDebugEnabled)
+                _log.Debug("Processing poll result with {0} records", rawResult.Count);
 
             var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
             if (!fetchedTps.Except(partitionsToFetch).IsEmpty())

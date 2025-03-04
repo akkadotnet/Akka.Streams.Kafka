@@ -75,7 +75,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         {
             var topic1 = CreateTopic(1);
 
-            await GivenInitializedTopic(topic1);
+            await GivenInitializedTopicAsync(topic1);
 
             var config = ProducerSettings<Null, string>.Create(Sys, null, null)
                 .WithBootstrapServers("localhost:10092");

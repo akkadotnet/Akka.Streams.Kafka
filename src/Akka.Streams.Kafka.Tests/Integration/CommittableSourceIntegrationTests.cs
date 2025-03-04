@@ -42,7 +42,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             var probe = KafkaConsumer
                 .CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
-                .Select(c => c.Record.Value)
+                .Select(c => c.Record.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe.Request(elementsCount);
