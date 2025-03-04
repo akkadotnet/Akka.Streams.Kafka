@@ -56,6 +56,9 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         return killSwitch;
     }
 
+    /// <summary>
+    /// Reproduction spec for https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415
+    /// </summary>
     [Fact]
     public async Task ShouldReBalanceWithoutArgumentExceptions()
     {
@@ -85,28 +88,38 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         
         // act
 
-        async Task<IKillSwitch> KillAndRelaunchFirstConsumer(IKillSwitch ks)
+        // per https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415 - it might take many restart attempts to reproduce
+        const int restartAttempts = 100;
+        for (var i = 0; i < restartAttempts; i++)
         {
+            killSwitch1 = await KillAndRelaunchFirstConsumer(killSwitch1, i);
+        }
+
+        return;
+
+        async Task<IKillSwitch> KillAndRelaunchFirstConsumer(IKillSwitch ks, int attemptCount)
+        {
+            Sys.Log.Info("Restarting consumer, attempt {0}", attemptCount);
+            
             // kill the first consumer
             ks.Shutdown();
+            
+            // produce more messages
+            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
+            
+            // relaunch the first consumer
+            var newKs = CreateKillableStream(topic, settings, probe1.Ref);
         
             // produce more messages
-            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings);
+            await ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
         
             var msg2 = await probe1.FishForMessageAsync(c => c is StreamCompleted or StreamFailed);
             if (msg2 is StreamFailed failure)
             {
-                throw new Exception("Stream failed", failure.Ex);
+                throw new Exception($"Stream failed due to {failure.Ex.Message}", failure.Ex);
             }
-            
-            // relaunch the first consumer
-            return CreateKillableStream(topic, settings, probe1.Ref);
-        }
 
-        const int restartAttempts = 100;
-        for (var i = 0; i < restartAttempts; i++)
-        {
-            killSwitch1 = await KillAndRelaunchFirstConsumer(killSwitch1);
+            return newKs;
         }
     }
 }
