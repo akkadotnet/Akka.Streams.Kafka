@@ -580,12 +580,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K,V>> rawResult)
         {
-            if(rawResult.IsEmpty())
-                return;
-            
             if(_log.IsDebugEnabled)
                 _log.Debug("Processing poll result with {0} records", rawResult.Count);
 
+            if(rawResult.IsEmpty())
+                return;
+            
             var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
             if (!fetchedTps.Except(partitionsToFetch).IsEmpty())
                 throw new ArgumentException(
