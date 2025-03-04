@@ -54,7 +54,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             .ToMaterialized(
                 Sink.ActorRef<ConsumeResult<Null, string>>(sinkRef, StreamCompleted.Instance,
                     exception => new StreamFailed(exception)), Keep.Left)
-            .Run(Materializer);
+            .Run(Materializer.WithNamePrefix(consumerName));
 
         return killSwitch;
     }
