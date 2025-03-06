@@ -256,7 +256,7 @@ namespace Akka.Streams.Kafka.Settings
             builder.AddRange(Properties);
             foreach (var kvp in properties)
             {
-                builder.AddOrSet(kvp.Key, kvp.Value);
+                builder[kvp.Key] = kvp.Value;
             }
             return Copy(properties: builder.ToImmutable());
         }
