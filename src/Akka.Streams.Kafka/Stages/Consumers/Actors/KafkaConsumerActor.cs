@@ -475,7 +475,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (partitionsToFetch.IsEmpty || _requests.IsEmpty())
             {
                 if(_log.IsDebugEnabled)
-                    _log.Debug("Requests are empty - attempting to consume.");
+                    _log.Debug("Requests are empty - partitionsToFetch.IsEmpty={0}, _requests.IsEmpty={1}. Attempting to consume with paused partitions.", 
+                        partitionsToFetch.IsEmpty, 
+                        _requests.IsEmpty);
                 PausePartitions(currentAssignment);
                 try
                 {
