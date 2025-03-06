@@ -481,7 +481,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var consumed = _consumer.Consume(0);
                     if (consumed != null)
-                        throw new IllegalActorStateException("Consumed message should be null");
+                        throw new IllegalActorStateException(
+                            $"Received unexpected message when no requests were active. " +
+                            $"Message: [{consumed.Message.Value}] from TopicPartition: [{consumed.TopicPartition}], " +
+                            $"Current assignment: [{string.Join(", ", _consumer.Assignment)}], " +
+                            $"Paused partitions: [{string.Join(", ", _pausedPartitions)}], " +
+                            $"Rebalance in progress: [{_rebalanceInProgress.Value}], " +
+                            $"Active requests: [{string.Join(", ", _requests.Values.SelectMany(v => v.Topics))}]");
                     PausePartitions(_pausedPartitions);
                     _pausedPartitions = ImmutableList<TopicPartition>.Empty;
                 }
