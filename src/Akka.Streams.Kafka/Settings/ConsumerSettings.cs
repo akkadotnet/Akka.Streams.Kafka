@@ -81,11 +81,11 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Key deserializer
         /// </summary>
-        public IDeserializer<TKey> KeyDeserializer { get; init; }
+        public IDeserializer<TKey> KeyDeserializer { get; init; } = null!;
         /// <summary>
         /// Value deserializer
         /// </summary>
-        public IDeserializer<TValue> ValueDeserializer { get; init; }
+        public IDeserializer<TValue> ValueDeserializer { get; init; } = null!;
         /// <summary>
         /// Set the interval from one scheduled poll to the next.
         /// </summary>
@@ -132,7 +132,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Fully qualified config path which holds the dispatcher configuration to be used by the consuming actor. Some blocking may occur.
         /// </summary>
-        public string DispatcherId { get; init; }
+        public string DispatcherId { get; init; } = null!;
         /// <summary>
         /// Allow automatic topic creation on the broker when subscribing to or assigning a topic.
         /// </summary>
@@ -146,11 +146,11 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Configuration properties
         /// </summary>
-        public IImmutableDictionary<string, string> Properties { get; init; }
+        public IImmutableDictionary<string, string> Properties { get; init; } = null!;
 
         public TimeSpan MetadataRequestTimeout { get; init; }
 
-        public ConnectionCheckerSettings ConnectionCheckerSettings { get; init; }
+        public ConnectionCheckerSettings ConnectionCheckerSettings { get; init; } = null!;
         
         [JsonIgnore]
         public Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>>? ConsumerFactory { get; init; }
