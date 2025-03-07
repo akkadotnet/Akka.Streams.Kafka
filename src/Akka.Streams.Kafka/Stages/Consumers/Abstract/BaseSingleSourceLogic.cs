@@ -31,8 +31,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
 
-        protected StageActor SourceActor { get; private set; }
-        internal IActorRef ConsumerActor { get; private set; }
+        protected StageActor SourceActor { get; private set; } = null!;
+        internal IActorRef ConsumerActor { get; private set; } = null!;
 
         /// <summary>
         /// Implements <see cref="IControl"/> to provide control over executed source

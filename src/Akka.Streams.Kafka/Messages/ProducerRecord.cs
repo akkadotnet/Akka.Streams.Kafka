@@ -32,7 +32,7 @@ namespace Akka.Streams.Kafka.Messages
     /// </list>
     /// </para>
     /// <para>
-    /// In either of the cases above, the timestamp that has actually been used will be returned to user in <see cref="RecordMetadata"/>
+    /// In either of the cases above, the timestamp that has actually been used will be returned to user in <see cref="Confluent.Kafka.DeliveryResult{K,V}"/>
     /// </para>
     /// </summary>
     /// <typeparam name="K">Type of key</typeparam>

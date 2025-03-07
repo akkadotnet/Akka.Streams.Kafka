@@ -69,7 +69,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Run(Materializer);
             
             for (var i = 0; i < totalMessages; ++i)
-                await AwaitConditionAsync(async () => receivedMessages.Current > i, TimeSpan.FromSeconds(10));
+                await AwaitConditionAsync(() => Task.FromResult(receivedMessages.Current > i), TimeSpan.FromSeconds(10));
 
             await Task.Delay(1000); // Wait for message handling finished after all messages received
 

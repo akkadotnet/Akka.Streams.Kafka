@@ -47,7 +47,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
                 .SelectAsync(10, elem =>
                 {
-                    committedElements.Enqueue(elem.Record.Value);
+                    committedElements.Enqueue(elem.Record.Message.Value);
                     return Task.FromResult(elem.CommitableOffset as ICommittable);
                 })
                 .Via(Committer.Flow(committerSettings))
@@ -66,7 +66,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Value)
+                .Select(_ => _.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe2.Request(75);

@@ -71,7 +71,6 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         var topic = CreateTopic(1);
         var group = CreateGroup(1);
         const int partitions = 10;
-        const int totalMessages = 100;
 
         // initialize the topic with 10 partitions
         await GivenInitializedTopicAsync(topic, partitions);
