@@ -66,7 +66,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             AwaitCondition(() => task.IsShutdown.IsCompletedSuccessfully);
 
             var probe2 = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Assignment(new TopicPartition(topic1, 0)))
-                .Select(_ => _.Value)
+                .Select(_ => _.Message.Value)
                 .RunWith(this.SinkProbe<string>(), Materializer);
 
             probe2.Request(75);

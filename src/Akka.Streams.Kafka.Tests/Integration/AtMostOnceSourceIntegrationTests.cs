@@ -51,7 +51,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe) = KafkaConsumer.AtMostOnceSource(settings, Subscriptions.Topics(topic))
                 .SelectAsync(1, m =>
                 {
-                    if (m.Value == totalMessages.ToString())
+                    if (m.Message.Value == totalMessages.ToString())
                         lastMessage.SetResult(Done.Instance);
 
                     return Task.FromResult(Done.Instance);

@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 },
                 revokedPartitions =>
                 {
-                    revoked = new Option<IImmutableSet<TopicPartition>>(revokedPartitions);
+                    revoked = Option<IImmutableSet<TopicPartition>>.Create(revokedPartitions);
                 })
                 .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
                 .Select(m => m.Message.Value);
