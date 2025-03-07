@@ -66,26 +66,28 @@ namespace Akka.Streams.Kafka.Benchmark
         public string KafkaTopic { get; private set; }
         public string KafkaGroup { get; private set; }
 
-        private async Task SetupActorSystemsAsync()
+        private Task SetupActorSystemsAsync()
         {
             Console.WriteLine("Starting Akka ActorSystems");
             
             //var config = ConfigurationFactory.ParseString("akka.loglevel = DEBUG");
-            var config = ConfigurationFactory.ParseString(@"
-          akka {
-            log-config-on-start = off
-            stdout-loglevel = INFO
-            loglevel = ERROR
-            actor {
-              debug {
-                  receive = on
-                  autoreceive = on
-                  lifecycle = on
-                  event-stream = on
-                  unhandled = on
-              }
-            }          
-          }")
+            var config = ConfigurationFactory.ParseString("""
+                                                          
+                                                                    akka {
+                                                                      log-config-on-start = off
+                                                                      stdout-loglevel = INFO
+                                                                      loglevel = ERROR
+                                                                      actor {
+                                                                        debug {
+                                                                            receive = on
+                                                                            autoreceive = on
+                                                                            lifecycle = on
+                                                                            event-stream = on
+                                                                            unhandled = on
+                                                                        }
+                                                                      }          
+                                                                    }
+                                                          """)
                 .WithFallback(KafkaExtensions.DefaultSettings);
             
             //ProducerSystem = ActorSystem.Create("akka-kafka-producer", config);
@@ -106,6 +108,8 @@ namespace Akka.Streams.Kafka.Benchmark
                 
             Console.WriteLine("ActorSystems created");
             */
+            
+            return Task.CompletedTask;
         }
 
         private async Task TeardownActorSystemsAsync()
@@ -118,7 +122,11 @@ namespace Akka.Streams.Kafka.Benchmark
             try
             {
                 await ConsumerSystem.Terminate();
-            } catch {}
+            }
+            catch
+            {
+                // ignored
+            }
         }
 
         #endregion

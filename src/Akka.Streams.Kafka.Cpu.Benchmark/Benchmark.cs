@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
             await Docker.SetupContainersAsync();
         }
 
-        public static async Task SetupAkkaAsync()
+        public static Task SetupAkkaAsync()
         {
             Console.WriteLine("Starting Akka ActorSystems");
             
@@ -50,6 +50,7 @@ akka {
             
             ConsumerSystem = ActorSystem.Create("akka-kafka-consumer", config);
             Console.WriteLine("ActorSystems started");
+            return Task.CompletedTask;
         }
 
         public static async Task TearDownAkkaAsync()
