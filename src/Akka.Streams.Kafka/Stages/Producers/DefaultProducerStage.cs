@@ -87,6 +87,9 @@ namespace Akka.Streams.Kafka.Stages
                                     onFailure: OnProduceFailure);
                                 Producer.Produce(message.Record, GetAsyncCallback(callback));
                                 PostSend(msg);
+                                // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                                // but we can't cast it to IResults<K, V, P> because it is not covariant
+                                // TODO: probably should redesign the generic parameters to avoid this entirely
                                 Push(stage.Out!, result.Task as Task<TOut>);
                             }
                             catch (Exception exception)
@@ -123,7 +126,10 @@ namespace Akka.Streams.Kafka.Stages
                             if (tasks.Length > 0)
                             {
                                 PostSend(msg);
-                                var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
+                                var resultTask = Task.WhenAll(tasks!).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
+                                // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                                // but we can't cast it to IResults<K, V, P> because it is not covariant
+                                // TODO: probably should redesign the generic parameters to avoid this entirely
                                 Push(stage.Out!, resultTask as Task<TOut>);
                             }
                             else
@@ -136,8 +142,11 @@ namespace Akka.Streams.Kafka.Stages
                         case PassThroughMessage<K, V, P> passThroughMessage:
                         {
                             PostSend(msg);
-                            var resultTask = Task.FromResult(new PassThroughResult<K, V, P>(passThroughMessage.PassThrough) as IResults<K, V, P>);
-                            Push(stage.Out, resultTask as Task<TOut>);
+                            var resultTask = Task.FromResult<IResults<K, V, P>>(new PassThroughResult<K, V, P>(passThroughMessage.PassThrough));
+                            // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                            // but we can't cast it to IResults<K, V, P> because it is not covariant
+                            // TODO: probably should redesign the generic parameters to avoid this entirely
+                            Push(stage.Out!, resultTask as Task<TOut>);
                             break;
                         }
                     }
@@ -184,7 +193,7 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             Producer = _stage.ProducerProvider(null);
-            Log.Debug($"Producer started: {Producer.Name}");
+            Log.Debug("Producer started: {0}", Producer.Name);
         }
 
         public override void PostStop()
@@ -199,7 +208,7 @@ namespace Akka.Streams.Kafka.Stages
                     Producer.Flush(_stage.FlushTimeout);
                     // TODO: fix missing deferred close support: `producer.close(stage.closeTimeout.toMillis, TimeUnit.MILLISECONDS)` 
                     Producer.Dispose();
-                    Log.Debug($"Producer closed: {Producer.Name}");
+                    Log.Debug("Producer closed: {0}", Producer.Name);
                 }
                 catch (Exception ex)
                 {
