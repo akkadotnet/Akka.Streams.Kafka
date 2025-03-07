@@ -43,7 +43,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Consumer group Id
         /// </summary>
-        public abstract string GroupId { get; }
+        public abstract string? GroupId { get; }
         /// <summary>
         /// Method for extracting string metadata from consumed record
         /// </summary>
@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public override IInternalCommitter Committer { get; }
 
         /// <inheritdoc />
-        public override string GroupId { get; }
+        public override string? GroupId { get; }
 
         /// <summary>
         /// CommittableSourceMessageBuilder
@@ -100,7 +100,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Consumer group Id
         /// </summary>
-        public string GroupId { get; }
+        public string? GroupId { get; }
         
         /// <summary>
         /// OffsetContextBuilder
@@ -115,7 +115,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
         {
-            var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+            // Use a default group ID if GroupId is null
+            var groupId = GroupId ?? "default-group";
+            var offset = new GroupTopicPartitionOffset(groupId, record.Topic, record.Partition, record.Offset);
             return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
         }
     }
@@ -128,7 +130,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Consumer's group Id
         /// </summary>
-        string GroupId { get; }
+        string? GroupId { get; }
         /// <summary>
         /// Committed marker for consumed offset
         /// </summary>

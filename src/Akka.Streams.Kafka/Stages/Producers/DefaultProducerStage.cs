@@ -54,7 +54,7 @@ namespace Akka.Streams.Kafka.Stages
         private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
         private readonly Decider _decider;
         
-        protected IProducer<K, V> Producer { get; private set; }
+        protected IProducer<K, V> Producer { get; private set; } = null!;
         protected readonly AtomicCounter AwaitingConfirmation = new AtomicCounter(0);
         
         public DefaultProducerStageLogic(IProducerStage<K, V, P, TIn, TOut> stage, Attributes attributes) : base(stage.Shape)
