@@ -15,9 +15,9 @@
   <ItemGroup>
     <PackageReference Include="Akka.Streams" />
     <PackageReference Include="Confluent.Kafka" />
-    <PackageReference Include="IsExternalInit">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    <PackageReference Include="Polyfill">
       <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
     

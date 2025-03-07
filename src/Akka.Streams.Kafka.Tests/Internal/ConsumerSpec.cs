@@ -115,7 +115,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             MockConsumer<K, V> mock,
             Func<ConsumeResult<K, V>, string> metadataFromRecord,
             string groupId = "group1",
-            string[] topics = null)
+            string[]? topics = null)
         {
             var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
                 .WithGroupId(groupId)
