@@ -48,11 +48,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private TimeSpan _pollTimeout;
         
-        /// <summary>
-        /// Limits the blocking on offsetForTimes
-        /// </summary>
-        private TimeSpan _offsetForTimesTimeout;
-
         private ImmutableDictionary<TopicPartition, TopicPartitionOffset> _seekedOffset = ImmutableDictionary<TopicPartition, TopicPartitionOffset>.Empty;
 
         /// <summary>
