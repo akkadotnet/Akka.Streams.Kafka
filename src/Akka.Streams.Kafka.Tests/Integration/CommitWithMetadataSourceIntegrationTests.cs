@@ -47,7 +47,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             {
                 var offsetWithMeta = message.CommitableOffset as ICommittableOffsetMetadata;
                 offsetWithMeta.Should().NotBeNull();
-                offsetWithMeta.Metadata.Should().Be(message.CommitableOffset.Offset.Offset.ToString());
+                offsetWithMeta!.Metadata.Should().Be(message.CommitableOffset.Offset.Offset.ToString());
             });
 
             probe.Cancel();

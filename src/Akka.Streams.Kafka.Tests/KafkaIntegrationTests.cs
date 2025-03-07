@@ -25,7 +25,7 @@ namespace Akka.Streams.Kafka.Tests
         public KafkaFixture Fixture { get; }
         protected IMaterializer Materializer { get; }
 
-        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
+        public KafkaIntegrationTests(string? actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), actorSystemName, output)
         {
             Fixture = fixture;

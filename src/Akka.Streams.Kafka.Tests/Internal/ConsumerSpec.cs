@@ -124,7 +124,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             
             return KafkaConsumer.CommitWithMetadataSource(
                 settings,
-                Subscriptions.Topics(topics),
+                Subscriptions.Topics(topics ?? []),
                 metadataFromRecord);
         }
 
