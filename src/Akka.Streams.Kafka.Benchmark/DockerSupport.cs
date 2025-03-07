@@ -95,6 +95,8 @@ namespace Akka.Streams.Kafka.Benchmark
         public async Task WaitForKafkaServerAsync()
         {
             // wait until Kafka is ready
+#pragma warning disable CS1061 // MultiplexedStream type compatibility warnings
+#pragma warning disable CS0618 // Type or member is obsolete
             var logStream = await Client.Containers.GetContainerLogsAsync(
                 _kafkaContainerName, 
                 new ContainerLogsParameters
@@ -123,6 +125,8 @@ namespace Akka.Streams.Kafka.Benchmark
 #else
             await logStream.DisposeAsync();
 #endif
+#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore CS1061 // MultiplexedStream type compatibility warnings
             
             if (!(line?.Contains("started (kafka.server.KafkaServer)") ?? false))
             {
