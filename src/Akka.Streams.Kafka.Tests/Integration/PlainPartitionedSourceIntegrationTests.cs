@@ -321,7 +321,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             
             var consumeCount = 0;
 
-            var offsets = new List<TopicPartitionOffset>
+            var offsets = new List<TopicPartitionOffset?>
             {
                 new TopicPartitionOffset(new TopicPartition(topic, 0), 0),
                 new TopicPartitionOffset(new TopicPartition(topic, 1), 0),
@@ -360,7 +360,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             consumeCount.Should().Be(totalMessages);
         }
 
-        private (int count, TopicPartitionOffset seekOffset) CheckForSeek(List<ConsumeResult<string, string>> messages)
+        private (int count, TopicPartitionOffset? seekOffset) CheckForSeek(List<ConsumeResult<string, string>> messages)
         {
             var messageCount = 0;
             foreach (var msg  in messages)
@@ -376,7 +376,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
         private (int consumed, List<ConsumeResult<string, string>>[] messages) ConsumeAllMessages(
             IConsumer<string, string> consumer,
             long totalMessages,
-            List<TopicPartitionOffset> offsets,
+            List<TopicPartitionOffset?> offsets,
             int consumeTimeout)
         {
             var result = new []
@@ -388,7 +388,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
 
             totalMessages = offsets
                 .Where(offset => offset != null)
-                .Aggregate(totalMessages, (current, offset) => current - offset.Offset.Value);
+                .Aggregate(totalMessages, (current, offset) => current - offset?.Offset.Value ?? 0);
 
             var consumeCount = 0;
             var watch = Stopwatch.StartNew();

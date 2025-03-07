@@ -29,16 +29,16 @@ namespace Akka.Streams.Kafka.Tests.Internal
         private AtomicBoolean _releaseCommitCallbacks = new AtomicBoolean();
         
         public IConsumer<TKey, TValue> Mock { get; protected set; }
-        internal ConsumerSettings<TKey, TValue> Settings { get; set; }
+        internal ConsumerSettings<TKey, TValue>? Settings { get; set; }
 
         public MockConsumer()
         {
             Mock = A.Fake<IConsumer<TKey, TValue>>();
 
-            A.CallTo(() => Mock.Consume(A<int>.Ignored))
+            A.CallTo(() => Mock.Consume(A<int>.Ignored))!
                 .ReturnsLazily(Consume);
 
-            A.CallTo(() => Mock.Consume(A<CancellationToken>.Ignored))
+            A.CallTo(() => Mock.Consume(A<CancellationToken>.Ignored))!
                 .ReturnsLazily(Consume);
 
             A.CallTo(() => Mock.Commit(A<IEnumerable<TopicPartitionOffset>>._))
@@ -50,7 +50,7 @@ namespace Akka.Streams.Kafka.Tests.Internal
             A.CallTo(() => Mock.Subscribe(A<IEnumerable<string>>._))
                 .Invokes(info =>
                 {
-                    var topics = (IEnumerable<string>) info.Arguments[0];
+                    var topics = (IEnumerable<string>) info.Arguments[0]!;
                     lock (_lock)
                     {
                         _pendingSubscriptions = topics.ToImmutableList();
@@ -60,7 +60,7 @@ namespace Akka.Streams.Kafka.Tests.Internal
             A.CallTo(() => Mock.Resume(A<IEnumerable<TopicPartition>>._))
                 .Invokes(info =>
                 {
-                    var tps = (IEnumerable<TopicPartition>) info.Arguments[0];
+                    var tps = (IEnumerable<TopicPartition>) info.Arguments[0]!;
                     lock (_lock)
                     {
                         foreach (var tp in tps)
@@ -74,7 +74,7 @@ namespace Akka.Streams.Kafka.Tests.Internal
             A.CallTo(() => Mock.Pause(A<IEnumerable<TopicPartition>>._))
                 .Invokes(info =>
                 {
-                    var tps = (IEnumerable<TopicPartition>) info.Arguments[0];
+                    var tps = (IEnumerable<TopicPartition>) info.Arguments[0]!;
                     lock (_lock)
                     {
                         foreach (var tp in tps)
@@ -94,12 +94,12 @@ namespace Akka.Streams.Kafka.Tests.Internal
                     }
                 });
 
-            A.CallTo(() => Mock.Handle)
+            A.CallTo(() => Mock.Handle)!
                 .Returns(null);
             
             return;
 
-            ConsumeResult<TKey, TValue> Consume()
+            ConsumeResult<TKey, TValue>? Consume()
             {
                 lock (_lock)
                 {
@@ -108,17 +108,17 @@ namespace Akka.Streams.Kafka.Tests.Internal
                         var tps = _pendingSubscriptions.Select(topic => new TopicPartition(topic, 1)).ToList();
                         foreach (var tp in tps)
                         {
-                            if(!_paused.ContainsKey(tp))
-                                _paused[tp] = false;
+                            _paused.TryAdd(tp, false);
                             _assignment = _assignment.Add(tp);
                         }
-
-                        Settings.RebalanceListener?.OnPartitionAssigned(Mock, tps);
+                        
+                        // if we have settings, with a rebalance listener, call the partition assigned callback
+                        Settings?.RebalanceListener?.OnPartitionAssigned?.Invoke(Mock, tps);
                         _pendingSubscriptions = ImmutableList<string>.Empty;
                         return null;
                     }
 
-                    ConsumeResult<TKey, TValue> result = null;
+                    ConsumeResult<TKey, TValue>? result = null;
                     foreach (var response in _responses)
                     {
                         var contained = _assignment.Contains(response.TopicPartition);
@@ -165,7 +165,7 @@ namespace Akka.Streams.Kafka.Tests.Internal
         {
             Mock = A.Fake<IConsumer<TKey, TValue>>();
 
-            A.CallTo(() => Mock.Handle)
+            A.CallTo(() => Mock.Handle)!
                 .Returns(null);
             
             if (failOnCallNumber == 1)
