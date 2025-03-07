@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
             
             var (control, task) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
-                .Select(m => m.Value)
+                .Select(m => m.Message.Value)
                 .Take(5)
                 .ToMaterialized(Sink.Seq<string>(), Keep.Both)
                 .Run(Materializer);

@@ -38,7 +38,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
                 .Select(message =>
                 {
                     return ProducerMessage.Single(
-                        new ProducerRecord<Null, string>(targetTopic, message.Record.Key, message.Record.Value),
+                        new ProducerRecord<Null, string>(targetTopic, message.Record.Message.Key, message.Record.Message.Value),
                         passThrough: message.PartitionOffset);
                 })
                 .ToMaterialized(KafkaProducer.TransactionalSink(ProducerSettings, transactionalId), Keep.Both)

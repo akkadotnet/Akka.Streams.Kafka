@@ -47,7 +47,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
                 .SelectAsync(10, elem =>
                 {
-                    committedElements.Enqueue(elem.Record.Value);
+                    committedElements.Enqueue(elem.Record.Message.Value);
                     return Task.FromResult(elem.CommitableOffset as ICommittable);
                 })
                 .Via(Committer.Flow(committerSettings))
