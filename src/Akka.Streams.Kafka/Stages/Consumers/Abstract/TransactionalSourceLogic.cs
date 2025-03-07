@@ -253,7 +253,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             /// <summary>
             /// Gets empty collection
             /// </summary>
-            public static InFlightRecords Empty => new InFlightRecords();
+            public static InFlightRecords Empty => new();
             
             /// <summary>
             /// Assumes that offsets per topic partition are added in the increasing order
@@ -291,7 +291,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public IImmutableSet<TopicPartition> Assigned => _inFlightRecords.Keys.ToImmutableHashSet();
 
             /// <inheritdoc />
-            public override string ToString() => _inFlightRecords.ToString();
+            public override string ToString() => _inFlightRecords.ToString()!;
         }
     }
 }

@@ -51,7 +51,7 @@ namespace Akka.Streams.Kafka.Stages
         where TOut: IResults<K, V, P>
     {
         private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
-        private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
+        private readonly TaskCompletionSource<NotUsed> _completionState = new();
         private readonly Decider _decider;
         
         protected IProducer<K, V> Producer { get; private set; } = null!;
@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages
             SetHandler(_stage.In, 
                 onPush: () =>
                 {
-                    var msg = Grab(_stage.In) as IEnvelope<K, V, P>;
+                    var msg = Grab(_stage.In);
 
                     switch (msg)
                     {
@@ -87,7 +87,7 @@ namespace Akka.Streams.Kafka.Stages
                                     onFailure: OnProduceFailure);
                                 Producer.Produce(message.Record, GetAsyncCallback(callback));
                                 PostSend(msg);
-                                Push(stage.Out, result.Task as Task<TOut>);
+                                Push(stage.Out!, result.Task as Task<TOut>);
                             }
                             catch (Exception exception)
                             {
@@ -124,7 +124,7 @@ namespace Akka.Streams.Kafka.Stages
                             {
                                 PostSend(msg);
                                 var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
-                                Push(stage.Out, resultTask as Task<TOut>);
+                                Push(stage.Out!, resultTask as Task<TOut>);
                             }
                             else
                             {
@@ -285,7 +285,7 @@ namespace Akka.Streams.Kafka.Stages
 
                 if (completionTask.IsFaulted || completionTask.IsCanceled)
                 {
-                    OnCompletionFailure(completionTask.Exception);
+                    OnCompletionFailure(completionTask.Exception!);
                 }
                 else if (completionTask.IsCompleted)
                 {

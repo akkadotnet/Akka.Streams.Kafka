@@ -48,7 +48,7 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public GroupTopicPartition GroupTopicPartition => new GroupTopicPartition(GroupId, Topic, Partition);
 
-        public bool Equals(GroupTopicPartitionOffset other)
+        public bool Equals(GroupTopicPartitionOffset? other)
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
