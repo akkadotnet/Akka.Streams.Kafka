@@ -71,7 +71,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         private readonly ImmutableList<CommittableMessage<K, V>> Messages =
             Enumerable.Range(1, 1000).Select(CreateMessage).ToImmutableList();
 
-        private async Task CheckMessagesReceiving(List<List<CommittableMessage<K, V>>> msgss)
+        private async Task CheckMessagesReceivingAsync(List<List<CommittableMessage<K, V>>> msgss)
         {
             var mock = new MockConsumer<K, V>();
             var (control, probe) = CreateCommitableSource(mock)
@@ -91,7 +91,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
                 received.Record.Message.Key.Should().Be(message.Record.Message.Key);
                 received.Record.Message.Value.Should().Be(message.Record.Message.Value);
             }
-            await control.Shutdown().WithTimeout(RemainingOrDefault);
+            await control.Shutdown().WithTimeoutAsync(RemainingOrDefault);
         }
 
         private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
@@ -105,7 +105,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
                 .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
                 .WithConsumerFactory(_ => mock.Mock);
             mock.Settings = settings;
-            
+             
             return KafkaConsumer.CommittableSource(
                 settings,
                 Subscriptions.Topics(topics));
@@ -117,14 +117,18 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             string groupId = "group1",
             string[]? topics = null)
         {
+            topics ??= new[] {"topic"};
             var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
                 .WithGroupId(groupId)
+                .WithCloseTimeout(MockConsumer.CloseTimeout)
+                .WithStopTimeout(MockConsumer.CloseTimeout)
+                .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
                 .WithConsumerFactory(_ => mock.Mock);
             mock.Settings = settings;
             
             return KafkaConsumer.CommitWithMetadataSource(
                 settings,
-                Subscriptions.Topics(topics ?? []),
+                Subscriptions.Topics(topics),
                 metadataFromRecord);
         }
 
@@ -140,7 +144,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         }
 
         [Fact(DisplayName = "CommittableSource should complete stage when stream control.stop called")]
-        public async Task ShouldCompleteWhenStopped()
+        public async Task ShouldCompleteWhenStoppedAsync()
         {
             var mock = new MockConsumer<K, V>();
             var (control, probe) = CreateCommitableSource(mock)
@@ -149,13 +153,13 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
             probe.Request(100);
 
-            await control.Shutdown().WithTimeout(TimeSpan.FromSeconds(10));
+            await control.Shutdown().WithTimeoutAsync(TimeSpan.FromSeconds(10));
             probe.ExpectComplete();
             mock.VerifyClosed();
         }
 
         [Fact(DisplayName = "CommittableSource should complete stage when processing flow canceled")]
-        public async Task ShouldCompleteWhenCanceled()
+        public async Task ShouldCompleteWhenCanceledAsync()
         {
             var mock = new MockConsumer<K, V>();
             var (control, probe) = CreateCommitableSource(mock)
@@ -165,38 +169,38 @@ akka.stream.materializer.debug.fuzzing-mode = on")
             probe.Request(100);
             mock.VerifyNotClosed();
             probe.Cancel();
-            await control.IsShutdown.WithTimeout(RemainingOrDefault);
+            await control.IsShutdown.WithTimeoutAsync(RemainingOrDefault);
             mock.VerifyClosed();
         }
 
         [Fact(DisplayName = "CommittableSource should emit messages received as one big chunk")]
-        public async Task ShouldEmitBigChunk()
+        public async Task ShouldEmitBigChunkAsync()
         {
-            await CheckMessagesReceiving(
+            await CheckMessagesReceivingAsync(
                 new List<List<CommittableMessage<string, string>>> { Messages.ToList() } );
         }
         
         [Fact(DisplayName = "CommittableSource should emit messages received as medium chunk")]
-        public async Task ShouldEmitMediumChunk()
+        public async Task ShouldEmitMediumChunkAsync()
         {
-            await CheckMessagesReceiving(Messages.Grouped(97));
+            await CheckMessagesReceivingAsync(Messages.Grouped(97));
         }
         
         [Fact(DisplayName = "CommittableSource should emit messages received as chunked singles")]
-        public async Task ShouldEmitSingles()
+        public async Task ShouldEmitSinglesAsync()
         {
             var splits = new List<List<CommittableMessage<string, string>>>();
             foreach (var message in Messages)
             {
                 splits.Add(new List<CommittableMessage<string, string>>{message});
             }
-            await CheckMessagesReceiving(splits);
+            await CheckMessagesReceivingAsync(splits);
         }
         
         [Fact(DisplayName = "CommittableSource should emit messages received empties")]
-        public async Task ShouldEmitEmpties()
+        public async Task ShouldEmitEmptiesAsync()
         {
-            await CheckMessagesReceiving(Messages.Grouped(97)
+            await CheckMessagesReceivingAsync(Messages.Grouped(97)
                 .Select(x => new List<CommittableMessage<string, string>>()).ToList());
         }
 
@@ -213,7 +217,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
     internal static class Extensions
     {
-        public static async Task WithTimeout(this Task task, TimeSpan timeout)
+        public static async Task WithTimeoutAsync(this Task task, TimeSpan timeout)
         {
             using (var cts = new CancellationTokenSource())
             {
