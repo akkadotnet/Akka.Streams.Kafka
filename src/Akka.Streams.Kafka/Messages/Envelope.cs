@@ -6,7 +6,7 @@ using Confluent.Kafka;
 namespace Akka.Streams.Kafka.Messages
 {
     /// <summary>
-    /// Type assepted by "KafkaProducer.FlexiFlow"  with implementations
+    /// Type accepted by "KafkaProducer.FlexiFlow"  with implementations
     /// 
     /// </summary>
     /// <typeparam name="K"></typeparam>
