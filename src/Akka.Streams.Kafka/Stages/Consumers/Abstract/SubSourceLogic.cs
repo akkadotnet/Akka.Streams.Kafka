@@ -86,9 +86,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         private IImmutableSet<TopicPartition> _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
 
-
-        protected StageActor SourceActor { get; private set; }
-        public IActorRef ConsumerActor { get; private set; }
+        protected StageActor SourceActor { get; private set; } = null!;
+        public IActorRef ConsumerActor { get; private set; } = null!;
 
         public PromiseControl<(TopicPartition, Source<TMessage, NotUsed>)> Control { get; }
 
@@ -482,7 +481,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 private readonly Action<(TopicPartition, IControl)> _subSourceStartedCallback;
                 private readonly KafkaConsumerActorMetadata.Internal.RequestMessages _requestMessages;
                 private bool _requested = false;
-                private StageActor _subSourceActor;
+                private StageActor _subSourceActor = null!;
                 private readonly Decider _decider;
                 private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
 
