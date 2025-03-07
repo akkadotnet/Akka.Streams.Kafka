@@ -228,7 +228,7 @@ namespace Akka.Streams.Kafka.Stages
             public IImmutableDictionary<GroupTopicPartition, Offset> Offsets { get; }
             public string GroupId { get; }
 
-            public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset> tail = null)
+            public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset>? tail = null)
             {
                 _head = head;
                 _tail = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
@@ -238,7 +238,8 @@ namespace Akka.Streams.Kafka.Stages
 
                 var previousHighest = _tail.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
                 var highestOffset = new Offset(Math.Max(head.Offset, previousHighest));
-                Offsets = _tail.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
+                Offsets = _tail.AddRange([new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset)
+                ]);
             }
             
             /// <inheritdoc />

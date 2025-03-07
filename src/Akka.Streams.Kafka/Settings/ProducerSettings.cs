@@ -117,9 +117,9 @@ namespace Akka.Streams.Kafka.Settings
                 properties: properties);
         }
 
-        public Confluent.Kafka.IProducer<TKey, TValue> CreateKafkaProducer(Action<IProducer<TKey, TValue>, Error> producerErrorHandler = null)
+        public Confluent.Kafka.IProducer<TKey, TValue> CreateKafkaProducer(Action<IProducer<TKey, TValue>, Error>? producerErrorHandler = null)
         {
-            var builder = new Confluent.Kafka.ProducerBuilder<TKey, TValue>(Properties);
+            var builder = new ProducerBuilder<TKey, TValue>(Properties);
             
             if (KeySerializer != null)
                 builder.SetKeySerializer(KeySerializer);

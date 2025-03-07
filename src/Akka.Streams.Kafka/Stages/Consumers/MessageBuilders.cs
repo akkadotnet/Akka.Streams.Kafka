@@ -73,7 +73,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// CommittableSourceMessageBuilder
         /// </summary>
-        public CommittableSourceMessageBuilder(IInternalCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        public CommittableSourceMessageBuilder(IInternalCommitter committer, string? groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
             Committer = committer;
             GroupId = groupId;

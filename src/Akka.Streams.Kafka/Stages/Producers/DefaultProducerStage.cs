@@ -31,10 +31,10 @@ namespace Akka.Streams.Kafka.Stages
         public DefaultProducerStage(
             ProducerSettings<K, V> settings,
             bool closeProducerOnStop,
-            Func<IProducer<K, V>> customProducerProvider = null)
+            Func<IProducer<K, V>>? customProducerProvider = null)
         {
-            ProducerProvider = errorHandler => customProducerProvider?.Invoke() ?? Settings.CreateKafkaProducer(errorHandler);
             Settings = settings;
+            ProducerProvider = errorHandler => customProducerProvider?.Invoke() ?? Settings.CreateKafkaProducer(errorHandler);
             CloseProducerOnStop = closeProducerOnStop;
             
             Shape = new FlowShape<TIn, Task<TOut>>(In, Out);

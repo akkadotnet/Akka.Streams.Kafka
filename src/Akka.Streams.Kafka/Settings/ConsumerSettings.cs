@@ -414,11 +414,11 @@ namespace Akka.Streams.Kafka.Settings
         /// Creates new kafka consumer, using event handlers provided
         /// </summary>
         public IConsumer<TKey, TValue> CreateKafkaConsumer(
-            Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
-            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
+            Action<IConsumer<TKey, TValue>, Error>? consumeErrorHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>>? partitionAssignedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionRevokedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionLostHandler = null,
+            Action<IConsumer<TKey, TValue>, string>? statisticHandler = null)
         {
             RebalanceListener = new RebalanceListener<TKey, TValue>(
                 onPartitionAssigned: partitionAssignedHandler,
@@ -449,17 +449,17 @@ namespace Akka.Streams.Kafka.Settings
     internal sealed class RebalanceListener<TKey, TValue>
     {
         public RebalanceListener(
-            Action<IConsumer<TKey, TValue>, List<TopicPartition>> onPartitionAssigned, 
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionRevoked, 
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionLost)
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>>? onPartitionAssigned, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionRevoked, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionLost)
         {
             OnPartitionAssigned = onPartitionAssigned;
             OnPartitionRevoked = onPartitionRevoked;
             OnPartitionLost = onPartitionLost;
         }
 
-        public Action<IConsumer<TKey, TValue>, List<TopicPartition>> OnPartitionAssigned { get; } 
-        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionRevoked { get; }
-        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionLost { get; }
+        public Action<IConsumer<TKey, TValue>, List<TopicPartition>>? OnPartitionAssigned { get; } 
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionRevoked { get; }
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionLost { get; }
     }
 }
