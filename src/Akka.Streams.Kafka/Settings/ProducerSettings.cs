@@ -93,7 +93,7 @@ namespace Akka.Streams.Kafka.Settings
                 eosCommitInterval: eosCommitInterval ?? this.EosCommitInterval,
                 properties: properties ?? this.Properties);
 
-        public static ProducerSettings<TKey, TValue> Create(ActorSystem system, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
+        public static ProducerSettings<TKey, TValue> Create(ActorSystem system, ISerializer<TKey>? keySerializer, ISerializer<TValue>? valueSerializer)
         {
             if (system == null) throw new ArgumentNullException(nameof(system));
 
@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Settings
             return Create(config, keySerializer, valueSerializer);
         }
 
-        public static ProducerSettings<TKey, TValue> Create(Akka.Configuration.Config config, ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer)
+        public static ProducerSettings<TKey, TValue> Create(Akka.Configuration.Config config, ISerializer<TKey>? keySerializer, ISerializer<TValue>? valueSerializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET producer was not provided");
             

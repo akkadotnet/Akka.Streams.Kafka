@@ -31,7 +31,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="keyDeserializer">Key deserializer</param>
         /// <param name="valueDeserializer">Value deserializer</param>
         /// <returns>Consumer settings</returns>
-        public static ConsumerSettings<TKey, TValue> Create(ActorSystem system, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
+        public static ConsumerSettings<TKey, TValue> Create(ActorSystem system, IDeserializer<TKey>? keyDeserializer, IDeserializer<TValue>? valueDeserializer)
         {
             var config = system.Settings.Config.GetConfig("akka.kafka.consumer");
             return Create(config, keyDeserializer, valueDeserializer);
@@ -45,7 +45,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="valueDeserializer">Value deserializer</param>
         /// <returns>Consumer settings</returns>
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
-        public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
+        public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey>? keyDeserializer, IDeserializer<TValue>? valueDeserializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
             
