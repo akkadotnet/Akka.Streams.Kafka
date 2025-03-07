@@ -9,12 +9,13 @@ using Error = Confluent.Kafka.Error;
 
 namespace Akka.Streams.Kafka.Settings
 {
-    public sealed class ProducerSettings<TKey, TValue>
+    public sealed record ProducerSettings<TKey, TValue>
     {
         public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, 
                                 string dispatcherId, TimeSpan flushTimeout, TimeSpan eosCommitInterval,
                                 IImmutableDictionary<string, string> properties)
         {
+            // These properties are guaranteed to be initialized in all constructors
             KeySerializer = keySerializer;
             ValueSerializer = valueSerializer;
             Parallelism = parallelism;
@@ -24,16 +25,16 @@ namespace Akka.Streams.Kafka.Settings
             Properties = properties;
         }
 
-        public ISerializer<TKey> KeySerializer { get; }
-        public ISerializer<TValue> ValueSerializer { get; }
-        public int Parallelism { get; }
-        public string DispatcherId { get; }
-        public TimeSpan FlushTimeout { get; }
+        public ISerializer<TKey> KeySerializer { get; init; } = null!;
+        public ISerializer<TValue> ValueSerializer { get; init; } = null!;
+        public int Parallelism { get; init; }
+        public string DispatcherId { get; init; } = null!;
+        public TimeSpan FlushTimeout { get; init; }
         /// <summary>
         /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
         /// </summary>
-        public TimeSpan EosCommitInterval { get; }
-        public IImmutableDictionary<string, string> Properties { get; }
+        public TimeSpan EosCommitInterval { get; init; }
+        public IImmutableDictionary<string, string> Properties { get; init; } = null!;
 
         /// <summary>
         /// Gets property value by key
@@ -46,7 +47,7 @@ namespace Akka.Streams.Kafka.Settings
             WithProperty("bootstrap.servers", bootstrapServers);
 
         public ProducerSettings<TKey, TValue> WithProperty(string key, string value) =>
-            Copy(properties: Properties.SetItem(key, value));
+            this with { Properties = Properties.SetItem(key, value) };
 
         public ProducerSettings<TKey, TValue> WithProducerConfig(ProducerConfig config)
             => WithProperties(config);
@@ -59,21 +60,22 @@ namespace Akka.Streams.Kafka.Settings
             {
                 builder[kvp.Key] = kvp.Value;
             }
-            return Copy(properties: builder.ToImmutable());
+            return this with { Properties = builder.ToImmutable() };
         }   
         
         /// <summary>
         /// The time interval to commit a transaction when using the `Transactional.sink` or `Transactional.flow`.
         /// </summary>
         public ProducerSettings<TKey, TValue> WithEosCommitInterval(TimeSpan eosCommitInterval) =>
-            Copy(eosCommitInterval: eosCommitInterval);
+            this with { EosCommitInterval = eosCommitInterval };
 
         public ProducerSettings<TKey, TValue> WithParallelism(int parallelism) =>
-            Copy(parallelism: parallelism);
+            this with { Parallelism = parallelism };
 
         public ProducerSettings<TKey, TValue> WithDispatcher(string dispatcherId) =>
-            Copy(dispatcherId: dispatcherId);
+            this with { DispatcherId = dispatcherId };
 
+        [Obsolete("Use C# record copy syntax with 'with' expressions instead")]
         private ProducerSettings<TKey, TValue> Copy(
             ISerializer<TKey> keySerializer = null,
             ISerializer<TValue> valueSerializer = null,
