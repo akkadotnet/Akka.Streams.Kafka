@@ -6,6 +6,7 @@
     <Tags>akka streams kafka</Tags>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Visual Studio C# settings -->
