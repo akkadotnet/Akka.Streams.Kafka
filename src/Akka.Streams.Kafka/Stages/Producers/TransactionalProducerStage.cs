@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Stages
             _stage = stage;
             _commitInterval = commitInterval;
 
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
             _onInternalCommitCallback = GetAsyncCallback(() => ScheduleOnce(CommitSchedulerKey, commitInterval));

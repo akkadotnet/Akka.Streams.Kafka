@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 using Confluent.Kafka;
+using Debug = System.Diagnostics.Debug;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
 {
@@ -158,9 +159,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
         {
             _transactionalMessageBuilderStage.OnMessage(record);
+
+            // groupId can be null sometimes, but never in this context
+            Debug.Assert(_transactionalMessageBuilderStage.GroupId != null, "_transactionalMessageBuilderStage.GroupId != null");
             
             var offset = new PartitionOffsetCommittedMarker(
-                _transactionalMessageBuilderStage.GroupId, 
+                _transactionalMessageBuilderStage.GroupId!, 
                 record.Topic, 
                 record.Partition, 
                 record.Offset, 

@@ -430,7 +430,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public override void PerformStop() => _performStop();
 
             /// <inheritdoc />
-            public override void PerformShutdown(Exception ex) => _performShutdown(ex);
+            public override void PerformShutdown(Exception? ex) => _performShutdown(ex);
         }
 
         private class SubSourceStreamStage : GraphStage<SourceShape<TMessage>>
@@ -611,9 +611,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         _completeStage = completeStage;
                     }
 
-                    public override void PerformShutdown(Exception ex)
+                    public override void PerformShutdown(Exception? ex)
                     {
-                        _debugLog("#{0} Completing SubSource for partition {1}", new object[] { _actorNumber, _topicPartition });
+                        _debugLog("#{0} Completing SubSource for partition {1}", [_actorNumber, _topicPartition]);
                         _completeStage(ex);
                     }
                 }

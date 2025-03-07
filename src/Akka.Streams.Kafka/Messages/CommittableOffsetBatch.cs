@@ -129,7 +129,7 @@ namespace Akka.Streams.Kafka.Messages
                 : throw new ArgumentException($"Unknown committable offset, got {committableOffset.GetType().Name}, expected {nameof(committableOffset)}");
             
             
-            IImmutableDictionary<string, IInternalCommitter> newCommitters = ImmutableDictionary<string, IInternalCommitter>.Empty;
+            IImmutableDictionary<string, IInternalCommitter> newCommitters;
             if (Committers.TryGetValue(partitionOffset.GroupId, out var groupCommitter))
             {
                 if (!groupCommitter.Equals(committer))

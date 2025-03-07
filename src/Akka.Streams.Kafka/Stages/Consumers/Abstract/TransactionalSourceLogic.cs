@@ -32,7 +32,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ISubscription subscription, 
                 Attributes attributes,
                 Func<ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>, TransactionalMessageBuilder<K, V>> messageBuilderFactory) 
-            : base(shape, settings, subscription, attributes, logic => messageBuilderFactory(logic as ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>))
+            : base(shape, settings, subscription, attributes, logic => messageBuilderFactory((ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>)logic))
         {
             _shape = shape;
             _settings = settings;
