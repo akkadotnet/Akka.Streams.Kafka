@@ -589,7 +589,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                 private class SubSourceStreamPromiseControl : PromiseControl<TMessage>
                 {
-                    private readonly ILoggingAdapter _log;
                     private readonly Action<string, object[]> _debugLog;
                     private readonly int _actorNumber;
                     private readonly TopicPartition _topicPartition;
