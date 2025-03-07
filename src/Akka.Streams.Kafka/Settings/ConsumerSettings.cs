@@ -360,9 +360,12 @@ namespace Akka.Streams.Kafka.Settings
             this with { StopTimeout = closeTimeout };
 
         /// <summary>
-        /// Assigned consumer group Id, or null
+        /// Assigned consumer group id.
         /// </summary>
-        public string? GroupId => Properties.GetValueOrDefault("group.id");
+        /// <remarks>
+        /// According to the Kafka documentation, the group Id is requried and cannot be null.
+        /// </remarks>
+        public string GroupId => Properties["group.id"];
 
         [Obsolete("Use C# record copy syntax with 'with' expressions instead")]
         private ConsumerSettings<TKey, TValue> Copy(

@@ -107,7 +107,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _getOffsetsOnAssign = getOffsetsOnAssign;
             _onRevoke = onRevoke;
 
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
             Control = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback, PerformStop, PerformShutdown);
@@ -377,9 +377,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Control.OnStop();
         }
 
-        private void PerformShutdown(Exception ex)
+        private void PerformShutdown(Exception? ex)
         {
-            if (ex is { } and not SubscriptionWithCancelException.NonFailureCancellation)
+            if (ex is not null and not SubscriptionWithCancelException.NonFailureCancellation)
                 Log.Info(ex, $"{nameof(SubSourceLogic<K, V, TMessage>)} was shutdown due to exception");
             
             SetKeepGoing(true);
@@ -409,7 +409,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected class SubSourcePromiseControl : PromiseControl<(TopicPartition, Source<TMessage, NotUsed>)>
         {
             private readonly Action _performStop;
-            private readonly Action<Exception> _performShutdown;
+            private readonly Action<Exception?> _performShutdown;
 
             public SubSourcePromiseControl(SourceShape<(
                     TopicPartition,
@@ -417,9 +417,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     Action<Outlet<(TopicPartition, Source<TMessage, NotUsed>)>> completeStageOutlet,
                     Action<bool> setStageKeepGoing, 
                     Func<Action, Action> asyncCallbackFactory,
-                    Func<Action<Exception>, Action<Exception>> asyncShutdownCallbackFactory,
+                    Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
                     Action performStop, 
-                    Action<Exception> performShutdown)
+                    Action<Exception?> performShutdown)
                 : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory, asyncShutdownCallbackFactory)
             {
                 _performStop = performStop;
@@ -591,18 +591,18 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     private readonly Action<string, object[]> _debugLog;
                     private readonly int _actorNumber;
                     private readonly TopicPartition _topicPartition;
-                    private readonly Action<Exception> _completeStage;
+                    private readonly Action<Exception?> _completeStage;
 
                     public SubSourceStreamPromiseControl(
                         SourceShape<TMessage> shape,
                         Action<Outlet<TMessage>> completeStageOutlet,
                         Action<bool> setStageKeepGoing,
                         Func<Action, Action> asyncCallbackFactory,
-                        Func<Action<Exception>, Action<Exception>> asyncShutdownCallbackFactory,
+                        Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
                         Action<string, object[]> debugLog,
                         int actorNumber,
                         TopicPartition topicPartition,
-                        Action<Exception> completeStage)
+                        Action<Exception?> completeStage)
                         : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory, asyncShutdownCallbackFactory)
                     {
                         _debugLog = debugLog;

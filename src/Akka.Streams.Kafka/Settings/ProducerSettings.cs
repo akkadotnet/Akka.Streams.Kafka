@@ -39,7 +39,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Gets property value by key
         /// </summary>
-        public object this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
+        public object? this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
         
         public string? GetProperty(string key) => Properties.GetValueOrDefault(key);
         

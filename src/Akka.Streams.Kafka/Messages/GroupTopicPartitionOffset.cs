@@ -55,7 +55,7 @@ namespace Akka.Streams.Kafka.Messages
             return GroupId == other.GroupId && Topic == other.Topic && Partition == other.Partition && Offset.Equals(other.Offset);
         }
 
-        public override bool Equals(object obj) => ReferenceEquals(this, obj) || obj is GroupTopicPartitionOffset other && Equals(other);
+        public override bool Equals(object? obj) => ReferenceEquals(this, obj) || obj is GroupTopicPartitionOffset other && Equals(other);
 
         public override int GetHashCode()
         {
@@ -95,14 +95,14 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public int Partition { get; }
 
-        public bool Equals(GroupTopicPartition other)
+        public bool Equals(GroupTopicPartition? other)
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
             return GroupId == other.GroupId && Topic == other.Topic && Partition == other.Partition;
         }
 
-        public override bool Equals(object obj) => ReferenceEquals(this, obj) || obj is GroupTopicPartition other && Equals(other);
+        public override bool Equals(object? obj) => ReferenceEquals(this, obj) || obj is GroupTopicPartition other && Equals(other);
 
         public override int GetHashCode()
         {
@@ -133,14 +133,14 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public string Metadata { get; }
 
-        public bool Equals(OffsetAndMetadata other)
+        public bool Equals(OffsetAndMetadata? other)
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
             return Offset.Equals(other.Offset) && Metadata == other.Metadata;
         }
 
-        public override bool Equals(object obj) => ReferenceEquals(this, obj) || obj is OffsetAndMetadata other && Equals(other);
+        public override bool Equals(object? obj) => ReferenceEquals(this, obj) || obj is OffsetAndMetadata other && Equals(other);
 
         public override int GetHashCode()
         {

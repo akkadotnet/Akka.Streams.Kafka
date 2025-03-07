@@ -24,7 +24,7 @@ namespace Akka.Streams.Kafka.Stages
         
         public TimeSpan FlushTimeout => _settings.FlushTimeout;
         public bool CloseProducerOnStop { get; }
-        public Func<Action<IProducer<K, V>, Error>, IProducer<K, V>> ProducerProvider { get; }
+        public Func<Action<IProducer<K, V>, Error>?, IProducer<K, V>> ProducerProvider { get; }
         public override FlowShape<IEnvelope<K, V, TPassThrough>, Task<IResults<K, V, TPassThrough>>> Shape { get; }
         public Inlet<IEnvelope<K, V, TPassThrough>> In { get; } = new Inlet<IEnvelope<K, V, TPassThrough>>("kafka.transactional.producer.in");
         public Outlet<Task<IResults<K, V, TPassThrough>>> Out { get; } = new Outlet<Task<IResults<K, V, TPassThrough>>>("kafka.transactional.producer.out");

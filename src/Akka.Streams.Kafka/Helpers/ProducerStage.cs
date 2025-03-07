@@ -18,7 +18,7 @@ namespace Akka.Streams.Kafka.Helpers
     {
         TimeSpan FlushTimeout { get; }
         bool CloseProducerOnStop { get; }
-        Func<Action<IProducer<K, V>, Error>, IProducer<K, V>> ProducerProvider { get; }
+        Func<Action<IProducer<K, V>, Error>?, IProducer<K, V>> ProducerProvider { get; }
         
         Inlet<TIn> In { get; }
         Outlet<Task<TOut>> Out { get; }

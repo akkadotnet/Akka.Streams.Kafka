@@ -41,10 +41,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// Committed object
         /// </summary>
         public abstract IInternalCommitter Committer { get; }
+        
         /// <summary>
         /// Consumer group Id
         /// </summary>
-        public abstract string? GroupId { get; }
+        public abstract string GroupId { get; }
         /// <summary>
         /// Method for extracting string metadata from consumed record
         /// </summary>
@@ -69,12 +70,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public override IInternalCommitter Committer { get; }
 
         /// <inheritdoc />
-        public override string? GroupId { get; }
+        public override string GroupId { get; }
 
         /// <summary>
         /// CommittableSourceMessageBuilder
         /// </summary>
-        public CommittableSourceMessageBuilder(IInternalCommitter committer, string? groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        public CommittableSourceMessageBuilder(IInternalCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
             Committer = committer;
             GroupId = groupId;
@@ -126,12 +127,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// <summary>
     /// Base interface for transactional message builders
     /// </summary>
-    internal interface ITransactionalMessageBuilderStage<K, V, TMsg> : IMessageBuilder<K, V, TMsg>
+    internal interface ITransactionalMessageBuilderStage<K, V, out TMsg> : IMessageBuilder<K, V, TMsg>
     {
         /// <summary>
         /// Consumer's group Id
         /// </summary>
-        string? GroupId { get; }
+        string GroupId { get; }
+        
         /// <summary>
         /// Committed marker for consumed offset
         /// </summary>

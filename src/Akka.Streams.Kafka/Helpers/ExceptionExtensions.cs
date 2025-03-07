@@ -9,7 +9,7 @@ namespace Akka.Streams.Kafka.Helpers
             => ex switch
             {
                 KafkaException {InnerException: null} ke => ke.Error.Reason,
-                KafkaException {InnerException: { }} ke => ke.InnerException.Message ?? ke.Error.Reason,
+                KafkaException {InnerException: not null } ke => ke.InnerException.Message,
                 _ => ex.Message
             };
     }

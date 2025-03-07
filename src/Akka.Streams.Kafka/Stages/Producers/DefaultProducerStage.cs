@@ -20,12 +20,12 @@ namespace Akka.Streams.Kafka.Stages
         where TIn: IEnvelope<K, V, P>
         where TOut: IResults<K, V, P>
     {
-        public Func<Action<IProducer<K, V>, Error>, IProducer<K, V>> ProducerProvider { get; }
+        public Func<Action<IProducer<K, V>, Error>?, IProducer<K, V>> ProducerProvider { get; }
         public ProducerSettings<K, V> Settings { get; }
         public TimeSpan FlushTimeout => Settings.FlushTimeout;
         public bool CloseProducerOnStop { get; }
-        public Inlet<TIn> In { get; } = new Inlet<TIn>("kafka.producer.in");
-        public Outlet<Task<TOut>> Out { get; } = new Outlet<Task<TOut>>("kafka.producer.out");
+        public Inlet<TIn> In { get; } = new("kafka.producer.in");
+        public Outlet<Task<TOut>> Out { get; } = new("kafka.producer.out");
         public override FlowShape<TIn, Task<TOut>> Shape { get; }
 
         public DefaultProducerStage(
