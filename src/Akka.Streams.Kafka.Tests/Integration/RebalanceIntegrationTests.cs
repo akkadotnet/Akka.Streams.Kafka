@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
@@ -8,6 +10,7 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Util;
 using Confluent.Kafka;
 using FluentAssertions.Extensions;
 using Xunit;
@@ -40,7 +43,8 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
 
     private sealed record StreamFailed(Exception Ex);
 
-    private IKillSwitch CreateKillableStream(string topic, ConsumerSettings<Null, string> settings, IActorRef sinkRef, string consumerName)
+    private IKillSwitch CreateKillableStream(string topic, ConsumerSettings<Null, string> settings, IActorRef sinkRef,
+        string consumerName)
     {
         var source = GetConsumer(settings, topic);
         var killSwitch = source
@@ -90,10 +94,10 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         // make sure all 10 messages got processed
         await foreach (var msg in probe1.ReceiveNAsync(10))
         {
-            if(msg is StreamFailed failed)
+            if (msg is StreamFailed failed)
                 throw failed.Ex;
         }
-        
+
         // act
 
         // per https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415 - it might take many restart attempts to reproduce
@@ -108,24 +112,47 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         async Task<IKillSwitch> KillAndRelaunchFirstConsumer(IKillSwitch ks, int attemptCount)
         {
             Sys.Log.Info("Restarting consumer, attempt {0}", attemptCount);
-            
+
             // kill the first consumer
             ks.Shutdown();
             await probe1.FishForMessageAsync(o => o is StreamCompleted);
-            
+
             // produce more messages
             _ = ProduceStrings(topic, Enumerable.Range(10, 30), ProducerSettings); // let it run as a detatched task
-            
+
             // relaunch the first consumer
             var newKs = CreateKillableStream(topic, settings, probe1.Ref, $"consumer1-{attemptCount}");
-        
+
             await foreach (var msg in probe1.ReceiveNAsync(30, 30.Seconds()))
             {
-                if(msg is StreamFailed failed)
+                if (msg is StreamFailed failed)
                     ExceptionDispatchInfo.Throw(failed.Ex);
             }
 
             return newKs;
+        }
+    }
+
+    private class AkkaPartitionAssignor
+    {
+        private readonly ILoggingAdapter _log;
+
+        private static readonly AtomicReference<ImmutableDictionary<string, ImmutableHashSet<TopicPartition>>>
+            ClientIdToPartitions =
+                new(ImmutableDictionary<string, ImmutableHashSet<TopicPartition>>.Empty);
+
+        public AkkaPartitionAssignor(ActorSystem sys)
+        {
+            _log = Logging.GetLogger(sys, typeof(AkkaPartitionAssignor));
+        }
+
+        public IEnumerable<TopicPartitionOffset> AssignPartitions<TKey, TValue>(IConsumer<TKey, TValue> consumer,
+            List<TopicPartition> partitions)
+        {
+            var safeClientIdToPartitions = ClientIdToPartitions.Value;
+            var allTopicPartitions = safeClientIdToPartitions.Values
+                .SelectMany(x => x).ToImmutableHashSet();
+            var subscriptionTopicPartitions = partitions
         }
     }
 }
