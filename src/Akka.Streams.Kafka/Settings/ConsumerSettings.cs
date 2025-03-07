@@ -81,11 +81,11 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Key deserializer
         /// </summary>
-        public IDeserializer<TKey> KeyDeserializer { get; init; } = null!;
+        public IDeserializer<TKey>? KeyDeserializer { get; init; }
         /// <summary>
         /// Value deserializer
         /// </summary>
-        public IDeserializer<TValue> ValueDeserializer { get; init; } = null!;
+        public IDeserializer<TValue>? ValueDeserializer { get; init; }
         /// <summary>
         /// Set the interval from one scheduled poll to the next.
         /// </summary>
@@ -157,8 +157,8 @@ namespace Akka.Streams.Kafka.Settings
 
         [Obsolete("Please use ctor with consumerFactory parameter")]
         public ConsumerSettings(
-            IDeserializer<TKey> keyDeserializer,
-            IDeserializer<TValue> valueDeserializer,
+            IDeserializer<TKey>? keyDeserializer,
+            IDeserializer<TValue>? valueDeserializer,
             TimeSpan pollInterval,
             TimeSpan pollTimeout,
             TimeSpan commitTimeout,
@@ -181,8 +181,8 @@ namespace Akka.Streams.Kafka.Settings
                 properties, connectionCheckerSettings, null);
 
         public ConsumerSettings(
-            IDeserializer<TKey> keyDeserializer, 
-            IDeserializer<TValue> valueDeserializer, 
+            IDeserializer<TKey>? keyDeserializer, 
+            IDeserializer<TValue>? valueDeserializer, 
             TimeSpan pollInterval, 
             TimeSpan pollTimeout, 
             TimeSpan commitTimeout, 
@@ -211,13 +211,13 @@ namespace Akka.Streams.Kafka.Settings
             CommitTimeout = commitTimeout;
             CommitRefreshInterval = commitRefreshInterval;
             BufferSize = bufferSize;
-            DispatcherId = dispatcherId;
-            Properties = properties;
+            DispatcherId = dispatcherId ?? throw new ArgumentNullException(nameof(dispatcherId));
+            Properties = properties ?? throw new ArgumentNullException(nameof(properties));
             WaitClosePartition = waitClosePartition;
             MetadataRequestTimeout = metadataRequestTimeout;
             DrainingCheckInterval = drainingCheckInterval;
             AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
-            ConnectionCheckerSettings = connectionCheckerSettings;
+            ConnectionCheckerSettings = connectionCheckerSettings ?? throw new ArgumentNullException(nameof(connectionCheckerSettings));
             ConsumerFactory = consumerFactory;
         }
 
@@ -366,8 +366,8 @@ namespace Akka.Streams.Kafka.Settings
 
         [Obsolete("Use C# record copy syntax with 'with' expressions instead")]
         private ConsumerSettings<TKey, TValue> Copy(
-            IDeserializer<TKey> keyDeserializer = null,
-            IDeserializer<TValue> valueDeserializer = null,
+            IDeserializer<TKey>? keyDeserializer = null,
+            IDeserializer<TValue>? valueDeserializer = null,
             TimeSpan? pollInterval = null,
             TimeSpan? pollTimeout = null,
             TimeSpan? commitTimeout = null,
@@ -381,9 +381,9 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? waitClosePartition = null,
             bool? autoCreateTopicsEnabled = null,
             int? bufferSize = null,
-            string dispatcherId = null,
-            IImmutableDictionary<string, string> properties = null,
-            ConnectionCheckerSettings connectionCheckerSettings = null,
+            string? dispatcherId = null,
+            IImmutableDictionary<string, string>? properties = null,
+            ConnectionCheckerSettings? connectionCheckerSettings = null,
             TimeSpan? closeTimeout = null,
             Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>>? consumerFactory = null
             ) =>
@@ -428,9 +428,15 @@ namespace Akka.Streams.Kafka.Settings
             if (this.ConsumerFactory != null)
                 return this.ConsumerFactory(this);
             
-            return new ConsumerBuilder<TKey, TValue>(this.Properties)
-                .SetKeyDeserializer(this.KeyDeserializer)
-                .SetValueDeserializer(this.ValueDeserializer)
+            var builder = new ConsumerBuilder<TKey, TValue>(this.Properties);
+            
+            if (this.KeyDeserializer != null)
+                builder.SetKeyDeserializer(this.KeyDeserializer);
+                
+            if (this.ValueDeserializer != null)
+                builder.SetValueDeserializer(this.ValueDeserializer);
+                
+            return builder
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))

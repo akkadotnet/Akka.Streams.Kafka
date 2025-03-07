@@ -11,7 +11,7 @@ namespace Akka.Streams.Kafka.Settings
 {
     public sealed record ProducerSettings<TKey, TValue>
     {
-        public ProducerSettings(ISerializer<TKey> keySerializer, ISerializer<TValue> valueSerializer, int parallelism, 
+        public ProducerSettings(ISerializer<TKey>? keySerializer, ISerializer<TValue>? valueSerializer, int parallelism, 
                                 string dispatcherId, TimeSpan flushTimeout, TimeSpan eosCommitInterval,
                                 IImmutableDictionary<string, string> properties)
         {
@@ -19,14 +19,14 @@ namespace Akka.Streams.Kafka.Settings
             KeySerializer = keySerializer;
             ValueSerializer = valueSerializer;
             Parallelism = parallelism;
-            DispatcherId = dispatcherId;
+            DispatcherId = dispatcherId ?? throw new ArgumentNullException(nameof(dispatcherId));
             FlushTimeout = flushTimeout;
             EosCommitInterval = eosCommitInterval;
-            Properties = properties;
+            Properties = properties ?? throw new ArgumentNullException(nameof(properties));
         }
 
-        public ISerializer<TKey> KeySerializer { get; init; } = null!;
-        public ISerializer<TValue> ValueSerializer { get; init; } = null!;
+        public ISerializer<TKey>? KeySerializer { get; init; }
+        public ISerializer<TValue>? ValueSerializer { get; init; }
         public int Parallelism { get; init; }
         public string DispatcherId { get; init; } = null!;
         public TimeSpan FlushTimeout { get; init; }
@@ -41,7 +41,7 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public object this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
         
-        public string GetProperty(string key) => Properties.GetValueOrDefault(key, null);
+        public string? GetProperty(string key) => Properties.GetValueOrDefault(key);
         
         public ProducerSettings<TKey, TValue> WithBootstrapServers(string bootstrapServers) =>
             WithProperty("bootstrap.servers", bootstrapServers);
@@ -77,13 +77,13 @@ namespace Akka.Streams.Kafka.Settings
 
         [Obsolete("Use C# record copy syntax with 'with' expressions instead")]
         private ProducerSettings<TKey, TValue> Copy(
-            ISerializer<TKey> keySerializer = null,
-            ISerializer<TValue> valueSerializer = null,
+            ISerializer<TKey>? keySerializer = null,
+            ISerializer<TValue>? valueSerializer = null,
             int? parallelism = null,
-            string dispatcherId = null,
+            string? dispatcherId = null,
             TimeSpan? flushTimeout = null,
             TimeSpan? eosCommitInterval = null,
-            IImmutableDictionary<string, string> properties = null) =>
+            IImmutableDictionary<string, string>? properties = null) =>
             new ProducerSettings<TKey, TValue>(
                 keySerializer: keySerializer ?? this.KeySerializer,
                 valueSerializer: valueSerializer ?? this.ValueSerializer,
@@ -119,9 +119,15 @@ namespace Akka.Streams.Kafka.Settings
 
         public Confluent.Kafka.IProducer<TKey, TValue> CreateKafkaProducer(Action<IProducer<TKey, TValue>, Error> producerErrorHandler = null)
         {
-            return new Confluent.Kafka.ProducerBuilder<TKey, TValue>(Properties)
-                .SetKeySerializer(KeySerializer)
-                .SetValueSerializer(ValueSerializer)
+            var builder = new Confluent.Kafka.ProducerBuilder<TKey, TValue>(Properties);
+            
+            if (KeySerializer != null)
+                builder.SetKeySerializer(KeySerializer);
+                
+            if (ValueSerializer != null)
+                builder.SetValueSerializer(ValueSerializer);
+                
+            return builder
                 .SetErrorHandler((p, error) => producerErrorHandler?.Invoke(p, error))
                 .Build();
         }
