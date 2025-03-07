@@ -95,7 +95,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         }
 
         private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
-            MockConsumer<K, V> mock, string groupId = "group1", string[] topics = null)
+            MockConsumer<K, V> mock, string groupId = "group1", string[]? topics = null)
         {
             topics ??= new[] {"topic"};
             var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)

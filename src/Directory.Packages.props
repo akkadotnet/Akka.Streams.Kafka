@@ -12,6 +12,10 @@
     <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
     <PackageVersion Include="Confluent.Kafka" Version="2.8.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="IsExternalInit" Version="1.0.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageVersion>
     <PackageVersion Include="Testcontainers.Kafka" Version="4.1.0" />
   </ItemGroup>
   <!-- Test dependencies -->

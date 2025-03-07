@@ -475,7 +475,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try
                 {
                     var consumed = _consumer.Consume(0);
-                    if (consumed != null)
+                    if (consumed is not null)
                         throw new IllegalActorStateException("Consumed message should be null");
                     PausePartitions(_pausedPartitions);
                     _pausedPartitions = ImmutableList<TopicPartition>.Empty;
@@ -522,7 +522,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         ProcessExceptions(e);
                     }
 
-                    ProcessExceptions(exception);
+                    if (exception is not null)
+                        ProcessExceptions(exception);
                 }
             }
             
@@ -612,7 +613,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         
         private void ProcessError(Exception error)
         {
-            var involvedStageActors = _requests.Keys.Append(_owner).ToImmutableHashSet();
+            var involvedStageActors = _requests.Keys.Append(_owner).Where(actor => actor is not null).ToImmutableHashSet();
             _log.Debug($"Sending failure to {involvedStageActors.JoinToString(", ")}. Error: {error}");
             foreach (var actor in involvedStageActors)
             {
