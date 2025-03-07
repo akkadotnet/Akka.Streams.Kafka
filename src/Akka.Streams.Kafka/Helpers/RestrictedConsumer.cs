@@ -27,7 +27,7 @@ namespace Akka.Streams.Kafka.Helpers
         void CommitSync(IEnumerable<TopicPartitionOffset> offsets);
 
         /// <summary>
-        /// See <see cref="IConsumer{TKey,TValue}.Committed"/>
+        /// See <see cref="IConsumer{TKey,TValue}.Committed(System.Collections.Generic.IEnumerable{Confluent.Kafka.TopicPartition}, System.TimeSpan)"/>
         /// </summary>
         void Committed(IEnumerable<TopicPartition> topicPartitions);
 
