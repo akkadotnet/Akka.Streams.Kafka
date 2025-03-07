@@ -22,7 +22,7 @@ namespace Akka.Streams.Kafka.Settings
     /// </summary>
     /// <typeparam name="TKey">Message key type</typeparam>
     /// <typeparam name="TValue">Message value tyoe</typeparam>
-    public sealed class ConsumerSettings<TKey, TValue>
+    public sealed record ConsumerSettings<TKey, TValue>
     {
         /// <summary>
         /// Creates consumer settings
@@ -31,7 +31,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="keyDeserializer">Key deserializer</param>
         /// <param name="valueDeserializer">Value deserializer</param>
         /// <returns>Consumer settings</returns>
-        public static ConsumerSettings<TKey, TValue> Create(ActorSystem system, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
+        public static ConsumerSettings<TKey, TValue> Create(ActorSystem system, IDeserializer<TKey>? keyDeserializer, IDeserializer<TValue>? valueDeserializer)
         {
             var config = system.Settings.Config.GetConfig("akka.kafka.consumer");
             return Create(config, keyDeserializer, valueDeserializer);
@@ -45,7 +45,7 @@ namespace Akka.Streams.Kafka.Settings
         /// <param name="valueDeserializer">Value deserializer</param>
         /// <returns>Consumer settings</returns>
         /// <exception cref="ArgumentNullException">Thrown when kafka config for Akka.NET is not provided</exception>
-        public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey> keyDeserializer, IDeserializer<TValue> valueDeserializer)
+        public static ConsumerSettings<TKey, TValue> Create(Akka.Configuration.Config config, IDeserializer<TKey>? keyDeserializer, IDeserializer<TValue>? valueDeserializer)
         {
             if (config == null) throw new ArgumentNullException(nameof(config), "Kafka config for Akka.NET consumer was not provided");
             
@@ -76,63 +76,63 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Gets property value by key
         /// </summary>
-        public object this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
+        public object? this[string propertyKey] => this.Properties.GetValueOrDefault(propertyKey);
 
         /// <summary>
         /// Key deserializer
         /// </summary>
-        public IDeserializer<TKey> KeyDeserializer { get; }
+        public IDeserializer<TKey>? KeyDeserializer { get; init; }
         /// <summary>
         /// Value deserializer
         /// </summary>
-        public IDeserializer<TValue> ValueDeserializer { get; }
+        public IDeserializer<TValue>? ValueDeserializer { get; init; }
         /// <summary>
         /// Set the interval from one scheduled poll to the next.
         /// </summary>
-        public TimeSpan PollInterval { get; }
+        public TimeSpan PollInterval { get; init; }
         /// <summary>
         /// Set the maximum duration a poll to the Kafka broker is allowed to take.
         /// </summary>
-        public TimeSpan PollTimeout { get; }
+        public TimeSpan PollTimeout { get; init; }
         /// <summary>
         /// When partition assigned events handling takes more then this timeout, the warning will be logged
         /// </summary>
-        public TimeSpan PartitionHandlerWarning { get; }
+        public TimeSpan PartitionHandlerWarning { get; init; }
         /// <summary>
         /// Time to wait for pending requests when a partition is closed.
         /// </summary>
-        public TimeSpan WaitClosePartition { get; }
+        public TimeSpan WaitClosePartition { get; init; }
         /// <summary>
         /// When offset committing takes more then this timeout, the warning will be logged
         /// </summary>
-        public TimeSpan CommitTimeWarning { get; }
+        public TimeSpan CommitTimeWarning { get; init; }
         /// <summary>
         /// If offset commit requests are not completed within this timeout <see cref="CommitTimeoutException"/> will be thrown
         /// </summary>
-        public TimeSpan CommitTimeout { get; }
+        public TimeSpan CommitTimeout { get; init; }
         /// <summary>
         /// If set to a finite duration, the consumer will re-send the last committed offsets periodically for all assigned partitions.
         /// Set it to TimeSpan.Zero to switch it off
         /// </summary>
-        public TimeSpan CommitRefreshInterval { get; }
+        public TimeSpan CommitRefreshInterval { get; init; }
         /// <summary>
         /// Check interval for TransactionalProducer when finishing transaction before shutting down consumer
         /// </summary>
-        public TimeSpan DrainingCheckInterval { get; }
+        public TimeSpan DrainingCheckInterval { get; init; }
         /// <summary>
         /// The stage will await outstanding offset commit requests before shutting down,
         /// but if that takes longer than this timeout it will stop forcefully.
         /// </summary>
-        public TimeSpan StopTimeout { get; }
+        public TimeSpan StopTimeout { get; init; }
         /// <summary>
         /// Limits the blocking on Kafka consumer position calls
         /// </summary>
-        public TimeSpan PositionTimeout { get; }
-        public int BufferSize { get; }
+        public TimeSpan PositionTimeout { get; init; }
+        public int BufferSize { get; init; }
         /// <summary>
         /// Fully qualified config path which holds the dispatcher configuration to be used by the consuming actor. Some blocking may occur.
         /// </summary>
-        public string DispatcherId { get; }
+        public string DispatcherId { get; init; } = null!;
         /// <summary>
         /// Allow automatic topic creation on the broker when subscribing to or assigning a topic.
         /// </summary>
@@ -142,23 +142,23 @@ namespace Akka.Streams.Kafka.Settings
         /// when set to `true` and topic is not created by Confluent driver, consuming error will be ignored
         /// (like if no message to consume)
         /// </remarks>
-        public bool AutoCreateTopicsEnabled { get; }
+        public bool AutoCreateTopicsEnabled { get; init; }
         /// <summary>
         /// Configuration properties
         /// </summary>
-        public IImmutableDictionary<string, string> Properties { get; }
+        public IImmutableDictionary<string, string> Properties { get; init; } = null!;
 
-        public TimeSpan MetadataRequestTimeout { get; }
+        public TimeSpan MetadataRequestTimeout { get; init; }
 
-        public ConnectionCheckerSettings ConnectionCheckerSettings { get; }
+        public ConnectionCheckerSettings ConnectionCheckerSettings { get; init; } = null!;
         
         [JsonIgnore]
-        public Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> ConsumerFactory { get; }
+        public Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>>? ConsumerFactory { get; init; }
 
         [Obsolete("Please use ctor with consumerFactory parameter")]
         public ConsumerSettings(
-            IDeserializer<TKey> keyDeserializer,
-            IDeserializer<TValue> valueDeserializer,
+            IDeserializer<TKey>? keyDeserializer,
+            IDeserializer<TValue>? valueDeserializer,
             TimeSpan pollInterval,
             TimeSpan pollTimeout,
             TimeSpan commitTimeout,
@@ -181,8 +181,8 @@ namespace Akka.Streams.Kafka.Settings
                 properties, connectionCheckerSettings, null);
 
         public ConsumerSettings(
-            IDeserializer<TKey> keyDeserializer, 
-            IDeserializer<TValue> valueDeserializer, 
+            IDeserializer<TKey>? keyDeserializer, 
+            IDeserializer<TValue>? valueDeserializer, 
             TimeSpan pollInterval, 
             TimeSpan pollTimeout, 
             TimeSpan commitTimeout, 
@@ -198,7 +198,7 @@ namespace Akka.Streams.Kafka.Settings
             int bufferSize, string dispatcherId, 
             IImmutableDictionary<string, string> properties,
             ConnectionCheckerSettings connectionCheckerSettings,
-            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory)
+            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>>? consumerFactory = null)
         {
             KeyDeserializer = keyDeserializer;
             ValueDeserializer = valueDeserializer;
@@ -211,41 +211,41 @@ namespace Akka.Streams.Kafka.Settings
             CommitTimeout = commitTimeout;
             CommitRefreshInterval = commitRefreshInterval;
             BufferSize = bufferSize;
-            DispatcherId = dispatcherId;
-            Properties = properties;
+            DispatcherId = dispatcherId ?? throw new ArgumentNullException(nameof(dispatcherId));
+            Properties = properties ?? throw new ArgumentNullException(nameof(properties));
             WaitClosePartition = waitClosePartition;
             MetadataRequestTimeout = metadataRequestTimeout;
             DrainingCheckInterval = drainingCheckInterval;
             AutoCreateTopicsEnabled = autoCreateTopicsEnabled;
-            ConnectionCheckerSettings = connectionCheckerSettings;
+            ConnectionCheckerSettings = connectionCheckerSettings ?? throw new ArgumentNullException(nameof(connectionCheckerSettings));
             ConsumerFactory = consumerFactory;
         }
 
-        public string GetProperty(string key) => Properties.GetValueOrDefault(key, null);
+        public string? GetProperty(string key) => Properties.GetValueOrDefault(key);
 
         /// <summary>
         /// Sets kafka server IPs
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithBootstrapServers(string bootstrapServers) =>
-            Copy(properties: Properties.SetItem("bootstrap.servers", bootstrapServers));
+            this with { Properties = Properties.SetItem("bootstrap.servers", bootstrapServers) };
 
         /// <summary>
         /// Sets client id to be used
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithClientId(string clientId) =>
-            Copy(properties: Properties.SetItem("client.id", clientId));
+            this with { Properties = Properties.SetItem("client.id", clientId) };
 
         /// <summary>
         /// Sets consumer group Id
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithGroupId(string groupId) =>
-            Copy(properties: Properties.SetItem("group.id", groupId));
+            this with { Properties = Properties.SetItem("group.id", groupId) };
 
         /// <summary>
         /// Sets property with given key to specified value
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithProperty(string key, string value) =>
-            Copy(properties: Properties.SetItem(key, value));
+            this with { Properties = Properties.SetItem(key, value) };
 
         public ConsumerSettings<TKey, TValue> WithConsumerConfig(ConsumerConfig config)
             => WithProperties(config);
@@ -258,94 +258,119 @@ namespace Akka.Streams.Kafka.Settings
             {
                 builder[kvp.Key] = kvp.Value;
             }
-            return Copy(properties: builder.ToImmutable());
+            return this with { Properties = builder.ToImmutable() };
         }
 
         /// <summary>
         /// Set the interval from one scheduled poll to the next.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithPollInterval(TimeSpan pollInterval) => Copy(pollInterval: pollInterval);
+        public ConsumerSettings<TKey, TValue> WithPollInterval(TimeSpan pollInterval) => 
+            this with { PollInterval = pollInterval };
+
         /// <summary>
         /// Set the maximum duration a poll to the Kafka broker is allowed to take.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithPollTimeout(TimeSpan pollTimeout) => Copy(pollTimeout: pollTimeout);
+        public ConsumerSettings<TKey, TValue> WithPollTimeout(TimeSpan pollTimeout) => 
+            this with { PollTimeout = pollTimeout };
+
         /// <summary>
         /// If offset commit requests are not completed within this timeout <see cref="CommitTimeoutException"/> will be thrown
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithCommitTimeout(TimeSpan commitTimeout) => Copy(commitTimeout: commitTimeout);
+        public ConsumerSettings<TKey, TValue> WithCommitTimeout(TimeSpan commitTimeout) => 
+            this with { CommitTimeout = commitTimeout };
+
         /// <summary>
         /// If commits take longer than this time a warning is logged
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithCommitTimeWarning(TimeSpan commitTimeWarning) => Copy(commitTimeWarning: commitTimeWarning);
+        public ConsumerSettings<TKey, TValue> WithCommitTimeWarning(TimeSpan commitTimeWarning) => 
+            this with { CommitTimeWarning = commitTimeWarning };
+
         /// <summary>
         /// When partition assigned events handling takes more then this timeout, the warning will be logged
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithPartitionHandlerWarning(TimeSpan partitionHandlerWarning) => Copy(partitionHandlerWarning: partitionHandlerWarning);
+        public ConsumerSettings<TKey, TValue> WithPartitionHandlerWarning(TimeSpan partitionHandlerWarning) => 
+            this with { PartitionHandlerWarning = partitionHandlerWarning };
+
         /// <summary>
         /// Time to wait for pending requests when a partition is closed.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithWaitClosePartition(TimeSpan waitClosePartition) => Copy(waitClosePartition: waitClosePartition);
+        public ConsumerSettings<TKey, TValue> WithWaitClosePartition(TimeSpan waitClosePartition) => 
+            this with { WaitClosePartition = waitClosePartition };
+
         /// <summary>
         /// Allows topic auto-creation when constumer is subscribing or assigning to the topic.
         /// </summary>
         /// <remarks>
         /// When set, and still getting error from broker, consumer will assume that no message was produced yet
         /// </remarks>
-        public ConsumerSettings<TKey, TValue> WithAutoCreateTopicsEnabled(bool autoCreateTopicsEnabled) => Copy(autoCreateTopicsEnabled: autoCreateTopicsEnabled);
+        public ConsumerSettings<TKey, TValue> WithAutoCreateTopicsEnabled(bool autoCreateTopicsEnabled) => 
+            this with { AutoCreateTopicsEnabled = autoCreateTopicsEnabled };
         
         /// <summary>
         /// If set to a finite duration, the consumer will re-send the last committed offsets periodically for all assigned partitions.
         /// Set it to TimeSpan.Zero to switch it off
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithCommitRefreshInterval(TimeSpan commitRefreshInterval)
-        {
-            return Copy(commitRefreshInterval: commitRefreshInterval == TimeSpan.Zero ? Timeout.InfiniteTimeSpan : commitRefreshInterval);
-        }
+        public ConsumerSettings<TKey, TValue> WithCommitRefreshInterval(TimeSpan commitRefreshInterval) =>
+            this with { CommitRefreshInterval = commitRefreshInterval == TimeSpan.Zero ? Timeout.InfiniteTimeSpan : commitRefreshInterval };
         
         /// <summary>
         /// The stage will await outstanding offset commit requests before shutting down,
         /// but if that takes longer than this timeout it will stop forcefully.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithStopTimeout(TimeSpan stopTimeout) => Copy(stopTimeout: stopTimeout);
+        public ConsumerSettings<TKey, TValue> WithStopTimeout(TimeSpan stopTimeout) => 
+            this with { StopTimeout = stopTimeout };
         
         /// <summary>
         ///  Limits the blocking on Kafka consumer position calls.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithPositionTimeout(TimeSpan positionTimeout) => Copy(positionTimeout: positionTimeout);
+        public ConsumerSettings<TKey, TValue> WithPositionTimeout(TimeSpan positionTimeout) => 
+            this with { PositionTimeout = positionTimeout };
 
         /// <summary>
         /// Fully qualified config path which holds the dispatcher configuration to be used by the consuming actor. Some blocking may occur.
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => Copy(dispatcherId: dispatcherId);
+        public ConsumerSettings<TKey, TValue> WithDispatcher(string dispatcherId) => 
+            this with { DispatcherId = dispatcherId };
         
         /// <summary>
         /// Check interval for TransactionalProducer when finishing transaction before shutting down consumer
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithDrainingCheckInterval(TimeSpan drainingCheckInterval) => Copy(drainingCheckInterval: drainingCheckInterval);
+        public ConsumerSettings<TKey, TValue> WithDrainingCheckInterval(TimeSpan drainingCheckInterval) => 
+            this with { DrainingCheckInterval = drainingCheckInterval };
         
         /// <summary>
         /// Sets key deserializer
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithKeyDeserializer(IDeserializer<TKey> keyDeserializer) => Copy(keyDeserializer: keyDeserializer);
+        public ConsumerSettings<TKey, TValue> WithKeyDeserializer(IDeserializer<TKey> keyDeserializer) => 
+            this with { KeyDeserializer = keyDeserializer };
         
         /// <summary>
         /// Sets value deserializer
         /// </summary>
-        public ConsumerSettings<TKey, TValue> WithValueDeserializer(IDeserializer<TValue> valueDeserializer) => Copy(valueDeserializer: valueDeserializer);
+        public ConsumerSettings<TKey, TValue> WithValueDeserializer(IDeserializer<TValue> valueDeserializer) => 
+            this with { ValueDeserializer = valueDeserializer };
         
-        public ConsumerSettings<TKey, TValue> WithCloseTimeout(TimeSpan closeTimeout) => Copy(closeTimeout: closeTimeout);
-        
-        public ConsumerSettings<TKey, TValue> WithConsumerFactory(Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory) 
-            => Copy(consumerFactory: consumerFactory);
+        public ConsumerSettings<TKey, TValue> WithConsumerFactory(Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory) => 
+            this with { ConsumerFactory = consumerFactory };
         
         /// <summary>
-        /// Assigned consumer group Id, or null
+        /// Sets the timeout for closing the consumer
         /// </summary>
-        public string GroupId => Properties.ContainsKey("group.id") ? Properties["group.id"] : null;
+        public ConsumerSettings<TKey, TValue> WithCloseTimeout(TimeSpan closeTimeout) =>
+            this with { StopTimeout = closeTimeout };
 
+        /// <summary>
+        /// Assigned consumer group id.
+        /// </summary>
+        /// <remarks>
+        /// According to the Kafka documentation, the group Id is requried and cannot be null.
+        /// </remarks>
+        public string GroupId => Properties["group.id"];
+
+        [Obsolete("Use C# record copy syntax with 'with' expressions instead")]
         private ConsumerSettings<TKey, TValue> Copy(
-            IDeserializer<TKey> keyDeserializer = null,
-            IDeserializer<TValue> valueDeserializer = null,
+            IDeserializer<TKey>? keyDeserializer = null,
+            IDeserializer<TValue>? valueDeserializer = null,
             TimeSpan? pollInterval = null,
             TimeSpan? pollTimeout = null,
             TimeSpan? commitTimeout = null,
@@ -359,11 +384,11 @@ namespace Akka.Streams.Kafka.Settings
             TimeSpan? waitClosePartition = null,
             bool? autoCreateTopicsEnabled = null,
             int? bufferSize = null,
-            string dispatcherId = null,
-            IImmutableDictionary<string, string> properties = null,
-            ConnectionCheckerSettings connectionCheckerSettings = null,
+            string? dispatcherId = null,
+            IImmutableDictionary<string, string>? properties = null,
+            ConnectionCheckerSettings? connectionCheckerSettings = null,
             TimeSpan? closeTimeout = null,
-            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>> consumerFactory = null
+            Func<ConsumerSettings<TKey, TValue>, IConsumer<TKey, TValue>>? consumerFactory = null
             ) =>
             new ConsumerSettings<TKey, TValue>(
                 keyDeserializer: keyDeserializer ?? this.KeyDeserializer,
@@ -386,17 +411,17 @@ namespace Akka.Streams.Kafka.Settings
                 connectionCheckerSettings: connectionCheckerSettings ?? this.ConnectionCheckerSettings,
                 consumerFactory: consumerFactory ?? this.ConsumerFactory);
 
-        internal RebalanceListener<TKey, TValue> RebalanceListener { get; private set; }
+        internal RebalanceListener<TKey, TValue>? RebalanceListener { get; private set; }
         
         /// <summary>
         /// Creates new kafka consumer, using event handlers provided
         /// </summary>
         public IConsumer<TKey, TValue> CreateKafkaConsumer(
-            Action<IConsumer<TKey, TValue>, Error> consumeErrorHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartition>> partitionAssignedHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionRevokedHandler = null,
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> partitionLostHandler = null,
-            Action<IConsumer<TKey, TValue>, string> statisticHandler = null)
+            Action<IConsumer<TKey, TValue>, Error>? consumeErrorHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>>? partitionAssignedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionRevokedHandler = null,
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionLostHandler = null,
+            Action<IConsumer<TKey, TValue>, string>? statisticHandler = null)
         {
             RebalanceListener = new RebalanceListener<TKey, TValue>(
                 onPartitionAssigned: partitionAssignedHandler,
@@ -406,9 +431,15 @@ namespace Akka.Streams.Kafka.Settings
             if (this.ConsumerFactory != null)
                 return this.ConsumerFactory(this);
             
-            return new ConsumerBuilder<TKey, TValue>(this.Properties)
-                .SetKeyDeserializer(this.KeyDeserializer)
-                .SetValueDeserializer(this.ValueDeserializer)
+            var builder = new ConsumerBuilder<TKey, TValue>(this.Properties);
+            
+            if (this.KeyDeserializer != null)
+                builder.SetKeyDeserializer(this.KeyDeserializer);
+                
+            if (this.ValueDeserializer != null)
+                builder.SetValueDeserializer(this.ValueDeserializer);
+                
+            return builder
                 .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
                 .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
                 .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
@@ -421,17 +452,17 @@ namespace Akka.Streams.Kafka.Settings
     internal sealed class RebalanceListener<TKey, TValue>
     {
         public RebalanceListener(
-            Action<IConsumer<TKey, TValue>, List<TopicPartition>> onPartitionAssigned, 
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionRevoked, 
-            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> onPartitionLost)
+            Action<IConsumer<TKey, TValue>, List<TopicPartition>>? onPartitionAssigned, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionRevoked, 
+            Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionLost)
         {
             OnPartitionAssigned = onPartitionAssigned;
             OnPartitionRevoked = onPartitionRevoked;
             OnPartitionLost = onPartitionLost;
         }
 
-        public Action<IConsumer<TKey, TValue>, List<TopicPartition>> OnPartitionAssigned { get; } 
-        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionRevoked { get; }
-        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>> OnPartitionLost { get; }
+        public Action<IConsumer<TKey, TValue>, List<TopicPartition>>? OnPartitionAssigned { get; } 
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionRevoked { get; }
+        public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionLost { get; }
     }
 }

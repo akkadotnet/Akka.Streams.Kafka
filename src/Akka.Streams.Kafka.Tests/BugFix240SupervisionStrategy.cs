@@ -600,7 +600,7 @@ namespace Akka.Streams.Kafka.Tests
             public T Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
             {
                 var result = _deserializer(data.ToArray());
-                if (!_failThrown && result.Equals(_failOn))
+                if (!_failThrown && result != null && result.Equals(_failOn))
                 {
                     _failThrown = true;
                     throw new Exception("BOOM");

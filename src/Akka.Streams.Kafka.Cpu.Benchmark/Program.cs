@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -30,7 +29,7 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
 
         private const int DefaultWarmUpRepeat = 5;
         
-        private static ILoggingAdapter _log;
+        private static ILoggingAdapter _log = null!;
         private static readonly AtomicCounter ReceivedMessage = new AtomicCounter(0);
         
         public static async Task<int> Main(string[] args)
@@ -206,7 +205,10 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
                 var final = end - start;
                 
                 Console.WriteLine($"{i}. {msg}: {final}");
-                usages.Add(final.Value);
+                if (final.HasValue)
+                {
+                    usages.Add(final.Value);
+                }
             }
 
             return usages;

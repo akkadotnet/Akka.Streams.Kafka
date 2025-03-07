@@ -29,7 +29,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
     {
         private const string PollTimerKey = "PollTimer";
         
-        private readonly IActorRef _owner;
+        private readonly IActorRef? _owner;
         private ConsumerSettings<K, V> _settings;
         /// <summary>
         /// Stores delegates for external handling of statistics
@@ -64,10 +64,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// Stores stage actors, requesting for more messages
         /// </summary>
         private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
-        private ICommitRefreshing<K, V> _commitRefreshing;
-        private IConsumer<K, V> _consumer;
-        private RestrictedConsumer<K, V> _restrictedConsumer;
-        private IActorRef _connectionCheckerActor;
+        private ICommitRefreshing<K, V> _commitRefreshing = null!;
+        private IConsumer<K, V> _consumer = null!;
+        private RestrictedConsumer<K, V> _restrictedConsumer = null!;
+        private IActorRef _connectionCheckerActor = null!;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
         private bool _delayedPollInFlight = false;
@@ -97,7 +97,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <param name="statisticsHandler">Statistics handler</param>
         /// <param name="decider"></param>
         /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
+        public KafkaConsumerActor(IActorRef? owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;
             _settings = settings;
@@ -475,7 +475,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try
                 {
                     var consumed = _consumer.Consume(0);
-                    if (consumed != null)
+                    if (consumed is not null)
                         throw new IllegalActorStateException("Consumed message should be null");
                     PausePartitions(_pausedPartitions);
                     _pausedPartitions = ImmutableList<TopicPartition>.Empty;
@@ -522,7 +522,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         ProcessExceptions(e);
                     }
 
-                    ProcessExceptions(exception);
+                    if (exception is not null)
+                        ProcessExceptions(exception);
                 }
             }
             
@@ -535,25 +536,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void ProcessExceptions(Exception exception)
+        private (List<ConsumeResult<K, V>>, Exception?) PollKafka(CancellationToken token)
         {
-            if (exception == null)
-                return;
-
-            var directive = _decider(exception);
-            ProcessError(exception);
-            if (directive == Directive.Resume)
-                return;
-            
-            Timers.CancelAll();
-            if(directive == Directive.Stop && _log.IsErrorEnabled)
-                _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.Message);
-            Context.Stop(Self);
-        }
-
-        private (List<ConsumeResult<K, V>>, Exception) PollKafka(CancellationToken token)
-        {
-            ConsumeResult<K, V> consumed = null;
+            ConsumeResult<K, V>? consumed = null;
             var i = 10; // 10 poll attempts
             var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
             var polled = new List<ConsumeResult<K, V>>();
@@ -628,7 +613,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         
         private void ProcessError(Exception error)
         {
-            var involvedStageActors = _requests.Keys.Append(_owner).ToImmutableHashSet();
+            var involvedStageActors = _requests.Keys.Append(_owner).Where(actor => actor is not null).ToImmutableHashSet();
             _log.Debug($"Sending failure to {involvedStageActors.JoinToString(", ")}. Error: {error}");
             foreach (var actor in involvedStageActors)
             {
@@ -705,6 +690,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if(_log.IsDebugEnabled)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitions));
             _consumer.Resume(partitions);
+        }
+
+        private void ProcessExceptions(Exception? exception)
+        {
+            if (exception == null)
+                return;
+
+            var directive = _decider(exception);
+            ProcessError(exception);
+            if (directive == Directive.Resume)
+                return;
+            
+            Timers.CancelAll();
+            if(directive == Directive.Stop && _log.IsErrorEnabled)
+                _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.Message);
+            Context.Stop(Self);
         }
 
         static class Internal

@@ -26,7 +26,7 @@ namespace Akka.Streams.Kafka.Benchmark
         private readonly string _zookeeperContainerName = $"{ZookeeperContainerNameBase}-{Guid.NewGuid():N}";
         private readonly string _networkName = $"{NetworkNameBase}-{Guid.NewGuid():N}";
         
-        public DockerClient Client { get; private set; }
+        public DockerClient Client { get; private set; } = null!;
         public int KafkaPort { get; private set; }
         public string KafkaAddress => $"127.0.0.1:{KafkaPort}";
         public int ZookeeperPort { get; private set; }
@@ -106,7 +106,7 @@ namespace Akka.Streams.Kafka.Benchmark
                     ShowStderr = true
                 });
 
-            string line = null;
+            string? line = null;
             var timeoutInMilis = 60000;
             using (var reader = new StreamReader(logStream))
             {
@@ -131,7 +131,7 @@ namespace Akka.Streams.Kafka.Benchmark
             if (!(line?.Contains("started (kafka.server.KafkaServer)") ?? false))
             {
                 await TearDownDockerAsync();
-                Client = null;
+                Client = null!;
                 throw new Exception("Kafka docker image failed to run.");
             }
             Console.WriteLine("Kafka server started.");
@@ -143,6 +143,7 @@ namespace Akka.Streams.Kafka.Benchmark
             {
                 await ResourceCleanupAsync();
                 Client.Dispose();
+                Client = null!;
             }
         }
         
@@ -247,7 +248,7 @@ namespace Akka.Streams.Kafka.Benchmark
             {
                 var endpoint = new IPEndPoint(IPAddress.Parse(hostName), 0);
                 socket.Bind(endpoint);
-                return (IPEndPoint) socket.LocalEndPoint;
+                return (IPEndPoint) socket.LocalEndPoint!;
             }
         }
         

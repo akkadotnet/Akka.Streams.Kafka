@@ -20,21 +20,21 @@ namespace Akka.Streams.Kafka.Stages
         where TIn: IEnvelope<K, V, P>
         where TOut: IResults<K, V, P>
     {
-        public Func<Action<IProducer<K, V>, Error>, IProducer<K, V>> ProducerProvider { get; }
+        public Func<Action<IProducer<K, V>, Error>?, IProducer<K, V>> ProducerProvider { get; }
         public ProducerSettings<K, V> Settings { get; }
         public TimeSpan FlushTimeout => Settings.FlushTimeout;
         public bool CloseProducerOnStop { get; }
-        public Inlet<TIn> In { get; } = new Inlet<TIn>("kafka.producer.in");
-        public Outlet<Task<TOut>> Out { get; } = new Outlet<Task<TOut>>("kafka.producer.out");
+        public Inlet<TIn> In { get; } = new("kafka.producer.in");
+        public Outlet<Task<TOut>> Out { get; } = new("kafka.producer.out");
         public override FlowShape<TIn, Task<TOut>> Shape { get; }
 
         public DefaultProducerStage(
             ProducerSettings<K, V> settings,
             bool closeProducerOnStop,
-            Func<IProducer<K, V>> customProducerProvider = null)
+            Func<IProducer<K, V>>? customProducerProvider = null)
         {
-            ProducerProvider = errorHandler => customProducerProvider?.Invoke() ?? Settings.CreateKafkaProducer(errorHandler);
             Settings = settings;
+            ProducerProvider = errorHandler => customProducerProvider?.Invoke() ?? Settings.CreateKafkaProducer(errorHandler);
             CloseProducerOnStop = closeProducerOnStop;
             
             Shape = new FlowShape<TIn, Task<TOut>>(In, Out);
@@ -51,10 +51,10 @@ namespace Akka.Streams.Kafka.Stages
         where TOut: IResults<K, V, P>
     {
         private readonly IProducerStage<K, V, P, TIn, TOut> _stage;
-        private readonly TaskCompletionSource<NotUsed> _completionState = new TaskCompletionSource<NotUsed>();
+        private readonly TaskCompletionSource<NotUsed> _completionState = new();
         private readonly Decider _decider;
         
-        protected IProducer<K, V> Producer { get; private set; }
+        protected IProducer<K, V> Producer { get; private set; } = null!;
         protected readonly AtomicCounter AwaitingConfirmation = new AtomicCounter(0);
         
         public DefaultProducerStageLogic(IProducerStage<K, V, P, TIn, TOut> stage, Attributes attributes) : base(stage.Shape)
@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages
             SetHandler(_stage.In, 
                 onPush: () =>
                 {
-                    var msg = Grab(_stage.In) as IEnvelope<K, V, P>;
+                    var msg = Grab(_stage.In);
 
                     switch (msg)
                     {
@@ -87,7 +87,10 @@ namespace Akka.Streams.Kafka.Stages
                                     onFailure: OnProduceFailure);
                                 Producer.Produce(message.Record, GetAsyncCallback(callback));
                                 PostSend(msg);
-                                Push(stage.Out, result.Task as Task<TOut>);
+                                // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                                // but we can't cast it to IResults<K, V, P> because it is not covariant
+                                // TODO: probably should redesign the generic parameters to avoid this entirely
+                                Push(stage.Out!, result.Task as Task<TOut>);
                             }
                             catch (Exception exception)
                             {
@@ -123,8 +126,11 @@ namespace Akka.Streams.Kafka.Stages
                             if (tasks.Length > 0)
                             {
                                 PostSend(msg);
-                                var resultTask = Task.WhenAll(tasks).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
-                                Push(stage.Out, resultTask as Task<TOut>);
+                                var resultTask = Task.WhenAll(tasks!).ContinueWith(t => new MultiResult<K, V, P>(t.Result.ToImmutableHashSet(), multiMessage.PassThrough) as IResults<K, V, P>);
+                                // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                                // but we can't cast it to IResults<K, V, P> because it is not covariant
+                                // TODO: probably should redesign the generic parameters to avoid this entirely
+                                Push(stage.Out!, resultTask as Task<TOut>);
                             }
                             else
                             {
@@ -136,8 +142,11 @@ namespace Akka.Streams.Kafka.Stages
                         case PassThroughMessage<K, V, P> passThroughMessage:
                         {
                             PostSend(msg);
-                            var resultTask = Task.FromResult(new PassThroughResult<K, V, P>(passThroughMessage.PassThrough) as IResults<K, V, P>);
-                            Push(stage.Out, resultTask as Task<TOut>);
+                            var resultTask = Task.FromResult<IResults<K, V, P>>(new PassThroughResult<K, V, P>(passThroughMessage.PassThrough));
+                            // compiler ceremony: the Task result is of type IResults<K, V, P> and we know it is a Result<K, V, P>
+                            // but we can't cast it to IResults<K, V, P> because it is not covariant
+                            // TODO: probably should redesign the generic parameters to avoid this entirely
+                            Push(stage.Out!, resultTask as Task<TOut>);
                             break;
                         }
                     }
@@ -184,7 +193,7 @@ namespace Akka.Streams.Kafka.Stages
             base.PreStart();
 
             Producer = _stage.ProducerProvider(null);
-            Log.Debug($"Producer started: {Producer.Name}");
+            Log.Debug("Producer started: {0}", Producer.Name);
         }
 
         public override void PostStop()
@@ -199,7 +208,7 @@ namespace Akka.Streams.Kafka.Stages
                     Producer.Flush(_stage.FlushTimeout);
                     // TODO: fix missing deferred close support: `producer.close(stage.closeTimeout.toMillis, TimeUnit.MILLISECONDS)` 
                     Producer.Dispose();
-                    Log.Debug($"Producer closed: {Producer.Name}");
+                    Log.Debug("Producer closed: {0}", Producer.Name);
                 }
                 catch (Exception ex)
                 {
@@ -285,7 +294,7 @@ namespace Akka.Streams.Kafka.Stages
 
                 if (completionTask.IsFaulted || completionTask.IsCanceled)
                 {
-                    OnCompletionFailure(completionTask.Exception);
+                    OnCompletionFailure(completionTask.Exception!);
                 }
                 else if (completionTask.IsCompleted)
                 {

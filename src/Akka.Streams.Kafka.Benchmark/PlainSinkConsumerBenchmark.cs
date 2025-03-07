@@ -15,8 +15,8 @@ namespace Akka.Streams.Kafka.Benchmark
     [IterationCount(80)]
     public class PlainSinkConsumerBenchmark : BenchmarkBase
     {
-        private IControl _kafkaControl;
-        private ISinkQueue<ConsumeResult<Null, string>> _sink;
+        private IControl _kafkaControl = null!;
+        private ISinkQueue<ConsumeResult<Null, string>> _sink = null!;
         
         [GlobalSetup(Target = nameof(PlainSinkThroughput))]
         public async Task GlobalSetupAkkaAsync()
@@ -64,9 +64,9 @@ namespace Akka.Streams.Kafka.Benchmark
             await TearDownKafkaAsync();
         }
 
-        private Thread _producerThread;
+        private Thread _producerThread = null!;
         private bool _done;
-        private IConsumer<Null, string> _consumer;
+        private IConsumer<Null, string> _consumer = null!;
         [GlobalSetup(Target = nameof(KafkaClientThroughput))]
         public async Task GlobalSetupKafkaAsync()
         {

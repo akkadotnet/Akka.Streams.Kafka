@@ -11,9 +11,7 @@ using Akka.Event;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
-using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Kafka.Tests.Logging;
 using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
@@ -21,7 +19,6 @@ using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
-using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests.Integration
 {

@@ -26,7 +26,7 @@ namespace Akka.Streams.Kafka.Benchmark
     public abstract class BenchmarkBase
     {
         public readonly DockerSupport Docker;
-        public ActorSystem ActorSystem { get; private set; }
+        public ActorSystem ActorSystem { get; private set; } = null!;
         
         protected BenchmarkBase()
         {
@@ -60,11 +60,11 @@ namespace Akka.Streams.Kafka.Benchmark
 
         #region Akka methods
 
-        private string _uuid;
+        private string _uuid = null!;
         //public ActorSystem ProducerSystem { get; private set; }
-        public ActorSystem ConsumerSystem { get; private set; }
-        public string KafkaTopic { get; private set; }
-        public string KafkaGroup { get; private set; }
+        public ActorSystem ConsumerSystem { get; private set; } = null!;
+        public string KafkaTopic { get; private set; } = null!;
+        public string KafkaGroup { get; private set; } = null!;
 
         private Task SetupActorSystemsAsync()
         {

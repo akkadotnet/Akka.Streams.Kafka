@@ -29,7 +29,7 @@ namespace Akka.Streams.Kafka.Internal
             _factor = config.Factor;
         }
 
-        public ITimerScheduler Timers { get; set; }
+        public ITimerScheduler Timers { get; set; } = null!;
 
         private Receive Regular()
             => Behaviour(0, _checkInterval);

@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Dsl
         /// </summary>
         [ApiMayChange]
         public static SourceWithContext<ConsumeResult<K, V>, ICommittableOffset, IControl> SourceWithOffsetContext<K, V>(
-            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string> metadataFromRecord = null)
+            ConsumerSettings<K, V> settings, ISubscription subscription, Func<ConsumeResult<K, V>, string>? metadataFromRecord = null)
         {
             return Source.FromGraph(new SourceWithOffsetContextStage<K, V>(settings, subscription, metadataFromRecord))
                 .AsSourceWithContext(m => m.Item2)

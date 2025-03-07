@@ -8,6 +8,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 using Confluent.Kafka;
+using Debug = System.Diagnostics.Debug;
 
 namespace Akka.Streams.Kafka.Stages.Consumers
 {
@@ -40,6 +41,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// Committed object
         /// </summary>
         public abstract IInternalCommitter Committer { get; }
+        
         /// <summary>
         /// Consumer group Id
         /// </summary>
@@ -100,7 +102,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Consumer group Id
         /// </summary>
-        public string GroupId { get; }
+        public string? GroupId { get; }
         
         /// <summary>
         /// OffsetContextBuilder
@@ -115,7 +117,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
         {
-            var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+            // Use a default group ID if GroupId is null
+            var groupId = GroupId ?? "default-group";
+            var offset = new GroupTopicPartitionOffset(groupId, record.Topic, record.Partition, record.Offset);
             return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
         }
     }
@@ -123,12 +127,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// <summary>
     /// Base interface for transactional message builders
     /// </summary>
-    internal interface ITransactionalMessageBuilderStage<K, V, TMsg> : IMessageBuilder<K, V, TMsg>
+    internal interface ITransactionalMessageBuilderStage<K, V, out TMsg> : IMessageBuilder<K, V, TMsg>
     {
         /// <summary>
         /// Consumer's group Id
         /// </summary>
         string GroupId { get; }
+        
         /// <summary>
         /// Committed marker for consumed offset
         /// </summary>
@@ -156,9 +161,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
         {
             _transactionalMessageBuilderStage.OnMessage(record);
+
+            // groupId can be null sometimes, but never in this context
+            Debug.Assert(_transactionalMessageBuilderStage.GroupId != null, "_transactionalMessageBuilderStage.GroupId != null");
             
             var offset = new PartitionOffsetCommittedMarker(
-                _transactionalMessageBuilderStage.GroupId, 
+                _transactionalMessageBuilderStage.GroupId!, 
                 record.Topic, 
                 record.Partition, 
                 record.Offset, 

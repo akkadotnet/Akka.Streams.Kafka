@@ -15,7 +15,7 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
 {
     public class DockerSupport
     {
-        private KafkaContainer _container;
+        private KafkaContainer _container = null!;
         
         public int KafkaPort { get; private set; }
         public string KafkaAddress => $"{_container.Hostname}:{KafkaPort}";

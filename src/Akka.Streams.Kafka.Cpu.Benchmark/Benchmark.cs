@@ -8,7 +8,7 @@ namespace Akka.Streams.Kafka.Cpu.Benchmark
 {
     public static class Benchmark
     {
-        public static ActorSystem ConsumerSystem { get; private set; }
+        public static ActorSystem ConsumerSystem { get; private set; } = null!;
         public static string KafkaTopic { get; }
         public static string KafkaGroup { get; }
         public static readonly DockerSupport Docker;

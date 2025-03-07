@@ -24,7 +24,7 @@ namespace Akka.Streams.Kafka.Stages
         
         public TimeSpan FlushTimeout => _settings.FlushTimeout;
         public bool CloseProducerOnStop { get; }
-        public Func<Action<IProducer<K, V>, Error>, IProducer<K, V>> ProducerProvider { get; }
+        public Func<Action<IProducer<K, V>, Error>?, IProducer<K, V>> ProducerProvider { get; }
         public override FlowShape<IEnvelope<K, V, TPassThrough>, Task<IResults<K, V, TPassThrough>>> Shape { get; }
         public Inlet<IEnvelope<K, V, TPassThrough>> In { get; } = new Inlet<IEnvelope<K, V, TPassThrough>>("kafka.transactional.producer.in");
         public Outlet<Task<IResults<K, V, TPassThrough>>> Out { get; } = new Outlet<Task<IResults<K, V, TPassThrough>>>("kafka.transactional.producer.out");
@@ -70,7 +70,7 @@ namespace Akka.Streams.Kafka.Stages
             _stage = stage;
             _commitInterval = commitInterval;
 
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>(null);
+            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
             _onInternalCommitCallback = GetAsyncCallback(() => ScheduleOnce(CommitSchedulerKey, commitInterval));
@@ -228,7 +228,7 @@ namespace Akka.Streams.Kafka.Stages
             public IImmutableDictionary<GroupTopicPartition, Offset> Offsets { get; }
             public string GroupId { get; }
 
-            public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset> tail = null)
+            public NonemptyTransactionBatch(PartitionOffsetCommittedMarker head, IImmutableDictionary<GroupTopicPartition, Offset>? tail = null)
             {
                 _head = head;
                 _tail = tail ?? ImmutableDictionary<GroupTopicPartition, Offset>.Empty;
@@ -238,7 +238,8 @@ namespace Akka.Streams.Kafka.Stages
 
                 var previousHighest = _tail.GetValueOrDefault(head.GroupTopicPartition, new Offset(-1)).Value;
                 var highestOffset = new Offset(Math.Max(head.Offset, previousHighest));
-                Offsets = _tail.AddRange(new []{ new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset) });
+                Offsets = _tail.AddRange([new KeyValuePair<GroupTopicPartition, Offset>(head.GroupTopicPartition, highestOffset)
+                ]);
             }
             
             /// <inheritdoc />

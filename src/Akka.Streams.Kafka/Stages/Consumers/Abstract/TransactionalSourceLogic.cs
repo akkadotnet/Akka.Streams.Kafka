@@ -32,7 +32,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 ISubscription subscription, 
                 Attributes attributes,
                 Func<ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>, TransactionalMessageBuilder<K, V>> messageBuilderFactory) 
-            : base(shape, settings, subscription, attributes, logic => messageBuilderFactory(logic as ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>))
+            : base(shape, settings, subscription, attributes, logic => messageBuilderFactory((ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>)logic))
         {
             _shape = shape;
             _settings = settings;
@@ -253,7 +253,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             /// <summary>
             /// Gets empty collection
             /// </summary>
-            public static InFlightRecords Empty => new InFlightRecords();
+            public static InFlightRecords Empty => new();
             
             /// <summary>
             /// Assumes that offsets per topic partition are added in the increasing order
@@ -291,7 +291,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public IImmutableSet<TopicPartition> Assigned => _inFlightRecords.Keys.ToImmutableHashSet();
 
             /// <inheritdoc />
-            public override string ToString() => _inFlightRecords.ToString();
+            public override string ToString() => _inFlightRecords.ToString()!;
         }
     }
 }

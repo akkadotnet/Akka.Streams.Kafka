@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
@@ -24,13 +25,26 @@ namespace Akka.Streams.Kafka.Tests
         public KafkaFixture Fixture { get; }
         protected IMaterializer Materializer { get; }
 
-        public KafkaIntegrationTests(string actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
+        public KafkaIntegrationTests(string? actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
             : base(Default(), actorSystemName, output)
         {
             Fixture = fixture;
             Materializer = Sys.Materializer();
             
-            Sys.Log.Info("Starting test: " + output.GetCurrentTestName());
+            Sys.Log.Info("Starting test: " + GetCurrentTestName(output));
+        }
+
+        private static string GetCurrentTestName(ITestOutputHelper output)
+        {
+            var type = output.GetType();
+            var testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (testMember != null)
+            {
+                var test = (ITest)testMember.GetValue(output)!;
+                return test.DisplayName;
+            }
+            
+            return "Unknown test";
         }
         
         private string Uuid { get; } = Guid.NewGuid().ToString();
