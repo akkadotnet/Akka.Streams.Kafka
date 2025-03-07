@@ -1,12 +1,13 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Generated.props', '$(MSBuildThisFileDirectory)'))" />
   <PropertyGroup>
-    <Copyright>Copyright © 2015-2023 .NET Foundation</Copyright>
-    <Authors>Akka</Authors>
-    <Tags>akka streams kafka</Tags>
+    <Copyright>Copyright © 2015-2025 Akka.NET Team</Copyright>
+    <Authors>Akka.NET Team</Authors>
+    <Tags>akka, akka.streams, kafka, akkadotnet, akka streams, akka.streams.kafka</Tags>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Visual Studio C# settings -->
@@ -31,7 +32,6 @@
     <!-- Optional: Build symbol package (.snupkg) to distribute the PDB containing Source Link -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PackageTags>akka;streams;kafka</PackageTags>
     <PackageProjectUrl>https://github.com/akkadotnet/Akka.Streams.Kafka</PackageProjectUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
