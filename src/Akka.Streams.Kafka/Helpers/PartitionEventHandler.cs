@@ -90,22 +90,18 @@ namespace Akka.Streams.Kafka.Helpers
             
             private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
             private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
-            private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
 
             public AsyncCallbacks(IAutoSubscription subscription, 
                 IActorRef sourceActorRef,
                 Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
-                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback, 
-                Action<IImmutableSet<TopicPartitionOffset>> partitionLostCallback)
+                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback)
             {
                 _partitionAssignedCallback = partitionAssignedCallback;
                 _partitionRevokedCallback = partitionRevokedCallback;
-                _partitionLostCallback = partitionLostCallback;
                 _subscription = subscription;
                 _sourceActorRef = sourceActorRef;
             }
-
-            /// <inheritdoc />
+            
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
                 _subscription.RebalanceListener
@@ -116,15 +112,12 @@ namespace Akka.Streams.Kafka.Helpers
                 
                 _partitionRevokedCallback(revokedTopicPartitions);
             }
-
-            /// <inheritdoc />
+            
             public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                // TODO: we don't need a separate OnLost handler. It should just be the OnRevoked handler.
-                _partitionLostCallback(revokedTopicPartitions);
+                OnRevoke(revokedTopicPartitions, consumer);
             }
-
-            /// <inheritdoc />
+            
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
                 _subscription.RebalanceListener
@@ -134,8 +127,7 @@ namespace Akka.Streams.Kafka.Helpers
                     });
                 _partitionAssignedCallback(assignedTopicPartitions);
             }
-
-            /// <inheritdoc />
+            
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
             }

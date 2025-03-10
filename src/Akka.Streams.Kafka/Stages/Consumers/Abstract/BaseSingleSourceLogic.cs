@@ -91,8 +91,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected abstract void ConfigureSubscription();
 
         protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
-            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb,
-            Action<IImmutableSet<TopicPartitionOffset>> partitionsLostCb)
+            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
         {
             switch (Subscription)
             {
@@ -120,7 +119,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
             {
                 return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
-                    partitionsRevokedCb, partitionsLostCb));
+                    partitionsRevokedCb));
             }
         }
 

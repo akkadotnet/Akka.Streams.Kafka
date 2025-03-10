@@ -53,9 +53,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             var partitionsAssignedHandler = GetAsyncCallback<IImmutableSet<TopicPartition>>(PartitionsAssigned);
             var partitionsRevokedHandler = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(PartitionsRevoked);
-            var partitionsLostHandler = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(PartitionsLost);
 
-            ConfigureSubscription(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
+            ConfigureSubscription(partitionsAssignedHandler, partitionsRevokedHandler);
         }
         
         
@@ -106,20 +105,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private void PartitionsAssigned(IImmutableSet<TopicPartition> partitions)
         {
             TopicPartitions = TopicPartitions.Union(partitions);
-            Log.Debug("[{0}] Partitions were assigned: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
+            Log.Debug("[{0}] Partitions were assigned: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
             RequestMessages();
         }
         
         private void PartitionsRevoked(IImmutableSet<TopicPartitionOffset> partitions)
         {
             TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
-            Log.Debug("[{0}] Partitions were revoked: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
-        }
-        
-        private void PartitionsLost(IImmutableSet<TopicPartitionOffset> partitions)
-        {
-            TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
-            Log.Debug("[{0}] Partitions were lost: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
+            Log.Debug("[{0}] Partitions were revoked: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
         }
     }
 }
