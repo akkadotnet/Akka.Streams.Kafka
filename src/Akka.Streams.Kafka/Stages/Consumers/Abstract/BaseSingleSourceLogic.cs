@@ -119,10 +119,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
             {
-                return new PartitionEventHandlers.Chain(
-                    subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance),
-                    new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
-                        partitionsRevokedCb, partitionsLostCb));
+                return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                    partitionsRevokedCb, partitionsLostCb));
             }
         }
 
