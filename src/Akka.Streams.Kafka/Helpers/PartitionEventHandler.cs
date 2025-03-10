@@ -83,7 +83,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Handler allowing to pass custom stage callbacks.
         /// </summary>
-        internal class AsyncCallbacks : IPartitionEventHandler
+        internal sealed class AsyncCallbacks : IPartitionEventHandler
         {
             private readonly IAutoSubscription _subscription;
             private readonly IActorRef _sourceActorRef;
@@ -138,7 +138,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Handler allowing chain other implementations of <see cref="IPartitionEventHandler"/>
         /// </summary>
-        internal class Chain : IPartitionEventHandler
+        internal sealed class Chain : IPartitionEventHandler
         {
             private readonly IPartitionEventHandler _handler1;
             private readonly IPartitionEventHandler _handler2;

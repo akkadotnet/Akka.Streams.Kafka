@@ -139,13 +139,28 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SourceActor.Ref.Tell(new Drain(_inFlightRecords.Assigned, ConsumerActor.AsOption(), KafkaConsumerActorMetadata.Internal.Stop.Instance), SourceActor.Ref);
         }
 
+        private class TransactionalAssignmentHandler : IPartitionEventHandler
+        {
+            private readonly Action<IImmutableSet<TopicPartitionOffset>> _onRevoke;
+
+            public TransactionalAssignmentHandler(Action<IImmutableSet<TopicPartitionOffset>> onRevoke)
+            {
+                _onRevoke = onRevoke;
+            }
+
+            public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer) => throw new NotImplementedException();
+
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer) => throw new NotImplementedException();
+
+            public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer){ }
+
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer) => throw new NotImplementedException();
+        }
+
         /// <inheritdoc />
         protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
         {
-            var blockingRevokedCall = new PartitionEventHandlers.AsyncCallbacks(
-                partitionAssignedCallback: _ => { },
-                partitionRevokedCallback: OnRevoke,
-                partitionLostCallback: OnRevoke);
+            var blockingRevokedCall = new TransactionalAssignmentHandler(OnRevoke);
             
             return new PartitionEventHandlers.Chain(handler, blockingRevokedCall);
 
