@@ -25,11 +25,15 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
     {
     }
 
-    private static Source<CommittableMessage<Null, string>, IControl> GetConsumer(
+    private static readonly IReadOnlyList<int> Numbers = Enumerable.Range(0, 5000).ToList();
+    private const string ConsumerClientId1 = "consumer-1";
+    private const string ConsumerClientId2 = "consumer-2";
+
+    private static Source<ConsumeResult<Null, string>, IControl> GetConsumer(
         ConsumerSettings<Null, string> settings,
         string topic)
     {
-        return KafkaConsumer.CommittableSource(settings, Subscriptions.Topics(topic));
+        return KafkaConsumer.PlainSource(settings, Subscriptions.Topics(topic));
     }
 
     private sealed class StreamCompleted
@@ -49,13 +53,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         var source = GetConsumer(settings, topic);
         var killSwitch = source
             .WithAttributes(Attributes.CreateName(consumerName))
-            .ViaMaterialized(KillSwitches.Single<CommittableMessage<Null, string>>(), Keep.Right)
-            .SelectAsync(1, async msg =>
-            {
-                // commit the offset
-                await msg.CommitableOffset.Commit();
-                return msg.Record;
-            })
+            .ViaMaterialized(KillSwitches.Single<ConsumeResult<Null, string>>(), Keep.Right)
             .WithAttributes(Attributes.CreateName($"selectAsync-{consumerName}"))
             .ToMaterialized(
                 Sink.ActorRef<ConsumeResult<Null, string>>(sinkRef, StreamCompleted.Instance,
@@ -72,18 +70,24 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
     public async Task ShouldReBalanceWithoutArgumentExceptions()
     {
         // arrange
+        const int count = 20;
         var topic = CreateTopic(1);
         var group = CreateGroup(1);
-        const int partitions = 10;
+        var tp0 = new TopicPartition(topic, 0);
+        var tp1 = new TopicPartition(topic, 1);
 
         // initialize the topic with 10 partitions
-        await GivenInitializedTopicAsync(topic, partitions);
+        await GivenInitializedTopicAsync(tp0);
 
         var settings = CreateConsumerSettings<Null, string>(group);
 
         // Produce some messages
-        await ProduceStrings(topic, Enumerable.Range(0, 10), ProducerSettings);
+        await ProduceStrings(tp0, Enumerable.Range(0, 20), ProducerSettings);
 
+        Log.Debug("Subscribe to the topic (without downstream demand)");
+        var probe1RebalanceActor = CreateTestProbe();
+        var probe1Subscription = Subscriptions.Topics(topic).WithRebalanceListener(probe1RebalanceActor.Ref);
+        
         // Spin up 3 consumers
         var probe1 = CreateTestProbe();
 
@@ -130,29 +134,6 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             }
 
             return newKs;
-        }
-    }
-
-    private class AkkaPartitionAssignor
-    {
-        private readonly ILoggingAdapter _log;
-
-        private static readonly AtomicReference<ImmutableDictionary<string, ImmutableHashSet<TopicPartition>>>
-            ClientIdToPartitions =
-                new(ImmutableDictionary<string, ImmutableHashSet<TopicPartition>>.Empty);
-
-        public AkkaPartitionAssignor(ActorSystem sys)
-        {
-            _log = Logging.GetLogger(sys, typeof(AkkaPartitionAssignor));
-        }
-
-        public IEnumerable<TopicPartitionOffset> AssignPartitions<TKey, TValue>(IConsumer<TKey, TValue> consumer,
-            List<TopicPartition> partitions)
-        {
-            var safeClientIdToPartitions = ClientIdToPartitions.Value;
-            var allTopicPartitions = safeClientIdToPartitions.Values
-                .SelectMany(x => x).ToImmutableHashSet();
-            var subscriptionTopicPartitions = partitions
         }
     }
 }

@@ -63,7 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             IPartitionEventHandler internalHandler = new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
 
             // If custom partition events handler specified - add it to the chain
-            var eventHandler = _subscription is IAutoSubscription autoSubscription && autoSubscription.PartitionEventsHandler.HasValue
+            var eventHandler = _subscription is IAutoSubscription { PartitionEventsHandler.HasValue: true } autoSubscription
                 ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
                 : internalHandler;
 
@@ -74,7 +74,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             // This allows to override partition events handling by subclasses
             eventHandler = AddToPartitionAssignmentHandler(eventHandler);
             
-            if (!(Materializer is ActorMaterializer actorMaterializer))
+            if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
