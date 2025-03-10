@@ -94,16 +94,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
-        /// <param name="statisticsHandler">Statistics handler</param>
         /// <param name="decider"></param>
-        /// <param name="partitionEventHandler">Partion events handler</param>
-        public KafkaConsumerActor(IActorRef? owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler partitionEventHandler, IStatisticsHandler statisticsHandler)
+        public KafkaConsumerActor(IActorRef? owner, ConsumerSettings<K, V> settings, Decider decider, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;
             _settings = settings;
             _decider = decider;
             _statisticsHandler = statisticsHandler;
-            _partitionEventHandler = partitionEventHandler;
+            _partitionEventHandler = PartitionEventHandlers.Empty.Instance;
             
             _warningDuration = _settings.PartitionHandlerWarning;
             

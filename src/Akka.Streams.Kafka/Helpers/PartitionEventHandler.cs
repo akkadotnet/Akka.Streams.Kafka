@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Immutable;
+using Akka.Actor;
 using Akka.Annotations;
+using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
 
@@ -41,15 +44,21 @@ namespace Akka.Streams.Kafka.Helpers
     }
 
     /// <summary>
-    /// Contains internal imlementations of <see cref="IPartitionEventHandler"/>
+    /// Contains internal implementations of <see cref="IPartitionEventHandler"/>
     /// </summary>
     internal static class PartitionEventHandlers
     {
         /// <summary>
         /// Dummy handler which does nothing. Also <see cref="IPartitionEventHandler"/>
         /// </summary>
-        internal class Empty : IPartitionEventHandler
+        internal sealed class Empty : IPartitionEventHandler
         {
+            public static readonly Empty Instance = new();
+            private Empty()
+            {
+                
+            }
+            
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
@@ -76,22 +85,35 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         internal class AsyncCallbacks : IPartitionEventHandler
         {
+            private readonly IAutoSubscription _subscription;
+            private readonly IActorRef _sourceActorRef;
+            
             private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
             private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
             private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
 
-            public AsyncCallbacks(Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
+            public AsyncCallbacks(IAutoSubscription subscription, 
+                IActorRef sourceActorRef,
+                Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
                 Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback, 
                 Action<IImmutableSet<TopicPartitionOffset>> partitionLostCallback)
             {
                 _partitionAssignedCallback = partitionAssignedCallback;
                 _partitionRevokedCallback = partitionRevokedCallback;
                 _partitionLostCallback = partitionLostCallback;
+                _subscription = subscription;
+                _sourceActorRef = sourceActorRef;
             }
 
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
+                // _subscription.RebalanceListener
+                //     .OnSuccess(@ref =>
+                //     {
+                //         @ref.Tell(new KafkaConsumerActorMetadata.Internal.Revoked(revokedTopicPartitions));
+                //     });
+                
                 _partitionRevokedCallback(revokedTopicPartitions);
             }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Akka.Actor;
@@ -11,7 +12,6 @@ using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
 
-#nullable enable
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
@@ -26,6 +26,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
+        protected ISubscription Subscription { get; };
         protected Decider Decider { get; }
 
         private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
@@ -43,10 +44,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SourceShape<TMessage> shape,
             Attributes attributes,
             Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
-            bool autoCreateTopics) 
+            bool autoCreateTopics, ISubscription subscription) 
             : base(shape)
         {
             _shape = shape;
+            Subscription = subscription;
             _messageBuilder = messageBuilderFactory(this);
             Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback, PerformShutdown);
             
@@ -79,6 +81,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// Creates consumer actor
         /// </summary>
         protected abstract IActorRef CreateConsumerActor();
+
+        protected IPartitionEventHandler CreateRebalanceListener(
+            Action<IReadOnlyCollection<TopicPartition>> partitionsAssignedCb,
+            Action<IReadOnlyCollection<TopicPartition>> partitionsRevokedCb,
+            Action<IReadOnlyCollection<TopicPartition>> partitionsLostCb)
+        {
+            return new PartitionEventHandlers.AsyncCallbacks()
+        }
 
         /// <summary>
         /// This should configure consumer subscription on stage start

@@ -142,18 +142,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 }
             });
 
-            if (!(Materializer is ActorMaterializer actorMaterializer))
+            if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
-
-            var eventHandler = new PartitionEventHandlers.AsyncCallbacks(_partitionAssignedCallback, _partitionRevokedCallback, _partitionLostCallback);
-
+            
             var statisticsHandler = _subscription.StatisticsHandler.HasValue
                 ? _subscription.StatisticsHandler.Value
-                : new StatisticsHandlers.Empty();
+                : StatisticsHandlers.Empty.Instance;
 
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
             ConsumerActor = extendedActorSystem.SystemActorOf(
-                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, _decider, eventHandler, statisticsHandler), 
+                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, _decider, statisticsHandler), 
                 $"kafka-consumer-{_actorNumber}");
 
             SourceActor.Watch(ConsumerActor);

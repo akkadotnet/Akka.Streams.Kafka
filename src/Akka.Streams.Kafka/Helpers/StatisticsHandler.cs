@@ -22,15 +22,18 @@ namespace Akka.Streams.Kafka.Helpers
     }
 
     /// <summary>
-    /// Contains internal imlementations of <see cref="IStatisticsHandler"/>
+    /// Contains internal implementations of <see cref="IStatisticsHandler"/>
     /// </summary>
     internal static class StatisticsHandlers
     {
         /// <summary>
         /// Dummy handler which does nothing. Also <see cref="IStatisticsHandler"/>
         /// </summary>
-        internal class Empty : IStatisticsHandler
+        internal sealed class Empty : IStatisticsHandler
         {
+            public static readonly Empty Instance  = new();
+            private Empty() { }
+            
             /// <inheritdoc />
             public void OnStatistics<TKey, TValue>(IConsumer<TKey, TValue> consumer, string json)
             {

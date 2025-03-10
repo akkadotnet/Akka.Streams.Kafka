@@ -158,7 +158,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 }
                 else
                 {
-                    SourceActor.Ref.Tell(new Status.Failure(new Exception("Timeout while drailing")));
+                    SourceActor.Ref.Tell(new Status.Failure(new Exception("Timeout while draining")));
                     ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance);
                 }
             }

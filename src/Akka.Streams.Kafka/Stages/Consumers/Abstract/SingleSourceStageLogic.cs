@@ -22,37 +22,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
     {
         private readonly SourceShape<TMessage> _shape;
         private readonly ConsumerSettings<K, V> _settings;
-        private readonly ISubscription _subscription;
 
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled)
+            : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled, subscription)
         {
             _shape = shape;
             _settings = settings;
-            _subscription = subscription;
         }
-
-        /// <inheritdoc />
-        protected override void ConfigureSubscription()
-        {
-            switch (_subscription)
-            {
-                case TopicSubscription topicSubscription:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
-                    break;
-                case TopicSubscriptionPattern topicSubscriptionPattern:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
-                    break;
-                case IManualSubscription manualSubscription:
-                    ConfigureManualSubscription(manualSubscription);
-                    break;
-                default:
-                    throw new NotSupportedException();
-            }
-        }
-
+        
         /// <inheritdoc />
         protected override IActorRef CreateConsumerActor()
         {
@@ -60,7 +39,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
             var partitionsLostHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsLost);
 
-            IPartitionEventHandler internalHandler = new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
+            IPartitionEventHandler internalHandler = 
+                new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
 
             // If custom partition events handler specified - add it to the chain
             var eventHandler = _subscription is IAutoSubscription { PartitionEventsHandler.HasValue: true } autoSubscription
@@ -70,15 +50,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             IStatisticsHandler statisticsHandler = _subscription.StatisticsHandler.HasValue
                 ? _subscription.StatisticsHandler.Value
                 : new StatisticsHandlers.Empty();
-
-            // This allows to override partition events handling by subclasses
-            eventHandler = AddToPartitionAssignmentHandler(eventHandler);
             
             if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider, eventHandler, statisticsHandler),
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider),
                                                           $"kafka-consumer-{KafkaConsumerActorMetadata.NextNumber()}");
             return actor;
         }
