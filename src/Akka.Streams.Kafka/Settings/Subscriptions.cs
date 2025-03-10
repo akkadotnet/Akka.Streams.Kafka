@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Akka.Actor;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Util;
 using Akka.Util;
@@ -24,20 +25,30 @@ namespace Akka.Streams.Kafka.Settings
     public interface IAutoSubscription : ISubscription
     {
         /// <summary>
-        /// Partition events handler
+        /// Optional. Partition events handler.
         /// </summary>
         Option<IPartitionEventHandler> PartitionEventsHandler { get; }
+        
+        /// <summary>
+        /// Optional actor that receives rebalance events as messages.
+        /// </summary>
+        Option<IActorRef> RebalanceListener { get; }
         
         /// <summary>
         /// Allows to specify custom partition events handler. See more at <see cref="IPartitionEventHandler"/>
         /// </summary>
         IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler);
+        
+        /// <summary>
+        /// Specifies actor that receives rebalance events as messages.
+        /// </summary>
+        IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener);
     }
 
     /// <summary>
-    /// TopicSubscription
+    /// A subscription to a set of 1 or more topics.
     /// </summary>
-    internal sealed class TopicSubscription : IAutoSubscription
+    internal sealed record TopicSubscription : IAutoSubscription
     {
         /// <summary>
         /// TopicSubscription
@@ -51,26 +62,29 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// List of topics to subscribe
         /// </summary>
-        public IImmutableSet<string> Topics { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public IImmutableSet<string> Topics { get; private init; }
+        
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; } = Option<IStatisticsHandler>.None;
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            var s = Option<IStatisticsHandler>.Create(statisticsHandler);
+            return this with { StatisticsHandler = s };
         }
+        
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private init; } = Option<IPartitionEventHandler>.None;
 
-        /// <inheritdoc />
-        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IActorRef> RebalanceListener { get; private init; } = Option<IActorRef>.None;
+        
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler);
-            return this;
+            var p = Option<IPartitionEventHandler>.Create(partitionEventHandler);
+            return this with { PartitionEventsHandler = p };
+        }
+
+        public IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener)
+        {
+            return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
         }
     }
     
@@ -80,7 +94,7 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows subscription to multiple topics, matching given regex pattern
     /// </remarks>
-    internal sealed class TopicSubscriptionPattern : IAutoSubscription
+    internal sealed record TopicSubscriptionPattern : IAutoSubscription
     {
         /// <summary>
         /// TopicSubscriptionPattern
@@ -94,26 +108,29 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Topic pattern (regular expression to be matched)
         /// </summary>
-        public string TopicPattern { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public string TopicPattern { get; private init; }
+        
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; } = Option<IStatisticsHandler>.None;
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            var s = Option<IStatisticsHandler>.Create(statisticsHandler);
+            return this with { StatisticsHandler = s };
         }
+        
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private init; } = Option<IPartitionEventHandler>.None;
 
-        /// <inheritdoc />
-        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IActorRef> RebalanceListener { get; private init; } = Option<IActorRef>.None;
+        
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler); 
-            return this;
+            var p = Option<IPartitionEventHandler>.Create(partitionEventHandler);
+            return this with { PartitionEventsHandler = p };
+        }
+
+        public IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener)
+        {
+            return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
         }
     }
 
