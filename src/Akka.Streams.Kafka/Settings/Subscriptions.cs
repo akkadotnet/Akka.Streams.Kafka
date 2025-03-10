@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Akka.Actor;
+using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Util;
 using Akka.Util;
@@ -40,10 +41,16 @@ namespace Akka.Streams.Kafka.Settings
         IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler);
         
         /// <summary>
-        /// Specifies actor that receives rebalance events as messages.
+        /// Specifies actor that receives re-balance events as messages.
         /// </summary>
         IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener);
     }
+    
+    public interface IConsumerRebalanceEvent;
+    
+    public sealed record TopicPartitionsAssigned(ISubscription Subscription, IImmutableSet<TopicPartition> Partitions) : IConsumerRebalanceEvent;
+    
+    public sealed record TopicPartitionsRevoked(ISubscription Subscription, IImmutableSet<TopicPartitionOffset> Partitions) : IConsumerRebalanceEvent;
 
     /// <summary>
     /// A subscription to a set of 1 or more topics.

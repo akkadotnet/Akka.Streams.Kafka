@@ -15,7 +15,7 @@ namespace Akka.Streams.Kafka
     /// own dispatcher, so just as the other remote calls to Kafka, the blocking happens within a designated thread pool.
     /// However, calling these during consuming might affect performance and even cause timeouts in extreme cases.
     /// </summary>
-    public class Metadata
+    public static class Metadata
     {
         public interface IRequest { }
         public interface IResponse { }

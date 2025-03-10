@@ -3,8 +3,6 @@ using System.Collections.Immutable;
 using Akka.Actor;
 using Akka.Annotations;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Kafka.Stages.Consumers.Actors;
-using Akka.Streams.Stage;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Helpers
@@ -78,6 +76,8 @@ namespace Akka.Streams.Kafka.Helpers
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
             }
+
+            public override string ToString() => "EmptyHandler";
         }
         
         /// <summary>
@@ -108,11 +108,11 @@ namespace Akka.Streams.Kafka.Helpers
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                // _subscription.RebalanceListener
-                //     .OnSuccess(@ref =>
-                //     {
-                //         @ref.Tell(new KafkaConsumerActorMetadata.Internal.Revoked(revokedTopicPartitions));
-                //     });
+                _subscription.RebalanceListener
+                    .OnSuccess(@ref =>
+                    {
+                        @ref.Tell(new TopicPartitionsRevoked(_subscription, revokedTopicPartitions), _sourceActorRef);
+                    });
                 
                 _partitionRevokedCallback(revokedTopicPartitions);
             }
@@ -120,12 +120,18 @@ namespace Akka.Streams.Kafka.Helpers
             /// <inheritdoc />
             public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
+                // TODO: we don't need a separate OnLost handler. It should just be the OnRevoked handler.
                 _partitionLostCallback(revokedTopicPartitions);
             }
 
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
+                _subscription.RebalanceListener
+                    .OnSuccess(@ref =>
+                    {
+                        @ref.Tell(new TopicPartitionsAssigned(_subscription, assignedTopicPartitions), _sourceActorRef);
+                    });
                 _partitionAssignedCallback(assignedTopicPartitions);
             }
 
@@ -133,6 +139,8 @@ namespace Akka.Streams.Kafka.Helpers
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
             }
+
+            public override string ToString() => $"AsyncCallbacks({_subscription}, {_sourceActorRef})";
         }
         
         /// <summary>
@@ -152,30 +160,32 @@ namespace Akka.Streams.Kafka.Helpers
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnRevoke(revokedTopicPartitions, consumer);
-                _handler2?.OnRevoke(revokedTopicPartitions, consumer);
+                _handler1.OnRevoke(revokedTopicPartitions, consumer);
+                _handler2.OnRevoke(revokedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnLost(revokedTopicPartitions, consumer);
-                _handler2?.OnLost(revokedTopicPartitions, consumer);
+                _handler1.OnLost(revokedTopicPartitions, consumer);
+                _handler2.OnLost(revokedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnAssign(assignedTopicPartitions, consumer);
-                _handler2?.OnAssign(assignedTopicPartitions, consumer);
+                _handler1.OnAssign(assignedTopicPartitions, consumer);
+                _handler2.OnAssign(assignedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnStop(topicPartitions, consumer);
-                _handler2?.OnStop(topicPartitions, consumer);
+                _handler1.OnStop(topicPartitions, consumer);
+                _handler2.OnStop(topicPartitions, consumer);
             }
+            
+            public override string ToString() => $"Chain({_handler1}, {_handler2})";
         }
     }
 }
