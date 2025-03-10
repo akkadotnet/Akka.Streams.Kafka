@@ -39,7 +39,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Stores delegates for external handling of partition events
         /// </summary>
-        private readonly IPartitionEventHandler _partitionEventHandler;
+        private IPartitionEventHandler _partitionEventHandler;
         
         private readonly TimeSpan _warningDuration;
         
@@ -60,6 +60,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private IImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages> _requests 
             = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
+        
         /// <summary>
         /// Stores stage actors, requesting for more messages
         /// </summary>
@@ -184,27 +185,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             switch (message)
             {
-                case KafkaConsumerActorMetadata.Internal.Assign assign:
-                {
-                    ScheduleFirstPollTask();
-                    CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
-                    var previousAssigned = _consumer.Assignment;
-                    _consumer.Assign(assign.TopicPartitions.Union(previousAssigned));
-                    _commitRefreshing.AssignedPositions(assign.TopicPartitions, _consumer, _settings.PositionTimeout);
-                    return true;
-                }
-
-                case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
-                {
-                    ScheduleFirstPollTask();
-                    var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
-                    CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
-                    var previousAssigned = _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
-                    _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
-                    _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
-                    return true;
-                }
-                    
                 case KafkaConsumerActorMetadata.Internal.Commit commit when _rebalanceInProgress:
                     _rebalanceCommitStash = _rebalanceCommitStash.Union(commit.Offsets);
                     _rebalanceCommitSenders = _rebalanceCommitSenders.Add(Sender);
@@ -370,14 +350,45 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             try
             {
-                if (subscriptionRequest is KafkaConsumerActorMetadata.Internal.Subscribe subscribe)
-                    _consumer.Subscribe(subscribe.Topics);
-                else if (subscriptionRequest is KafkaConsumerActorMetadata.Internal.SubscribePattern subscribePattern)
-                    _consumer.Subscribe(subscribePattern.TopicPattern);
-                else
-                    throw new NotSupportedException($"Unsupported subscription type: {subscriptionRequest.GetType()}");
-                
+                switch (subscriptionRequest)
+                {
+                    case KafkaConsumerActorMetadata.Internal.Assign assign:
+                    {
+                        CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
+                        var previousAssigned = _consumer.Assignment;
+                        _consumer.Assign(assign.TopicPartitions.Union(previousAssigned));
+                        _commitRefreshing.AssignedPositions(assign.TopicPartitions, _consumer, _settings.PositionTimeout);
+                        break;
+                    }
+
+                    case KafkaConsumerActorMetadata.Internal.AssignWithOffset assignWithOffset:
+                    {
+                        var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition).ToImmutableHashSet();
+                        CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
+                        
+                        // TODO: dear lord this is wrong, WE SHOULD NOT BE SETTING OFFSETS TO ZERO HERE
+                        var previousAssigned = _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
+                        _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
+                        _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
+                        break;
+                    }
+                    
+                    case KafkaConsumerActorMetadata.Internal.Subscribe subscribe:
+                    {
+                        _consumer.Subscribe(subscribe.Topics);
+                        _partitionEventHandler = subscribe.RebalanceHandler;
+                        break;
+                    }
+                    case KafkaConsumerActorMetadata.Internal.SubscribePattern subscribePattern:
+                    {
+                        _consumer.Subscribe(subscribePattern.TopicPattern);
+                        _partitionEventHandler = subscribePattern.RebalanceHandler;
+                        break;
+                    }
+                }
+
                 ScheduleFirstPollTask();
+                
             }
             catch (Exception ex)
             {
