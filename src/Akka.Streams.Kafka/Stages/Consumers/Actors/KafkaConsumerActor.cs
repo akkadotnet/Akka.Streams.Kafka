@@ -88,13 +88,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private IImmutableList<IActorRef> _rebalanceCommitSenders = ImmutableArray<IActorRef>.Empty;
 
         private ImmutableList<TopicPartition> _pausedPartitions = ImmutableList<TopicPartition>.Empty;
-        
+
         /// <summary>
         /// KafkaConsumerActor
         /// </summary>
         /// <param name="owner">Owner actor to send critical failures to</param>
         /// <param name="settings">Consumer settings</param>
         /// <param name="decider"></param>
+        /// <param name="statisticsHandler">Optional handler for reporting Confluent SDK statistics as a structured JSON payload.</param>
         public KafkaConsumerActor(IActorRef? owner, ConsumerSettings<K, V> settings, Decider decider, IStatisticsHandler statisticsHandler)
         {
             _owner = owner;

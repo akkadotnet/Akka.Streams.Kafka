@@ -123,6 +123,45 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: PerformShutdown);
         }
+        
+        protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
+            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb,
+            Action<IImmutableSet<TopicPartitionOffset>> partitionsLostCb)
+        {
+            switch (_subscription)
+            {
+                case TopicSubscription topicSubscription:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
+                        SourceActor.Ref);
+                    break;
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
+                        SourceActor.Ref);
+                    break;
+                default:
+                    throw new NotSupportedException();
+            }
+
+            return;
+
+            IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
+            {
+                return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                    partitionsRevokedCb, partitionsLostCb));
+            }
+        }
+        
+        /// <summary>
+        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
+        /// </summary>
+        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
+        {
+            return handler;
+        }
 
         public override void PreStart()
         {
@@ -156,16 +195,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             SourceActor.Watch(ConsumerActor);
 
-            switch (_subscription)
-            {
-                case TopicSubscription topicSubscription:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
-                    break;
-
-                case TopicSubscriptionPattern topicSubscriptionPattern:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
-                    break;
-            }
+            ConfigureSubscription(_partitionAssignedCallback, _partitionRevokedCallback, _partitionLostCallback);
         }
 
         public override void PostStop()

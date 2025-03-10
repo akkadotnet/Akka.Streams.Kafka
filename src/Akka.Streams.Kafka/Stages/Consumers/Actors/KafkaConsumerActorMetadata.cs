@@ -63,6 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             /// Subscribe to topics fitting a specific pattern.
             /// </summary>
             /// <param name="TopicPattern">Topic pattern (regular expression to be matched)</param>
+            /// <param name="RebalanceHandler">Optional - used to help handle and filter incoming rebalance events.</param>
             public sealed record SubscribePattern(string TopicPattern, IPartitionEventHandler RebalanceHandler) : ISubscriptionRequest;
 
             /// <summary>
