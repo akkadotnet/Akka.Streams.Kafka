@@ -648,7 +648,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     $"consumer assignment: [{string.Join(", ", _consumer.Assignment.Select(p => p.ToString()))}]");
 
             //send messages to actors
-            foreach (var (stageActorRef, request) in _requests.ToTuples())
+            foreach (var (stageActorRef, request) in _requests)
             {
                 var messages = new List<ConsumeResult<K, V>>();
                 foreach (var message in rawResult)
