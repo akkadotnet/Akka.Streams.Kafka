@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.Serialization;
 using System.Threading;
 using Akka.Actor;
-using Akka.Event;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Internal;
@@ -205,7 +203,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
                 
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
-                    if(_log.IsDebugEnabled)
+                    if(_settings.VerboseLogging)
                         _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
@@ -450,7 +448,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 var refreshOffsets = _commitRefreshing.RefreshOffsets;
                 if (refreshOffsets.Any())
                 {
-                    _log.Debug($"Refreshing comitted offsets: {refreshOffsets.JoinToString(", ")}");
+                    _log.Debug("Refreshing committed offsets: {0}", refreshOffsets.JoinToString(", "));
                     Commit(refreshOffsets, msg => Context.System.DeadLetters.Tell(msg));
                 }
                
@@ -479,7 +477,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             
             if (partitionsToFetch.IsEmpty || _requests.IsEmpty())
             {
-                if(_log.IsDebugEnabled)
+                if(_settings.VerboseLogging)
                     _log.Debug("Requests are empty - attempting to consume.");
                 PausePartitions(currentAssignment);
                 try
@@ -687,7 +685,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (partitions.Count == 0)
                 return;
             
-            if(_log.IsDebugEnabled)
+            if(_settings.VerboseLogging)
                 _log.Debug("Pausing partitions [{0}]", string.Join(",", partitions));
             _consumer.Pause(partitions);
         }
@@ -697,7 +695,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (partitions.Count == 0)
                 return;
             
-            if(_log.IsDebugEnabled)
+            if(_settings.VerboseLogging)
                 _log.Debug("Resuming partitions [{0}]", string.Join(",", partitions));
             _consumer.Resume(partitions);
         }

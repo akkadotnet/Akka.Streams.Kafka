@@ -59,7 +59,8 @@ namespace Akka.Streams.Kafka.Settings
                 partitionHandlerWarning: config.GetTimeSpan("partition-handler-warning", TimeSpan.FromSeconds(5)),
                 commitTimeWarning: config.GetTimeSpan("commit-time-warning", TimeSpan.FromSeconds(1)),
                 commitTimeout: config.GetTimeSpan("commit-timeout", TimeSpan.FromSeconds(15)),
-                commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", Timeout.InfiniteTimeSpan, allowInfinite: true),
+                commitRefreshInterval: config.GetTimeSpan("commit-refresh-interval", Timeout.InfiniteTimeSpan,
+                    allowInfinite: true),
                 stopTimeout: config.GetTimeSpan("stop-timeout", TimeSpan.FromSeconds(30)),
                 positionTimeout: config.GetTimeSpan("position-timeout", TimeSpan.FromSeconds(5)),
                 waitClosePartition: config.GetTimeSpan("wait-close-partition", TimeSpan.FromSeconds(1)),
@@ -69,8 +70,12 @@ namespace Akka.Streams.Kafka.Settings
                 dispatcherId: config.GetString("use-dispatcher", "akka.kafka.default-dispatcher"),
                 autoCreateTopicsEnabled: config.GetBoolean("allow.auto.create.topics", true),
                 properties: properties,
-                connectionCheckerSettings: ConnectionCheckerSettings.Create(config.GetConfig(ConnectionCheckerSettings.ConfigPath)),
-                consumerFactory: null );
+                connectionCheckerSettings: ConnectionCheckerSettings.Create(
+                    config.GetConfig(ConnectionCheckerSettings.ConfigPath)),
+                consumerFactory: null)
+            {
+                VerboseLogging = config.GetBoolean("verbose-logging", false)
+            };
         }
 
         /// <summary>
@@ -128,7 +133,11 @@ namespace Akka.Streams.Kafka.Settings
         /// Limits the blocking on Kafka consumer position calls
         /// </summary>
         public TimeSpan PositionTimeout { get; init; }
+        
         public int BufferSize { get; init; }
+        
+        
+        
         /// <summary>
         /// Fully qualified config path which holds the dispatcher configuration to be used by the consuming actor. Some blocking may occur.
         /// </summary>
@@ -143,6 +152,15 @@ namespace Akka.Streams.Kafka.Settings
         /// (like if no message to consume)
         /// </remarks>
         public bool AutoCreateTopicsEnabled { get; init; }
+
+        /// <summary>
+        /// When enabled, the client will emit very detailed trace information at the DEBUG loglevel.
+        /// </summary>
+        /// <remarks>
+        /// Helpful for debugging, but do not recommend running in production with this enabled.
+        /// </remarks>
+        public bool VerboseLogging { get; init; } = false;
+        
         /// <summary>
         /// Configuration properties
         /// </summary>
@@ -358,6 +376,9 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public ConsumerSettings<TKey, TValue> WithCloseTimeout(TimeSpan closeTimeout) =>
             this with { StopTimeout = closeTimeout };
+        
+        public ConsumerSettings<TKey, TValue> WithVerboseLogging(bool verboseLogging) =>
+            this with { VerboseLogging = verboseLogging };
 
         /// <summary>
         /// Assigned consumer group id.
