@@ -81,8 +81,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         }
     }
 
-   
-
     internal sealed class CommittableSubSourceStageLogic<K, V> : SubSourceStageLogic<K, V, CommittableMessage<K, V>>
     {
         public CommittableSubSourceStageLogic(
