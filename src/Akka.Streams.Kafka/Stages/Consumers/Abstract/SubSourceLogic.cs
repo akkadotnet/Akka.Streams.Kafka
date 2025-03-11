@@ -657,7 +657,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 FilterRevokedPartitionAsyncCallback);
 
             _subSourceStartedCallback(started);
-            // consumerActor.tell(RegisterSubStage(requestMessages.tps), subSourceActor.ref) // JVM
+            _consumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RegisterSubStage(_requestMessages.Topics),
+                _subSourceActor.Ref);
         }
 
         private StageActorRef.Receive MessageHandling() => args =>

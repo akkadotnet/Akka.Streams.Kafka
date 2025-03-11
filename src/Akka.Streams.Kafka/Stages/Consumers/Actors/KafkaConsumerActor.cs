@@ -58,11 +58,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private IImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages> _requests 
             = ImmutableDictionary<IActorRef, KafkaConsumerActorMetadata.Internal.RequestMessages>.Empty;
-        
+
         /// <summary>
         /// Stores stage actors, requesting for more messages
         /// </summary>
-        private IImmutableSet<IActorRef> _requestors = ImmutableHashSet<IActorRef>.Empty;
+        private ImmutableDictionary<IImmutableSet<TopicPartition>, IActorRef> _stageActorsMap = ImmutableDictionary<IImmutableSet<TopicPartition>, IActorRef>.Empty;
         private ICommitRefreshing<K, V> _commitRefreshing = null!;
         private IConsumer<K, V> _consumer = null!;
         private RestrictedConsumer<K, V> _restrictedConsumer = null!;
@@ -202,18 +202,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     HandleSubscription(subscribe);
                     return true;
                 
+                case KafkaConsumerActorMetadata.Internal.RegisterSubStage subStage:
+                    _stageActorsMap = _stageActorsMap.SetItem(subStage.TopicPartitions, Sender);
+                    return true;
+                
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
                     if(_settings.VerboseLogging)
                         _log.Debug("Messages was requested, RequestId: {0}, Partitions: {1}", requestMessages.RequestId, string.Join(", ", requestMessages.Topics));
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
-                    _requests = _requests.SetItem(Sender, requestMessages);
-                    _requestors = _requestors.Add(Sender);
+                    
+                    if(_stageActorsMap.TryGetValue(requestMessages.Topics, out var sender) && sender == Sender)
+                        _requests = _requests.SetItem(Sender, requestMessages);
                     
                     // When many requestors, e.g. many partitions with committablePartitionedSource the
                     // performance is much by collecting more requests/commits before performing the poll.
                     // That is done by sending a message to self, and thereby collect pending messages in mailbox.
-                    if (_requestors.Count == 1)
+                    if (_stageActorsMap.Count == 1)
                     {
                         Poll();
                     }
@@ -248,7 +253,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case Terminated terminated:
                     _requests = _requests.Remove(terminated.ActorRef);
-                    _requestors = _requestors.Remove(terminated.ActorRef);
+                    _stageActorsMap = _stageActorsMap.Where(c => !c.Value.Equals(terminated.ActorRef))
+                        .ToImmutableDictionary();
                     return true;
 
                 case Metadata.IRequest req:
@@ -385,7 +391,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
 
                 ScheduleFirstPollTask();
-                
+                _stageActorsMap = _stageActorsMap.SetItem(_consumer.Assignment.ToImmutableSet(), Sender);
             }
             catch (Exception ex)
             {
@@ -661,7 +667,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             // When many requestors, e.g. many partitions with committablePartitionedSource the
             // performance is much by collecting more requests/commits before performing the poll.
             // That is done by sending a message to self, and thereby collect pending messages in mailbox.
-            if (_requestors.Count == 1)
+            if (_stageActorsMap.Count == 1)
             {
                 Poll();
             }

@@ -75,6 +75,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 private Stop() { }
             }
+
+            public sealed record RegisterSubStage(IImmutableSet<TopicPartition> TopicPartitions)
+                : INoSerializationVerificationNeeded;
             
             public sealed record Seek(IImmutableSet<TopicPartitionOffset> Offsets) : INoSerializationVerificationNeeded;
             /// <summary>
