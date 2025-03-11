@@ -217,10 +217,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         Poll();
                     }
-                    else if (!_delayedPollInFlight)
+                    else
                     {
-                        _delayedPollInFlight = true;
-                        Self.Tell(_delayedPollMessage);
+                        RequestDelayedPoll();
                     }
                     return true;
                 
@@ -422,6 +421,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             Timers.CancelAll();
             Timers.StartSingleTimer(PollTimerKey, _pollMessage, _settings.PollInterval);
+        }
+
+        private void RequestDelayedPoll()
+        {
+            if (_delayedPollInFlight)
+            {
+                _delayedPollInFlight = true;
+                Self.Tell(_delayedPollMessage);
+            }
         }
 
         private void CheckOverlappingRequests(string updateType, IActorRef fromStage, IImmutableSet<TopicPartition> topics)
@@ -657,10 +665,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 Poll();
             }
-            else if (!_delayedPollInFlight)
+            else
             {
-                _delayedPollInFlight = true;
-                Self.Tell(_delayedPollMessage);
+                RequestDelayedPoll();
             }
         }
 
