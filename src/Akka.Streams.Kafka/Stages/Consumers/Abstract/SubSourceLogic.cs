@@ -18,42 +18,35 @@ using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
+using static Akka.Streams.Kafka.Stages.Consumers.Abstract.SubSourceLogic;
 
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
-    internal interface ISubSourceCancellationStrategy { }
-
-    internal sealed class SeekToOffsetAndReEmit : ISubSourceCancellationStrategy
-    {
-        public SeekToOffsetAndReEmit(long offset)
-        {
-            Offset = offset;
-        }
-
-        public long Offset { get; }
-    }
-
-    internal sealed class ReEmit : ISubSourceCancellationStrategy
-    {
-        public static readonly ISubSourceCancellationStrategy Instance = new ReEmit();
-        private ReEmit() {}
-    }
-
-    internal sealed class DoNothing : ISubSourceCancellationStrategy
-    {
-        public static readonly ISubSourceCancellationStrategy Instance = new DoNothing();
-        private DoNothing() {}
-    }
-
     /// <summary>
     /// INTERNAL API
     /// </summary>
-    internal static class SubSourceLogicHelpers
+    internal static class SubSourceLogic
     {
         public sealed class CloseRevokedPartitions
         {
             public static readonly CloseRevokedPartitions Instance = new();
             private CloseRevokedPartitions(){}
+        }
+        
+        internal interface ISubSourceCancellationStrategy;
+
+        internal sealed record SeekToOffsetAndReEmit(long Offset) : ISubSourceCancellationStrategy;
+
+        internal sealed class ReEmit : ISubSourceCancellationStrategy
+        {
+            public static readonly ISubSourceCancellationStrategy Instance = new ReEmit();
+            private ReEmit() {}
+        }
+
+        internal sealed class DoNothing : ISubSourceCancellationStrategy
+        {
+            public static readonly ISubSourceCancellationStrategy Instance = new DoNothing();
+            private DoNothing() {}
         }
     }
     
@@ -218,7 +211,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         protected override void OnTimer(object timerKey)
         {
-            if (timerKey is SubSourceLogicHelpers.CloseRevokedPartitions)
+            if (timerKey is SubSourceLogic.CloseRevokedPartitions)
             {
                 Log.Debug("#{0} Closing SubSources for revoked partitions: {1}", _actorNumber, _partitionsToRevoke.JoinToString(", "));
 
@@ -310,7 +303,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
 
-            ScheduleOnce(SubSourceLogicHelpers.CloseRevokedPartitions.Instance, _settings.WaitClosePartition);
+            ScheduleOnce(SubSourceLogic.CloseRevokedPartitions.Instance, _settings.WaitClosePartition);
         }
 
         private void HandleSubsourceCancelled((TopicPartition, ISubSourceCancellationStrategy) obj)
