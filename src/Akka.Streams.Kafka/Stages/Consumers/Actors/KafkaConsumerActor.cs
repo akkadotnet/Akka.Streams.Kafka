@@ -223,7 +223,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     Context.Watch(Sender);
                     CheckOverlappingRequests("RequestMessages", Sender, requestMessages.Topics);
 
-                    if (_stageActorsMap.TryGetValue(requestMessages.Topics, out var sender) && sender == Sender)
+                    if (_stageActorsMap.GetOrElse(requestMessages.Topics, Sender).Equals(Sender))
                         _requests = _requests.SetItem(Sender, requestMessages);
 
                     // When many requestors, e.g. many partitions with committablePartitionedSource the
