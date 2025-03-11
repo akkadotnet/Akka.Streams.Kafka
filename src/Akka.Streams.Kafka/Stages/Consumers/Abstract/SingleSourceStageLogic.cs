@@ -31,7 +31,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _shape = shape;
             _settings = settings;
         }
-        
+
+        protected override object LogSource
+        {
+            get
+            {
+                var strPart = (_settings.Properties.TryGetValue("client.id", out var clientId)) ?
+                    $"client-{_settings.GroupId}-{clientId}" : $"client-{_settings.GroupId}";
+                return Akka.Event.LogSource.Create(strPart, GetType());
+            }
+        }
+
         /// <inheritdoc />
         protected override IActorRef CreateConsumerActor()
         {

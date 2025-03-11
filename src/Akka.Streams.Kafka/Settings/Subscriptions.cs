@@ -93,6 +93,8 @@ namespace Akka.Streams.Kafka.Settings
         {
             return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
         }
+
+        public override string ToString() => $"TopicSubscription({string.Join(", ", Topics)})";
     }
     
     /// <summary>
@@ -139,6 +141,8 @@ namespace Akka.Streams.Kafka.Settings
         {
             return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
         }
+        
+        public override string ToString() => $"TopicSubscriptionPattern({TopicPattern})";
     }
 
     /// <summary>
@@ -147,31 +151,16 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows to subscribe to fixed set of topic partitions
     /// </remarks>
-    internal sealed class Assignment : IManualSubscription
+    internal sealed record Assignment(IImmutableSet<TopicPartition> TopicPartitions) : IManualSubscription
     {
-        /// <summary>
-        /// Assignment
-        /// </summary>
-        /// <param name="topicPartitions">List of topic partitions to subscribe</param>
-        public Assignment(IImmutableSet<TopicPartition> topicPartitions)
-        {
-            TopicPartitions = topicPartitions;
-        }
-
-        /// <summary>
-        /// Topic partitions to subscribe
-        /// </summary>
-        public IImmutableSet<TopicPartition> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; }
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            return this with { StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler) };
         }
+        
+        public override string ToString() => $"Assignment({string.Join(", ", TopicPartitions)})";
     }
 
     /// <summary>
@@ -180,31 +169,16 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows to subscribe to fixed set of topic partitions with initial offsets specified
     /// </remarks>
-    internal sealed class AssignmentWithOffset : IManualSubscription
+    internal sealed record AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> TopicPartitions) : IManualSubscription
     {
-        /// <summary>
-        /// AssignmentWithOffset
-        /// </summary>
-        /// <param name="topicPartitions">List of topic partitions with offsets to subscribe</param>
-        public AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> topicPartitions)
-        {
-            TopicPartitions = topicPartitions;
-        }
-
-        /// <summary>
-        /// List of topic partitions with offsets to subscribe
-        /// </summary>
-        public IImmutableSet<TopicPartitionOffset> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; }
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            return this with { StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler) };
         }
+        
+        public override string ToString() => $"AssignmentWithOffset({string.Join(", ", TopicPartitions)})";
     }
 
     /// <summary>
