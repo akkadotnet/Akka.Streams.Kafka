@@ -407,10 +407,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                             .ToImmutableHashSet();
                         CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
 
-                        // TODO: dear lord this is wrong, WE SHOULD NOT BE SETTING OFFSETS TO ZERO HERE
                         var previousAssigned =
-                            _consumer.Assignment.Select(tp => new TopicPartitionOffset(tp, new Offset(0)));
-                        _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
+                            _consumer.Assignment;
+                        _consumer.Assign(topicPartitions.Union(previousAssigned));
+                        foreach (var offset in assignWithOffset.TopicPartitionOffsets)
+                        {
+                            _consumer.Seek(offset);
+                        }
                         _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                         break;
                     }
