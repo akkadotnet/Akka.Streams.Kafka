@@ -98,7 +98,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly SourceShape<(TopicPartition, Source<TMessage, NotUsed>)> _shape;
         private readonly ConsumerSettings<K, V> _settings;
         private readonly IAutoSubscription _subscription;
-        private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private readonly ISubSourceStageLogicFactory<K, V, TMessage> _subSourceStageLogicFactory;
 
         private readonly Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>>
@@ -145,7 +144,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         public SubSourceLogic(SourceShape<(TopicPartition, Source<TMessage, NotUsed>)> shape,
             ConsumerSettings<K, V> settings,
             IAutoSubscription subscription,
-            Func<SubSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
             Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>> getOffsetsOnAssign,
             Action<IImmutableSet<TopicPartition>> onRevoke,
             ISubSourceStageLogicFactory<K, V, TMessage> subSourceStageLogicFactory,
@@ -155,7 +153,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _shape = shape;
             _settings = settings;
             _subscription = subscription;
-            _messageBuilder = messageBuilderFactory(this);
             _subSourceStageLogicFactory = subSourceStageLogicFactory;
             _getOffsetsOnAssign = getOffsetsOnAssign;
             _onRevoke = onRevoke;
@@ -435,7 +432,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         ConsumerActor,
                         _subsourceStartedCallback,
                         _subsourceCancelledCallback,
-                        _messageBuilder,
                         _decider,
                         _actorNumber,
                         _subSourceStageLogicFactory);
@@ -532,7 +528,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IActorRef _consumerActor;
         private readonly Action<SubSourceStageLogicControl> _subSourceStartedCallback;
         private readonly Action<(TopicPartition, ISubSourceCancellationStrategy)> _subSourceCancelledCallback;
-        private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private readonly ISubSourceStageLogicFactory<K, V, TMessage> _subSourceStageLogicFactory;
         private readonly int _actorNumber;
         private readonly Decider _decider;
@@ -543,7 +538,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         public SubSourceStage(TopicPartition topicPartition, IActorRef consumerActor,
             Action<SubSourceStageLogicControl> subSourceStartedCallback,
             Action<(TopicPartition, ISubSourceCancellationStrategy)> subSourceCancelledCallback,
-            IMessageBuilder<K, V, TMessage> messageBuilder,
             Decider decider,
             int actorNumber, ISubSourceStageLogicFactory<K, V, TMessage> subSourceStageLogicFactory)
         {
@@ -551,7 +545,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _consumerActor = consumerActor;
             _subSourceStartedCallback = subSourceStartedCallback;
             _subSourceCancelledCallback = subSourceCancelledCallback;
-            _messageBuilder = messageBuilder;
             _decider = decider;
             _actorNumber = actorNumber;
             _subSourceStageLogicFactory = subSourceStageLogicFactory;
