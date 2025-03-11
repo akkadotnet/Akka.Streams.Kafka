@@ -44,13 +44,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         public static readonly ISubSourceCancellationStrategy Instance = new DoNothing();
         private DoNothing() {}
     }
+
+    /// <summary>
+    /// INTERNAL API
+    /// </summary>
+    internal static class SubSourceLogicHelpers
+    {
+        public sealed class CloseRevokedPartitions
+        {
+            public static readonly CloseRevokedPartitions Instance = new();
+            private CloseRevokedPartitions(){}
+        }
+    }
     
     /// <summary>
     /// Stage logic used to produce sub-sources per topic partitions
     /// </summary>
     internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
     {
-        private class CloseRevokedPartitions { }
+        
 
         private readonly SourceShape<(TopicPartition, Source<TMessage, NotUsed>)> _shape;
         private readonly ConsumerSettings<K, V> _settings;
@@ -206,7 +218,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         protected override void OnTimer(object timerKey)
         {
-            if (timerKey is CloseRevokedPartitions)
+            if (timerKey is SubSourceLogicHelpers.CloseRevokedPartitions)
             {
                 Log.Debug("#{0} Closing SubSources for revoked partitions: {1}", _actorNumber, _partitionsToRevoke.JoinToString(", "));
 
@@ -298,7 +310,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
 
-            ScheduleOnce(new CloseRevokedPartitions(), _settings.WaitClosePartition);
+            ScheduleOnce(SubSourceLogicHelpers.CloseRevokedPartitions.Instance, _settings.WaitClosePartition);
         }
 
         private void HandleSubsourceCancelled((TopicPartition, ISubSourceCancellationStrategy) obj)
