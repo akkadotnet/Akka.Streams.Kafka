@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Akka.Actor;
@@ -28,7 +29,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected ISubscription Subscription { get; }
         protected Decider Decider { get; }
 
-        private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
+        private readonly Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
 
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } =
             ImmutableHashSet.Create<TopicPartition>();
@@ -197,9 +198,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                                     "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
                                     nameof(Directive.Restart));
                             // Empty the buffer to make sure that messages does not get duplicated
-                            while (_buffer.TryDequeue(out _))
-                            {
-                            }
+                            _buffer.Clear();
 
                             // ConsumerActor are designed to suicide itself on Directive.Stop or Directive.Restart
                             // to prevent any offset runaway. We will need to restart it.
@@ -225,8 +224,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            while (IsAvailable(_shape.Outlet) && _buffer.TryDequeue(out var message))
+            while (IsAvailable(_shape.Outlet) && _buffer.Count > 0)
             {
+                var message = _buffer.Dequeue();
                 Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
             }
 

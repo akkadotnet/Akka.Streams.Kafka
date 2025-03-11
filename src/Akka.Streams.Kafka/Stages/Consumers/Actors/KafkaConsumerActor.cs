@@ -546,7 +546,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private (List<ConsumeResult<K, V>>, Exception?) PollKafka(CancellationToken token)
         {
-            ConsumeResult<K, V>? consumed = null;
             var i = 10; // 10 poll attempts
             var timeout = Math.Max((int) _pollTimeout.TotalMilliseconds / i, 1);
             var polled = new List<ConsumeResult<K, V>>();
@@ -555,7 +554,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 try
                 {
                     // this would return immediately if there are messages waiting inside the client queue buffer
-                    consumed = _consumer.Consume(timeout);
+                    var consumed = _consumer.Consume(timeout);
                     if (consumed is null)
                     {
                         PausePartitions(_pausedPartitions);
