@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
@@ -128,8 +126,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         private IImmutableSet<TopicPartition> _partitionsInStartup = ImmutableHashSet<TopicPartition>.Empty;
 
-        private IImmutableDictionary<TopicPartition, IControl> _subSources =
-            ImmutableDictionary<TopicPartition, IControl>.Empty;
+        private IImmutableDictionary<TopicPartition, SubSourceStageLogicControl> _subSources =
+            ImmutableDictionary<TopicPartition,SubSourceStageLogicControl>.Empty;
 
         /// <summary>
         /// Kafka has signalled these partitions are revoked, but some may be re-assigned just after revoking.
@@ -210,12 +208,54 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
         }
 
+        private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
+        {
+            private IImmutableSet<TopicPartitionOffset> _lastRevoked = ImmutableHashSet<TopicPartitionOffset>.Empty;
+            private readonly SubSourceLogic<K, V, TMessage> _stageLogic;
+
+            public FlushMessagesOfRevokedPartitionsHandler(SubSourceLogic<K, V, TMessage> stageLogic)
+            {
+                _stageLogic = stageLogic;
+            }
+
+            public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
+                IRestrictedConsumer consumer)
+            {
+                _lastRevoked = revokedTopicPartitions;
+            }
+
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                foreach (var tp in revokedTopicPartitions)
+                {
+                    if (_stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
+                        control.FilterRevokedPartitionsCb(revokedTopicPartitions);
+                }
+            }
+
+            public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                // remove all of our previous revoked partitions that are not in the new assignment
+                var safeToRevoke = _lastRevoked
+                    .Where(c => !assignedTopicPartitions.Contains(c.TopicPartition))
+                    .ToImmutableHashSet();
+
+                foreach (var tp in safeToRevoke)
+                {
+                    if(_stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
+                        control.FilterRevokedPartitionsCb(safeToRevoke);
+                }
+            }
+
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer){}
+        }
+
         /// <summary>
         /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
         /// </summary>
         protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
         {
-            return handler;
+            return new PartitionEventHandlers.Chain(handler, new FlushMessagesOfRevokedPartitionsHandler(this));
         }
 
         public override void PreStart()
@@ -268,10 +308,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         protected override void OnTimer(object timerKey)
         {
-            if (timerKey is SubSourceLogic.CloseRevokedPartitions)
+            if (timerKey is CloseRevokedPartitions)
             {
-                Log.Debug("#{0} Closing SubSources for revoked partitions: {1}", _actorNumber,
-                    _partitionsToRevoke.JoinToString(", "));
+                if(Log.IsDebugEnabled)
+                    Log.Debug("#{0} Closing SubSources for revoked partitions: {1}", _actorNumber,
+                        _partitionsToRevoke.JoinToString(", "));
 
                 _onRevoke(_partitionsToRevoke);
                 _pendingPartitions = _pendingPartitions.Except(_partitionsToRevoke);
@@ -279,10 +320,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _partitionsToRevoke.ForEach(tp =>
                 {
                     if (_subSources.TryGetValue(tp, out var source))
-                        source.Shutdown(PartitionWasRevoked.Instance);
+                        source.ControlAndStageActor.Control.Shutdown(PartitionWasRevoked.Instance);
                 });
                 _subSources = _subSources.RemoveRange(_partitionsToRevoke);
                 _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
+            }
+            else
+            {
+                Log.Warning("Unexpected timer [{0}]", timerKey);
             }
         }
 
@@ -403,7 +448,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
             else
             {
-                _subSources = _subSources.SetItem(tp, control);
+                _subSources = _subSources.SetItem(tp, sssLogicControl);
                 _partitionsInStartup = _partitionsInStartup.Remove(tp);
             }
         }
@@ -450,7 +495,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             SetKeepGoing(true);
 
-            _subSources.Values.ForEach(control => control.Stop());
+            _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Stop());
 
             Complete(_shape.Outlet);
 
@@ -465,7 +510,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             SetKeepGoing(true);
 
             // TODO from alpakka: we should wait for subsources to be shutdown and next shutdown main stage
-            _subSources.Values.ForEach(control => control.Shutdown(ex));
+            _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Shutdown(ex));
 
             if (!IsClosed(_shape.Outlet))
                 Complete(_shape.Outlet);
@@ -478,11 +523,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     Control.OnShutdown();
                     CompleteStage();
                 }
+                else
+                {
+                    Log.Warning("Ignoring message [{0}]", message);
+                }
             });
 
             Materializer.ScheduleOnce(_settings.StopTimeout,
                 () => ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance));
         }
+        
+        
 
         /// <summary>
         /// Overrides some method of base <see cref="PromiseControl{TSourceOut}"/>

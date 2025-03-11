@@ -118,7 +118,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
         // Assert.True(control2.IsShutdown.IsCompleted);
     }
 
-    [Fact(Skip = "Filtering is not enabled on sub-sources just yet")]
+    [Fact]
     public async Task FetchedRecords_must_be_removed_from_the_partitioned_source_stage_when_a_partition_is_revoked()
     {
         const int count = 20;
