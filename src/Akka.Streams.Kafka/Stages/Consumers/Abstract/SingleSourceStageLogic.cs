@@ -112,6 +112,41 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             });
         }
 
+        private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
+        {
+            private IImmutableSet<TopicPartitionOffset> _lastRevoked = ImmutableHashSet<TopicPartitionOffset>.Empty;
+            private readonly SingleSourceStageLogic<K, V, TMessage> _stageLogic;
+
+            public FlushMessagesOfRevokedPartitionsHandler(SingleSourceStageLogic<K, V, TMessage> stageLogic)
+            {
+                _stageLogic = stageLogic;
+            }
+
+            public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
+                IRestrictedConsumer consumer)
+            {
+                _lastRevoked = revokedTopicPartitions;
+            }
+
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                _stageLogic.FilterRevokedPartitionAsyncCallback(revokedTopicPartitions);
+            }
+
+            public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                // remove all of our previous revoked partitions that are not in the new assignment
+                _stageLogic.FilterRevokedPartitionAsyncCallback(_lastRevoked
+                    .Where(c => !assignedTopicPartitions.Contains(c.TopicPartition))
+                        .ToImmutableHashSet());
+            }
+
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer){}
+        }
+
+        protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler) => 
+           new PartitionEventHandlers.Chain(new FlushMessagesOfRevokedPartitionsHandler(this), handler);
+
         private void PartitionsAssigned(IImmutableSet<TopicPartition> partitions)
         {
             TopicPartitions = TopicPartitions.Union(partitions);

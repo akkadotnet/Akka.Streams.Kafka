@@ -29,7 +29,24 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected ISubscription Subscription { get; }
         protected Decider Decider { get; }
 
-        private readonly Queue<ConsumeResult<K, V>> _buffer = new Queue<ConsumeResult<K, V>>();
+        public Action<IImmutableSet<TopicPartitionOffset>> FilterRevokedPartitionAsyncCallback =>
+            GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(FilterRevokedPartitions);
+        
+        private void FilterRevokedPartitions(IImmutableSet<TopicPartitionOffset> partitions)
+        {
+            if (partitions.Count > 0)
+            {
+                Log.Debug("Filtering out messages from revoked partitions [{0}]", string.Join(", ", partitions));
+                var tps = partitions.Select(tpo => tpo.TopicPartition).ToImmutableHashSet();
+                
+                // TODO: maybe it makes sense to look at offsets too
+                
+                // Thread-safe - happens inside an async callback
+                _buffer = new Queue<ConsumeResult<K, V>>(_buffer.Where(m => !tps.Contains(m.TopicPartition)));
+            }
+        }
+
+        private Queue<ConsumeResult<K, V>> _buffer = new();
 
         protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } =
             ImmutableHashSet.Create<TopicPartition>();
