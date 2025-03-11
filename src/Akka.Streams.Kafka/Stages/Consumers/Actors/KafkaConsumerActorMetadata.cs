@@ -23,23 +23,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <returns></returns>
         public static int NextNumber() => Interlocked.Increment(ref _number);
         
-        /// <summary>
-        /// Gets actor props
-        /// </summary>
         public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, Decider decider) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, decider, new PartitionEventHandlers.Empty(), new StatisticsHandlers.Empty())).WithDispatcher(settings.DispatcherId);
-        
-        /// <summary>
-        /// Gets actor props
-        /// </summary>
-        internal static Props GetProps<K, V>(ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(ActorRefs.Nobody, settings, decider, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
-        
-        /// <summary>
-        /// Gets actor props
-        /// </summary>
-        internal static Props GetProps<K, V>(IActorRef owner, ConsumerSettings<K, V> settings, Decider decider, IPartitionEventHandler handler, IStatisticsHandler statisticsHandler) =>
-            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, decider, handler, statisticsHandler)).WithDispatcher(settings.DispatcherId);
+            GetProps(null, settings, decider, null);
+   
+        internal static Props GetProps<K, V>(IActorRef? owner, ConsumerSettings<K, V> settings, Decider decider, IStatisticsHandler? statisticsHandler) =>
+            Props.Create(() => new KafkaConsumerActor<K, V>(owner, settings, decider, statisticsHandler ?? StatisticsHandlers.Empty.Instance)).WithDispatcher(settings.DispatcherId);
 
 
         /// <summary>
@@ -47,209 +35,39 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// Generally this should not be used from outside the library.
         /// </summary>
         [InternalApi]
-        public class Internal
+        public static class Internal
         {
             /// <summary>
-            /// Messages
+            /// Marker interface for subscription requests
             /// </summary>
-            public class Messages<K, V>
+            public interface ISubscriptionRequest : INoSerializationVerificationNeeded
             {
-                /// <summary>
-                /// Messages
-                /// </summary>
-                /// <param name="requestId">Request Id</param>
-                /// <param name="messagesList">List of consumed messages</param>
-               public Messages(int requestId, ImmutableList<ConsumeResult<K, V>> messagesList)
-                {
-                    RequestId = requestId;
-                    MessagesList = messagesList;
-                }
-
-                /// <summary>
-                /// Request Id
-                /// </summary>
-                public int RequestId { get; }
-                /// <summary>
-                /// List of consumed messages
-                /// </summary>
-                public ImmutableList<ConsumeResult<K, V>> MessagesList { get; }
             }
-
-            /// <summary>
-            /// Used to send commit requests to <see cref="KafkaConsumerActor{K,V}"/>
-            /// </summary>
-            public class Commit
-            {
-                /// <summary>
-                /// Commit
-                /// </summary>
-                /// <param name="offsets">List of offsets to commit</param>
-                public Commit(IImmutableSet<TopicPartitionOffset> offsets)
-                {
-                    Offsets = offsets;
-                }
-
-                /// <summary>
-                /// List of offsets to commit
-                /// </summary>
-                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
-            }
-
-            /// <summary>
-            /// Committed
-            /// </summary>
-            public class Committed
-            {
-                /// <summary>
-                /// Commited message
-                /// </summary>
-                /// <param name="offsets">Collection of committed offsets</param>
-                public Committed(IImmutableSet<TopicPartitionOffset> offsets)
-                {
-                    Offsets = offsets;
-                }
-
-                /// <summary>
-                /// Committed offsets
-                /// </summary>
-                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
-            }
-
-            /// <summary>
-            /// Used to request for kafka messages
-            /// </summary>
-            public class RequestMessages
-            {
-                /// <summary>
-                /// RequestMessages
-                /// </summary>
-                /// <param name="requestId">Request Id</param>
-                /// <param name="topics">List of topics to consume</param>
-                public RequestMessages(int requestId, ImmutableHashSet<TopicPartition> topics)
-                {
-                    RequestId = requestId;
-                    Topics = topics;
-                }
-
-                /// <summary>
-                /// Request Id
-                /// </summary>
-                public int RequestId { get; }
-                /// <summary>
-                /// List of topics to consume
-                /// </summary>
-                public ImmutableHashSet<TopicPartition> Topics { get; }
-            }
-
-            /// <summary>
-            /// Revoked
-            /// </summary>
-            public class Revoked
-            {
-                /// <summary>
-                /// Revoked
-                /// </summary>
-                /// <param name="partitions">List of revoked partitions</param>
-                public Revoked(IImmutableSet<TopicPartition> partitions)
-                {
-                    Partitions = partitions;
-                }
-
-                /// <summary>
-                /// List of revoked partitions
-                /// </summary>
-                public IImmutableSet<TopicPartition> Partitions { get; }
-            }
-
+            
+            /* REQUESTS */
+            
             /// <summary>
             /// Manual assignment of a partition - only used in conjunction with <see cref="IManualSubscription"/>
             /// </summary>
-            public class Assign
-            {
-                /// <summary>
-                /// Assign
-                /// </summary>
-                /// <param name="topicPartitions">Topic partitions</param>
-                public Assign(IImmutableSet<TopicPartition> topicPartitions)
-                {
-                    TopicPartitions = topicPartitions;
-                }
+            public sealed record Assign(IImmutableSet<TopicPartition> TopicPartitions) : ISubscriptionRequest;
 
-                /// <summary>
-                /// Topic partitions
-                /// </summary>
-                public IImmutableSet<TopicPartition> TopicPartitions { get; }
-            }
-            
             /// <summary>
             /// Manual assignment of a partition with a specific offset - only used in conjunction
             /// with <see cref="IManualSubscription"/>
             /// </summary>
-            public class AssignWithOffset
-            {
-                /// <summary>
-                /// AssignWithOffset
-                /// </summary>
-                /// <param name="topicPartitionOffsets">Topic partitions with offsets</param>
-                public AssignWithOffset(IImmutableSet<TopicPartitionOffset> topicPartitionOffsets)
-                {
-                    TopicPartitionOffsets = topicPartitionOffsets;
-                }
-
-                /// <summary>
-                /// Topic partitions
-                /// </summary>
-                public IImmutableSet<TopicPartitionOffset> TopicPartitionOffsets { get; }
-            }
+            public sealed record AssignWithOffset(IImmutableSet<TopicPartitionOffset> TopicPartitionOffsets)  : ISubscriptionRequest;
             
+            public sealed record Subscribe(IImmutableSet<string> Topics, IPartitionEventHandler RebalanceHandler) : ISubscriptionRequest;
+
             /// <summary>
-            /// Marker interface for subscription requests
+            /// Subscribe to topics fitting a specific pattern.
             /// </summary>
-            public interface ISubscriptionRequest
-            {
-            }
+            /// <param name="TopicPattern">Topic pattern (regular expression to be matched)</param>
+            /// <param name="RebalanceHandler">Optional - used to help handle and filter incoming rebalance events.</param>
+            public sealed record SubscribePattern(string TopicPattern, IPartitionEventHandler RebalanceHandler) : ISubscriptionRequest;
 
             /// <summary>
-            /// Subscribe
-            /// </summary>
-            public class Subscribe : ISubscriptionRequest
-            {
-                /// <summary>
-                /// Subscribe
-                /// </summary>
-                public Subscribe(IImmutableSet<string> topics)
-                {
-                    Topics = topics;
-                }
-
-                /// <summary>
-                /// List of topics to subscribe
-                /// </summary>
-                public IImmutableSet<string> Topics { get; }
-            }
-            
-            /// <summary>
-            /// SubscribePattern
-            /// </summary>
-            public class SubscribePattern : ISubscriptionRequest
-            {
-                /// <summary>
-                /// SubscribePattern
-                /// </summary>
-                /// <param name="topicPattern">Topic pattern (regular expression to be matched)</param>
-                public SubscribePattern(string topicPattern)
-                {
-                    TopicPattern = topicPattern;
-                }
-
-                /// <summary>
-                /// Topic pattern (regular expression to be matched)
-                /// </summary>
-                public string TopicPattern { get; }
-            }
-
-            /// <summary>
-            /// Stops consuming actor
+            /// Stops the consumer actor
             /// </summary>
             public class Stop
             {
@@ -257,26 +75,37 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 private Stop() { }
             }
+            
+            public sealed record Seek(IImmutableSet<TopicPartitionOffset> Offsets) : INoSerializationVerificationNeeded;
+            /// <summary>
+            /// Request sent from a StageRef in a stream stage to the <see cref="KafkaConsumerActor{K,V}"/>
+            /// for messages from a specific set of partitions.
+            /// </summary>
+            public sealed record RequestMessages(int RequestId, ImmutableHashSet<TopicPartition> Topics);
+            
+            /// <summary>
+            /// Used to send commit requests to <see cref="KafkaConsumerActor{K,V}"/>
+            /// </summary>
+            public sealed record Commit(IImmutableSet<TopicPartitionOffset> Offsets) : INoSerializationVerificationNeeded;
+
+            
+            /* RESPONSES */
 
             /// <summary>
-            /// Seek
+            /// Messages from the Kafka consumer to be delivered back to the stream stage with the given <see cref="RequestId"/>.
             /// </summary>
-            public class Seek
-            {
-                /// <summary>
-                /// Seek
-                /// </summary>
-                /// <param name="offsets">Offsets to seek</param>
-                public Seek(IImmutableSet<TopicPartitionOffset> offsets)
-                {
-                    Offsets = offsets;
-                }
+            public sealed record Messages<K, V>(int RequestId, ImmutableList<ConsumeResult<K, V>> MessagesList)
+                : INoSerializationVerificationNeeded;
 
-                /// <summary>
-                /// Offsets to seek
-                /// </summary>
-                public IImmutableSet<TopicPartitionOffset> Offsets { get; }
-            }
+
+            /// <summary>
+            /// Collection of committed offsets
+            /// </summary>
+            public sealed record Committed(IImmutableSet<TopicPartitionOffset> Offsets) : INoSerializationVerificationNeeded;
+            
+            public sealed record Revoked(IImmutableSet<TopicPartition> Partitions) : INoSerializationVerificationNeeded;
+            
+            public sealed record Assigned(IImmutableSet<TopicPartition> Partitions) : INoSerializationVerificationNeeded;
         }
     }
 }

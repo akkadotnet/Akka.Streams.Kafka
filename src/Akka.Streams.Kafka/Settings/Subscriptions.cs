@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using Akka.Actor;
+using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Util;
 using Akka.Util;
@@ -24,20 +26,36 @@ namespace Akka.Streams.Kafka.Settings
     public interface IAutoSubscription : ISubscription
     {
         /// <summary>
-        /// Partition events handler
+        /// Optional. Partition events handler.
         /// </summary>
         Option<IPartitionEventHandler> PartitionEventsHandler { get; }
+        
+        /// <summary>
+        /// Optional actor that receives rebalance events as messages.
+        /// </summary>
+        Option<IActorRef> RebalanceListener { get; }
         
         /// <summary>
         /// Allows to specify custom partition events handler. See more at <see cref="IPartitionEventHandler"/>
         /// </summary>
         IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler);
+        
+        /// <summary>
+        /// Specifies actor that receives re-balance events as messages.
+        /// </summary>
+        IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener);
     }
+    
+    public interface IConsumerRebalanceEvent;
+    
+    public sealed record TopicPartitionsAssigned(ISubscription Subscription, IImmutableSet<TopicPartition> Partitions) : IConsumerRebalanceEvent;
+    
+    public sealed record TopicPartitionsRevoked(ISubscription Subscription, IImmutableSet<TopicPartitionOffset> Partitions) : IConsumerRebalanceEvent;
 
     /// <summary>
-    /// TopicSubscription
+    /// A subscription to a set of 1 or more topics.
     /// </summary>
-    internal sealed class TopicSubscription : IAutoSubscription
+    internal sealed record TopicSubscription : IAutoSubscription
     {
         /// <summary>
         /// TopicSubscription
@@ -51,27 +69,32 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// List of topics to subscribe
         /// </summary>
-        public IImmutableSet<string> Topics { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public IImmutableSet<string> Topics { get; private init; }
+        
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; } = Option<IStatisticsHandler>.None;
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            var s = Option<IStatisticsHandler>.Create(statisticsHandler);
+            return this with { StatisticsHandler = s };
         }
+        
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private init; } = Option<IPartitionEventHandler>.None;
 
-        /// <inheritdoc />
-        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IActorRef> RebalanceListener { get; private init; } = Option<IActorRef>.None;
+        
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler);
-            return this;
+            var p = Option<IPartitionEventHandler>.Create(partitionEventHandler);
+            return this with { PartitionEventsHandler = p };
         }
+
+        public IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener)
+        {
+            return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
+        }
+
+        public override string ToString() => $"TopicSubscription({string.Join(", ", Topics)})";
     }
     
     /// <summary>
@@ -80,7 +103,7 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows subscription to multiple topics, matching given regex pattern
     /// </remarks>
-    internal sealed class TopicSubscriptionPattern : IAutoSubscription
+    internal sealed record TopicSubscriptionPattern : IAutoSubscription
     {
         /// <summary>
         /// TopicSubscriptionPattern
@@ -94,27 +117,32 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Topic pattern (regular expression to be matched)
         /// </summary>
-        public string TopicPattern { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public string TopicPattern { get; private init; }
+        
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; } = Option<IStatisticsHandler>.None;
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            var s = Option<IStatisticsHandler>.Create(statisticsHandler);
+            return this with { StatisticsHandler = s };
         }
+        
+        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private init; } = Option<IPartitionEventHandler>.None;
 
-        /// <inheritdoc />
-        public Option<IPartitionEventHandler> PartitionEventsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IActorRef> RebalanceListener { get; private init; } = Option<IActorRef>.None;
+        
         public IAutoSubscription WithPartitionEventsHandler(IPartitionEventHandler partitionEventHandler)
         {
-            PartitionEventsHandler = Option<IPartitionEventHandler>.Create(partitionEventHandler); 
-            return this;
+            var p = Option<IPartitionEventHandler>.Create(partitionEventHandler);
+            return this with { PartitionEventsHandler = p };
         }
+
+        public IAutoSubscription WithRebalanceListener(IActorRef rebalanceListener)
+        {
+            return this with { RebalanceListener = Option<IActorRef>.Create(rebalanceListener) };
+        }
+        
+        public override string ToString() => $"TopicSubscriptionPattern({TopicPattern})";
     }
 
     /// <summary>
@@ -123,31 +151,16 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows to subscribe to fixed set of topic partitions
     /// </remarks>
-    internal sealed class Assignment : IManualSubscription
+    internal sealed record Assignment(IImmutableSet<TopicPartition> TopicPartitions) : IManualSubscription
     {
-        /// <summary>
-        /// Assignment
-        /// </summary>
-        /// <param name="topicPartitions">List of topic partitions to subscribe</param>
-        public Assignment(IImmutableSet<TopicPartition> topicPartitions)
-        {
-            TopicPartitions = topicPartitions;
-        }
-
-        /// <summary>
-        /// Topic partitions to subscribe
-        /// </summary>
-        public IImmutableSet<TopicPartition> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; }
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            return this with { StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler) };
         }
+        
+        public override string ToString() => $"Assignment({string.Join(", ", TopicPartitions)})";
     }
 
     /// <summary>
@@ -156,31 +169,16 @@ namespace Akka.Streams.Kafka.Settings
     /// <remarks>
     /// Allows to subscribe to fixed set of topic partitions with initial offsets specified
     /// </remarks>
-    internal sealed class AssignmentWithOffset : IManualSubscription
+    internal sealed record AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> TopicPartitions) : IManualSubscription
     {
-        /// <summary>
-        /// AssignmentWithOffset
-        /// </summary>
-        /// <param name="topicPartitions">List of topic partitions with offsets to subscribe</param>
-        public AssignmentWithOffset(IImmutableSet<TopicPartitionOffset> topicPartitions)
-        {
-            TopicPartitions = topicPartitions;
-        }
-
-        /// <summary>
-        /// List of topic partitions with offsets to subscribe
-        /// </summary>
-        public IImmutableSet<TopicPartitionOffset> TopicPartitions { get; }
-
-        /// <inheritdoc />
-        public Option<IStatisticsHandler> StatisticsHandler { get; private set; }
-
-        /// <inheritdoc />
+        public Option<IStatisticsHandler> StatisticsHandler { get; private init; }
+        
         public ISubscription WithStatisticsHandler(IStatisticsHandler statisticsHandler)
         {
-            StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler);
-            return this;
+            return this with { StatisticsHandler = Option<IStatisticsHandler>.Create(statisticsHandler) };
         }
+        
+        public override string ToString() => $"AssignmentWithOffset({string.Join(", ", TopicPartitions)})";
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Akka.Actor;
@@ -11,7 +12,6 @@ using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
 
-#nullable enable
 namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 {
     /// <summary>
@@ -26,10 +26,30 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
         private int _requestId = 0;
         private bool _requested = false;
+        protected ISubscription Subscription { get; }
         protected Decider Decider { get; }
 
-        private readonly ConcurrentQueue<ConsumeResult<K, V>> _buffer = new ConcurrentQueue<ConsumeResult<K, V>>();
-        protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } = ImmutableHashSet.Create<TopicPartition>();
+        public Action<IImmutableSet<TopicPartitionOffset>> FilterRevokedPartitionAsyncCallback =>
+            GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(FilterRevokedPartitions);
+        
+        private void FilterRevokedPartitions(IImmutableSet<TopicPartitionOffset> partitions)
+        {
+            if (partitions.Count > 0)
+            {
+                Log.Debug("Filtering out messages from revoked partitions [{0}]", string.Join(", ", partitions));
+                var tps = partitions.Select(tpo => tpo.TopicPartition).ToImmutableHashSet();
+                
+                // TODO: maybe it makes sense to look at offsets too
+                
+                // Thread-safe - happens inside an async callback
+                _buffer = new Queue<ConsumeResult<K, V>>(_buffer.Where(m => !tps.Contains(m.TopicPartition)));
+            }
+        }
+
+        private Queue<ConsumeResult<K, V>> _buffer = new();
+
+        protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } =
+            ImmutableHashSet.Create<TopicPartition>();
 
         protected StageActor SourceActor { get; private set; } = null!;
         internal IActorRef ConsumerActor { get; private set; } = null!;
@@ -38,40 +58,43 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// Implements <see cref="IControl"/> to provide control over executed source
         /// </summary>
         public virtual PromiseControl<TMessage> Control { get; }
-        
+
         protected BaseSingleSourceLogic(
             SourceShape<TMessage> shape,
             Attributes attributes,
             Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
-            bool autoCreateTopics) 
+            bool autoCreateTopics, ISubscription subscription)
             : base(shape)
         {
             _shape = shape;
+            Subscription = subscription;
             _messageBuilder = messageBuilderFactory(this);
-            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback, PerformShutdown);
-            
+            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback,
+                PerformShutdown);
+
             // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             Decider = supervisionStrategy.Decider;
-            
+
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: PerformShutdown);
         }
 
         public override void PreStart()
         {
             base.PreStart();
-            
+
             SourceActor = GetStageActor(MessageHandling);
+            Log.Info("Starting. StageActor: {0}", SourceActor.Ref);
             ConsumerActor = CreateConsumerActor();
             SourceActor.Watch(ConsumerActor);
-            
+
             ConfigureSubscription();
         }
 
         public override void PostStop()
         {
             Control.OnShutdown();
-            
+
             base.PostStop();
         }
 
@@ -85,6 +108,47 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         /// </summary>
         protected abstract void ConfigureSubscription();
 
+        protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
+            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
+        {
+            switch (Subscription)
+            {
+                case TopicSubscription topicSubscription:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
+                        SourceActor.Ref);
+                    break;
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
+                        SourceActor.Ref);
+                    break;
+                case IManualSubscription manualSubscription:
+                    ConfigureManualSubscription(manualSubscription);
+                    break;
+                default:
+                    throw new NotSupportedException();
+            }
+
+            return;
+
+            IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
+            {
+                return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                    partitionsRevokedCb));
+            }
+        }
+
+        /// <summary>
+        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
+        /// </summary>
+        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
+        {
+            return handler;
+        }
+
         /// <summary>
         /// Configures manual subscription
         /// </summary>
@@ -94,12 +158,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             switch (subscription)
             {
                 case Assignment assignment:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Assign(assignment.TopicPartitions), SourceActor.Ref);
+                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Assign(assignment.TopicPartitions),
+                        SourceActor.Ref);
                     TopicPartitions = TopicPartitions.Union(assignment.TopicPartitions);
                     break;
                 case AssignmentWithOffset assignmentWithOffset:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.AssignWithOffset(assignmentWithOffset.TopicPartitions), SourceActor.Ref);
-                    TopicPartitions = TopicPartitions.Union(assignmentWithOffset.TopicPartitions.Select(tp => tp.TopicPartition));
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.AssignWithOffset(assignmentWithOffset.TopicPartitions),
+                        SourceActor.Ref);
+                    TopicPartitions =
+                        TopicPartitions.Union(assignmentWithOffset.TopicPartitions.Select(tp => tp.TopicPartition));
                     break;
             }
         }
@@ -110,40 +178,45 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             switch (message)
             {
                 case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
-                    if(Log.IsDebugEnabled)
+                    if (Log.IsDebugEnabled)
                         Log.Debug("Received {0} messages from {1}", msg.MessagesList.Count, sender);
-                    
+
                     // might be more than one in flight when we assign/revoke tps
                     if (msg.RequestId == _requestId)
                         _requested = false;
 
                     foreach (var consumerMessage in msg.MessagesList)
                         _buffer.Enqueue(consumerMessage);
-                    
+
                     Pump();
                     break;
-                
+
                 case Status.Failure failure:
                     var exception = failure.Cause;
-                    var cause = exception.GetCause(); 
+                    var cause = exception.GetCause();
                     switch (Decider(exception))
                     {
                         case Directive.Stop:
-                            if(Log.IsErrorEnabled)
-                                Log.Error(exception, "Source stage failed with exception: [{0}]. Supervision directive: [{1}]", cause, nameof(Directive.Stop));
+                            if (Log.IsErrorEnabled)
+                                Log.Error(exception,
+                                    "Source stage failed with exception: [{0}]. Supervision directive: [{1}]", cause,
+                                    nameof(Directive.Stop));
                             FailStage(failure.Cause);
                             break;
                         case Directive.Resume:
-                            if(Log.IsInfoEnabled)
-                                Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, nameof(Directive.Resume));
+                            if (Log.IsInfoEnabled)
+                                Log.Info(exception,
+                                    "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
+                                    nameof(Directive.Resume));
                             break;
                         case Directive.Restart:
-                            if(Log.IsInfoEnabled)
-                                Log.Info(exception, "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause, nameof(Directive.Restart));
+                            if (Log.IsInfoEnabled)
+                                Log.Info(exception,
+                                    "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
+                                    nameof(Directive.Restart));
                             // Empty the buffer to make sure that messages does not get duplicated
-                            while (_buffer.TryDequeue(out _))
-                            { }
-                    
+                            _buffer.Clear();
+
                             // ConsumerActor are designed to suicide itself on Directive.Stop or Directive.Restart
                             // to prevent any offset runaway. We will need to restart it.
                             SourceActor.Unwatch(ConsumerActor);
@@ -156,10 +229,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                         case var unknown:
                             throw new IndexOutOfRangeException($"Unknown Supervision.Directive: [{unknown}]");
                     }
+
                     break;
-                
+
                 case Terminated terminated:
-                    if(Log.IsInfoEnabled)
+                    if (Log.IsInfoEnabled)
                         Log.Info("Consumer actor terminated: {0}", terminated.ActorRef.Path);
                     break;
             }
@@ -167,11 +241,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         private void Pump()
         {
-            while(IsAvailable(_shape.Outlet) && _buffer.TryDequeue(out var message))
+            while (IsAvailable(_shape.Outlet) && _buffer.Count > 0)
             {
+                var message = _buffer.Dequeue();
                 Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
             }
-            
+
             if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
             {
                 RequestMessages();
@@ -183,8 +258,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _requested = true;
             _requestId += 1;
             if (Log.IsDebugEnabled)
-                Log.Debug("[{0}] Requesting messages, requestId: {1}, partitions: {2}", ConsumerActor.Path.Name, _requestId, string.Join(", ", TopicPartitions));
-            ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId, TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
+                Log.Debug("[{0}] Requesting messages, requestId: {1}, partitions: {2}", ConsumerActor.Path.Name,
+                    _requestId, string.Join(", ", TopicPartitions));
+            ConsumerActor.Tell(
+                new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId,
+                    TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
         protected abstract void PerformShutdown(Exception? ex);
@@ -196,11 +274,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public BaseSingleSourceControl(
                 SourceShape<TMessage> shape,
                 Action<Outlet<TMessage>> completeStageOutlet,
-                Action<bool> setStageKeepGoing, 
+                Action<bool> setStageKeepGoing,
                 Func<Action, Action> asyncCallbackFactory,
                 Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
-                Action<Exception?> performShutdown) 
-                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory, asyncShutdownCallbackFactory)
+                Action<Exception?> performShutdown)
+                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory,
+                    asyncShutdownCallbackFactory)
             {
                 _performShutdown = performShutdown;
             }

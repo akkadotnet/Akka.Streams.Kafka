@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Immutable;
+using Akka.Actor;
 using Akka.Annotations;
-using Akka.Streams.Stage;
+using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Helpers
@@ -41,15 +42,21 @@ namespace Akka.Streams.Kafka.Helpers
     }
 
     /// <summary>
-    /// Contains internal imlementations of <see cref="IPartitionEventHandler"/>
+    /// Contains internal implementations of <see cref="IPartitionEventHandler"/>
     /// </summary>
     internal static class PartitionEventHandlers
     {
         /// <summary>
         /// Dummy handler which does nothing. Also <see cref="IPartitionEventHandler"/>
         /// </summary>
-        internal class Empty : IPartitionEventHandler
+        internal sealed class Empty : IPartitionEventHandler
         {
+            public static readonly Empty Instance = new();
+            private Empty()
+            {
+                
+            }
+            
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
@@ -69,54 +76,69 @@ namespace Akka.Streams.Kafka.Helpers
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
             }
+
+            public override string ToString() => "EmptyHandler";
         }
         
         /// <summary>
         /// Handler allowing to pass custom stage callbacks.
         /// </summary>
-        internal class AsyncCallbacks : IPartitionEventHandler
+        internal sealed class AsyncCallbacks : IPartitionEventHandler
         {
+            private readonly IAutoSubscription _subscription;
+            private readonly IActorRef _sourceActorRef;
+            
             private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
             private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
-            private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
 
-            public AsyncCallbacks(Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
-                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback, 
-                Action<IImmutableSet<TopicPartitionOffset>> partitionLostCallback)
+            public AsyncCallbacks(IAutoSubscription subscription, 
+                IActorRef sourceActorRef,
+                Action<IImmutableSet<TopicPartition>> partitionAssignedCallback,
+                Action<IImmutableSet<TopicPartitionOffset>> partitionRevokedCallback)
             {
                 _partitionAssignedCallback = partitionAssignedCallback;
                 _partitionRevokedCallback = partitionRevokedCallback;
-                _partitionLostCallback = partitionLostCallback;
+                _subscription = subscription;
+                _sourceActorRef = sourceActorRef;
             }
-
-            /// <inheritdoc />
+            
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
+                _subscription.RebalanceListener
+                    .OnSuccess(@ref =>
+                    {
+                        @ref.Tell(new TopicPartitionsRevoked(_subscription, revokedTopicPartitions), _sourceActorRef);
+                    });
+                
                 _partitionRevokedCallback(revokedTopicPartitions);
             }
-
-            /// <inheritdoc />
+            
             public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _partitionLostCallback(revokedTopicPartitions);
+                OnRevoke(revokedTopicPartitions, consumer);
             }
-
-            /// <inheritdoc />
+            
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
+                _subscription.RebalanceListener
+                    .OnSuccess(@ref =>
+                    {
+                        @ref.Tell(new TopicPartitionsAssigned(_subscription, assignedTopicPartitions), _sourceActorRef);
+                    });
                 _partitionAssignedCallback(assignedTopicPartitions);
             }
-
-            /// <inheritdoc />
+            
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
             }
+
+            public override string ToString() => $"AsyncCallbacks({_subscription}, {_sourceActorRef})";
         }
         
         /// <summary>
         /// Handler allowing chain other implementations of <see cref="IPartitionEventHandler"/>
         /// </summary>
-        internal class Chain : IPartitionEventHandler
+        internal sealed class Chain : IPartitionEventHandler
         {
             private readonly IPartitionEventHandler _handler1;
             private readonly IPartitionEventHandler _handler2;
@@ -130,30 +152,32 @@ namespace Akka.Streams.Kafka.Helpers
             /// <inheritdoc />
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnRevoke(revokedTopicPartitions, consumer);
-                _handler2?.OnRevoke(revokedTopicPartitions, consumer);
+                _handler1.OnRevoke(revokedTopicPartitions, consumer);
+                _handler2.OnRevoke(revokedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnLost(revokedTopicPartitions, consumer);
-                _handler2?.OnLost(revokedTopicPartitions, consumer);
+                _handler1.OnLost(revokedTopicPartitions, consumer);
+                _handler2.OnLost(revokedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnAssign(assignedTopicPartitions, consumer);
-                _handler2?.OnAssign(assignedTopicPartitions, consumer);
+                _handler1.OnAssign(assignedTopicPartitions, consumer);
+                _handler2.OnAssign(assignedTopicPartitions, consumer);
             }
 
             /// <inheritdoc />
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
             {
-                _handler1?.OnStop(topicPartitions, consumer);
-                _handler2?.OnStop(topicPartitions, consumer);
+                _handler1.OnStop(topicPartitions, consumer);
+                _handler2.OnStop(topicPartitions, consumer);
             }
+            
+            public override string ToString() => $"Chain({_handler1}, {_handler2})";
         }
     }
 }

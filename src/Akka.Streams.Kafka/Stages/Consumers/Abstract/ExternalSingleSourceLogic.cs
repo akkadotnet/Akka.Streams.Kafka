@@ -16,7 +16,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
     internal class ExternalSingleSourceLogic<K, V, TMessage> : BaseSingleSourceLogic<K, V, TMessage>
     {
         private readonly IActorRef _consumerActor;
-        private readonly IManualSubscription _subscription;
+        private readonly IManualSubscription _manualSubscription;
 
         public ExternalSingleSourceLogic(
             SourceShape<TMessage> shape,
@@ -25,17 +25,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Attributes attributes, 
             Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
             bool autoCreateTopics) 
-            : base(shape, attributes, messageBuilderFactory, autoCreateTopics)
+            : base(shape, attributes, messageBuilderFactory, autoCreateTopics, subscription)
         {
             _consumerActor = consumerActor;
-            _subscription = subscription;
+            _manualSubscription = subscription;
         }
 
         /// <inheritdoc />
         protected override IActorRef CreateConsumerActor() => _consumerActor;
 
         /// <inheritdoc />
-        protected override void ConfigureSubscription() => ConfigureManualSubscription(_subscription);
+        protected override void ConfigureSubscription() => ConfigureManualSubscription(_manualSubscription);
 
         /// <inheritdoc />
         protected override void PerformShutdown(Exception? ex)

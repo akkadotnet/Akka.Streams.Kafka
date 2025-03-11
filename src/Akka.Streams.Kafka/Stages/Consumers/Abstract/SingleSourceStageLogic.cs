@@ -22,66 +22,52 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
     {
         private readonly SourceShape<TMessage> _shape;
         private readonly ConsumerSettings<K, V> _settings;
-        private readonly ISubscription _subscription;
 
         public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
                                       ISubscription subscription, Attributes attributes, 
                                       Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
-            : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled)
+            : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled, subscription)
         {
             _shape = shape;
             _settings = settings;
-            _subscription = subscription;
         }
 
-        /// <inheritdoc />
-        protected override void ConfigureSubscription()
+        protected override object LogSource
         {
-            switch (_subscription)
+            get
             {
-                case TopicSubscription topicSubscription:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
-                    break;
-                case TopicSubscriptionPattern topicSubscriptionPattern:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
-                    break;
-                case IManualSubscription manualSubscription:
-                    ConfigureManualSubscription(manualSubscription);
-                    break;
-                default:
-                    throw new NotSupportedException();
+                var strPart = (_settings.Properties.TryGetValue("client.id", out var clientId)) ?
+                    $"client-{_settings.GroupId}-{clientId}" : $"client-{_settings.GroupId}";
+                return Akka.Event.LogSource.Create(strPart, GetType());
             }
         }
 
         /// <inheritdoc />
         protected override IActorRef CreateConsumerActor()
         {
-            var partitionsAssignedHandler = GetAsyncCallback<IEnumerable<TopicPartition>>(PartitionsAssigned);
-            var partitionsRevokedHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsRevoked);
-            var partitionsLostHandler = GetAsyncCallback<IEnumerable<TopicPartitionOffset>>(PartitionsLost);
-
-            IPartitionEventHandler internalHandler = new PartitionEventHandlers.AsyncCallbacks(partitionsAssignedHandler, partitionsRevokedHandler, partitionsLostHandler);
-
-            // If custom partition events handler specified - add it to the chain
-            var eventHandler = _subscription is IAutoSubscription autoSubscription && autoSubscription.PartitionEventsHandler.HasValue
-                ? new PartitionEventHandlers.Chain(autoSubscription.PartitionEventsHandler.Value, internalHandler)
-                : internalHandler;
-
-            IStatisticsHandler statisticsHandler = _subscription.StatisticsHandler.HasValue
-                ? _subscription.StatisticsHandler.Value
-                : new StatisticsHandlers.Empty();
-
-            // This allows to override partition events handling by subclasses
-            eventHandler = AddToPartitionAssignmentHandler(eventHandler);
+            IStatisticsHandler statisticsHandler = Subscription.StatisticsHandler.HasValue
+                ? Subscription.StatisticsHandler.Value
+                :  StatisticsHandlers.Empty.Instance;
             
-            if (!(Materializer is ActorMaterializer actorMaterializer))
+            if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
             
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider, eventHandler, statisticsHandler),
+            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider, statisticsHandler),
                                                           $"kafka-consumer-{KafkaConsumerActorMetadata.NextNumber()}");
+            
             return actor;
         }
+
+        protected override void ConfigureSubscription()
+        {
+            var partitionsAssignedHandler = GetAsyncCallback<IImmutableSet<TopicPartition>>(PartitionsAssigned);
+            var partitionsRevokedHandler = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(PartitionsRevoked);
+
+            ConfigureSubscription(partitionsAssignedHandler, partitionsRevokedHandler);
+        }
+        
+        
 
         public override void PostStop()
         {
@@ -102,14 +88,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             
             SourceActor.Become(ShuttingDownReceive);
             StopConsumerActor();
-        }
-
-        /// <summary>
-        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
-        /// </summary>
-        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
-        {
-            return handler;
         }
 
         protected virtual void ShuttingDownReceive((IActorRef, object) args)
@@ -134,23 +112,52 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             });
         }
 
-        private void PartitionsAssigned(IEnumerable<TopicPartition> partitions)
+        private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
+        {
+            private IImmutableSet<TopicPartitionOffset> _lastRevoked = ImmutableHashSet<TopicPartitionOffset>.Empty;
+            private readonly SingleSourceStageLogic<K, V, TMessage> _stageLogic;
+
+            public FlushMessagesOfRevokedPartitionsHandler(SingleSourceStageLogic<K, V, TMessage> stageLogic)
+            {
+                _stageLogic = stageLogic;
+            }
+
+            public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
+                IRestrictedConsumer consumer)
+            {
+                _lastRevoked = revokedTopicPartitions;
+            }
+
+            public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                _stageLogic.FilterRevokedPartitionAsyncCallback(revokedTopicPartitions);
+            }
+
+            public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer)
+            {
+                // remove all of our previous revoked partitions that are not in the new assignment
+                _stageLogic.FilterRevokedPartitionAsyncCallback(_lastRevoked
+                    .Where(c => !assignedTopicPartitions.Contains(c.TopicPartition))
+                        .ToImmutableHashSet());
+            }
+
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer){}
+        }
+
+        protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler) => 
+           new PartitionEventHandlers.Chain(new FlushMessagesOfRevokedPartitionsHandler(this), handler);
+
+        private void PartitionsAssigned(IImmutableSet<TopicPartition> partitions)
         {
             TopicPartitions = TopicPartitions.Union(partitions);
-            Log.Debug("[{0}] Partitions were assigned: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
+            Log.Debug("[{0}] Partitions were assigned: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
             RequestMessages();
         }
         
-        private void PartitionsRevoked(IEnumerable<TopicPartitionOffset> partitions)
+        private void PartitionsRevoked(IImmutableSet<TopicPartitionOffset> partitions)
         {
             TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
-            Log.Debug("[{0}] Partitions were revoked: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
-        }
-        
-        private void PartitionsLost(IEnumerable<TopicPartitionOffset> partitions)
-        {
-            TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
-            Log.Debug("[{0}] Partitions were lost: {1}", ConsumerActor.Path.Name, string.Join(", ", partitions));
+            Log.Debug("[{0}] Partitions were revoked: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
         }
     }
 }

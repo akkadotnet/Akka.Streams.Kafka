@@ -63,7 +63,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly Action<IImmutableSet<TopicPartition>> _partitionAssignedCallback;
         private readonly Action<IImmutableSet<TopicPartition>> _updatePendingPartitionsAndEmitSubSourcesCallback;
         private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionRevokedCallback;
-        private readonly Action<IImmutableSet<TopicPartitionOffset>> _partitionLostCallback;
         private readonly Action<(TopicPartition, ISubSourceCancellationStrategy)> _subsourceCancelledCallback;
         private readonly Action<(TopicPartition, IControl)> _subsourceStartedCallback;
         private readonly Action<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)> _offsetsFromExternalResponseCb;
@@ -115,13 +114,50 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _updatePendingPartitionsAndEmitSubSourcesCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(UpdatePendingPartitionsAndEmitSubSources);
             _partitionAssignedCallback = GetAsyncCallback<IImmutableSet<TopicPartition>>(HandlePartitionsAssigned);
             _partitionRevokedCallback = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(HandlePartitionsRevoked);
-            _partitionLostCallback = GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(HandlePartitionsLost);
             _stageFailCallback = GetAsyncCallback<ConsumerFailed>(FailStage);
             _subsourceCancelledCallback = GetAsyncCallback<(TopicPartition, ISubSourceCancellationStrategy)>(HandleSubsourceCancelled);
             _subsourceStartedCallback = GetAsyncCallback<(TopicPartition, IControl)>(HandleSubsourceStarted);
             _offsetsFromExternalResponseCb = GetAsyncCallback<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)>(OffsetsFromExternalResponseCallback);
 
             SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: PerformShutdown);
+        }
+        
+        protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
+            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
+        {
+            switch (_subscription)
+            {
+                case TopicSubscription topicSubscription:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
+                        SourceActor.Ref);
+                    break;
+                case TopicSubscriptionPattern topicSubscriptionPattern:
+                    ConsumerActor.Tell(
+                        new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
+                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
+                        SourceActor.Ref);
+                    break;
+                default:
+                    throw new NotSupportedException();
+            }
+
+            return;
+
+            IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
+            {
+                return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                    partitionsRevokedCb));
+            }
+        }
+        
+        /// <summary>
+        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
+        /// </summary>
+        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
+        {
+            return handler;
         }
 
         public override void PreStart()
@@ -142,32 +178,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 }
             });
 
-            if (!(Materializer is ActorMaterializer actorMaterializer))
+            if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
-
-            var eventHandler = new PartitionEventHandlers.AsyncCallbacks(_partitionAssignedCallback, _partitionRevokedCallback, _partitionLostCallback);
-
+            
             var statisticsHandler = _subscription.StatisticsHandler.HasValue
                 ? _subscription.StatisticsHandler.Value
-                : new StatisticsHandlers.Empty();
+                : StatisticsHandlers.Empty.Instance;
 
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
             ConsumerActor = extendedActorSystem.SystemActorOf(
-                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, _decider, eventHandler, statisticsHandler), 
+                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, _decider, statisticsHandler), 
                 $"kafka-consumer-{_actorNumber}");
 
             SourceActor.Watch(ConsumerActor);
 
-            switch (_subscription)
-            {
-                case TopicSubscription topicSubscription:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics), SourceActor.Ref);
-                    break;
-
-                case TopicSubscriptionPattern topicSubscriptionPattern:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern), SourceActor.Ref);
-                    break;
-            }
+            ConfigureSubscription(_partitionAssignedCallback, _partitionRevokedCallback);
         }
 
         public override void PostStop()
@@ -270,13 +295,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         }
 
         private void HandlePartitionsRevoked(IImmutableSet<TopicPartitionOffset> revoked)
-        {
-            _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
-
-            ScheduleOnce(new CloseRevokedPartitions(), _settings.WaitClosePartition);
-        }
-
-        private void HandlePartitionsLost(IImmutableSet<TopicPartitionOffset> revoked)
         {
             _partitionsToRevoke = _partitionsToRevoke.Union(revoked.Select(r => r.TopicPartition));
 
