@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Akka.Streams.Kafka.Extensions
 {
-    public static class CollectionExtensions
+    internal static class CollectionExtensions
     {
         /// <summary>
         /// Joins elements of the collection with given separator to single string
