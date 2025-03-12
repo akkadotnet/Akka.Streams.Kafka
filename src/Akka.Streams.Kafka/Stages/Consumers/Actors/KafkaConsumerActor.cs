@@ -670,7 +670,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     // this would return immediately if there are messages waiting inside the client queue buffer
                     var consumed = _consumer.Consume(timeout);
-                    if (consumed is null || _rebalanceInProgress) // bail out if we detect the start of a re-balance
+                    if (consumed is null)
                     {
                         return (polled, null);
                     }
