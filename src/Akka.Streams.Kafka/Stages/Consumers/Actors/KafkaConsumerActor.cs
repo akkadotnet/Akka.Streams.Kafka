@@ -447,8 +447,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     case KafkaConsumerActorMetadata.Internal.Assign assign:
                     {
                         CheckOverlappingRequests("Assign", Sender, assign.TopicPartitions);
-                        var previousAssigned = _consumer.Assignment;
-                        _consumer.Assign(assign.TopicPartitions.Union(previousAssigned));
+                        _consumer.IncrementalAssign(assign.TopicPartitions);
                         _commitRefreshing.AssignedPositions(assign.TopicPartitions, _consumer,
                             _settings.PositionTimeout);
                         break;
@@ -459,10 +458,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition)
                             .ToImmutableHashSet();
                         CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
-
-                        var previousAssigned = _consumer.Assignment
-                            .Select(c => new TopicPartitionOffset(c, Offset.Stored));
-                        _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
+                        
+                        _consumer.IncrementalAssign(assignWithOffset.TopicPartitionOffsets);
                         _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                         break;
                     }
