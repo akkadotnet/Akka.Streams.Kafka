@@ -407,13 +407,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                             .ToImmutableHashSet();
                         CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
 
-                        var previousAssigned =
-                            _consumer.Assignment;
-                        _consumer.Assign(topicPartitions.Union(previousAssigned));
-                        foreach (var offset in assignWithOffset.TopicPartitionOffsets)
-                        {
-                            _consumer.Seek(offset);
-                        }
+                        var previousAssigned = _consumer.Assignment
+                            .Select(c => new TopicPartitionOffset(c, Offset.Stored));
+                        _consumer.Assign(assignWithOffset.TopicPartitionOffsets.Union(previousAssigned));
                         _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                         break;
                     }
@@ -437,11 +433,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
             catch (Exception ex)
             {
-                if (ex is KafkaException kafkaException)
-                {
-                    _log.Error(kafkaException, "Received Kafka broker exception: {0}, [{1}]", kafkaException.Message, kafkaException.Error);
-                }
-                
                 // only this sender needs to be notified about the failure
                 SendFailure(ex, Sender);
             }
