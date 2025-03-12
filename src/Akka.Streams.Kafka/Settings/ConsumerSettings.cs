@@ -74,7 +74,8 @@ namespace Akka.Streams.Kafka.Settings
                     config.GetConfig(ConnectionCheckerSettings.ConfigPath)),
                 consumerFactory: null)
             {
-                VerboseLogging = config.GetBoolean("verbose-logging", false)
+                VerboseLogging = config.GetBoolean("verbose-logging", false),
+                MaxPollRecords = config.GetInt("max-poll-records", 10)
             };
         }
 
@@ -160,6 +161,14 @@ namespace Akka.Streams.Kafka.Settings
         /// Helpful for debugging, but do not recommend running in production with this enabled.
         /// </remarks>
         public bool VerboseLogging { get; init; } = false;
+
+        /// <summary>
+        /// Maximum number of records to fetch per poll attempt.
+        /// </summary>
+        /// <remarks>
+        /// Defaults to 10.
+        /// </remarks>
+        public int MaxPollRecords { get; init; } = 10;
         
         /// <summary>
         /// Configuration properties
@@ -379,6 +388,9 @@ namespace Akka.Streams.Kafka.Settings
         
         public ConsumerSettings<TKey, TValue> WithVerboseLogging(bool verboseLogging) =>
             this with { VerboseLogging = verboseLogging };
+        
+        public ConsumerSettings<TKey, TValue> WithMaxPollRecords(int maxPollRecords) =>
+            this with { MaxPollRecords = maxPollRecords };
 
         /// <summary>
         /// Assigned consumer group id.
