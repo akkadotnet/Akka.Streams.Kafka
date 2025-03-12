@@ -581,7 +581,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private (List<ConsumeResult<K, V>>, Exception?) PollKafka(CancellationToken token)
         {
-            var i = 10; // 10 poll attempts
+            var i = _settings.MaxPollRecords; // use the number of poll attempts specified in the settings
             var timeout = Math.Max((int)_pollTimeout.TotalMilliseconds / i, 1);
             var polled = new List<ConsumeResult<K, V>>();
             do
