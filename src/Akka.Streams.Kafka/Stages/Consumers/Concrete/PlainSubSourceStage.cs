@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Immutable;
 using System.Threading.Tasks;
-using Akka.Event;
+using Akka.Actor;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Stage;
-using Akka.Streams.Util;
 using Akka.Util;
 using Confluent.Kafka;
 
@@ -38,9 +37,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
         /// </summary>
         public Action<IImmutableSet<TopicPartition>> OnRevoke { get; }
 
-        /// <summary>
-        /// PlainSubSourceStage
-        /// </summary>
+        private readonly SubSourceLogic.ISubSourceStageLogicFactory<K, V, ConsumeResult<K, V>>
+            _subSourceStageLogicFactory;
+        
         public PlainSubSourceStage(ConsumerSettings<K, V> settings, IAutoSubscription subscription, 
                                    Option<Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>>> getOffsetsOnAssign,
                                    Action<IImmutableSet<TopicPartition>> onRevoke) 
@@ -50,19 +49,46 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
             Subscription = subscription;
             GetOffsetsOnAssign = getOffsetsOnAssign;
             OnRevoke = onRevoke;
+            _subSourceStageLogicFactory = new PlainSubSourceStageLogicFactory();
         }
 
-        /// <inheritdoc />
+        private class
+            PlainSubSourceStageLogicFactory : SubSourceLogic.ISubSourceStageLogicFactory<K, V, ConsumeResult<K, V>>
+        {
+            public SubSourceStageLogic<K, V, ConsumeResult<K, V>> Create(SourceShape<ConsumeResult<K, V>> shape,
+                TopicPartition tp, IActorRef consumerActor,
+                Action<SubSourceLogic.SubSourceStageLogicControl> subSourceStartedCb,
+                Action<(TopicPartition partition, SubSourceLogic.ISubSourceCancellationStrategy cancellationStrategy)>
+                    subSourceCancelledCb, int actorNumber) =>
+                new PlainSubSourceStageLogic<K, V>(shape, tp, consumerActor, actorNumber,
+                    new PlainMessageBuilder<K, V>(), subSourceStartedCb, subSourceCancelledCb);
+        }
+        
         protected override (GraphStageLogic, IControl) Logic(SourceShape<(TopicPartition, Source<ConsumeResult<K, V>, NotUsed>)> shape, 
                                                              Attributes inheritedAttributes)
         {
             var logic = new SubSourceLogic<K, V, ConsumeResult<K, V>>(shape, Settings, Subscription, 
-                                                                      messageBuilderFactory: _ => new PlainMessageBuilder<K, V>(), 
                                                                       getOffsetsOnAssign: GetOffsetsOnAssign, 
                                                                       onRevoke: OnRevoke, 
+                                                                      _subSourceStageLogicFactory,
                                                                       attributes: inheritedAttributes);
 
             return (logic, logic.Control);
+        }
+    }
+    
+    internal sealed class PlainSubSourceStageLogic<K, V> : SubSourceStageLogic<K, V, ConsumeResult<K, V>>
+    {
+        public PlainSubSourceStageLogic(
+            SourceShape<ConsumeResult<K, V>> shape,
+            TopicPartition topicPartition,
+            IActorRef consumerActor, int actorNumber,
+            IMessageBuilder<K, V, ConsumeResult<K, V>> messageBuilder,
+            Action<SubSourceLogic.SubSourceStageLogicControl> subSourceStartedCallback,
+            Action<(TopicPartition, SubSourceLogic.ISubSourceCancellationStrategy)> subSourceCancelledCallback)
+            : base(shape, topicPartition, consumerActor, actorNumber, messageBuilder, subSourceStartedCallback,
+                subSourceCancelledCallback)
+        {
         }
     }
 }
