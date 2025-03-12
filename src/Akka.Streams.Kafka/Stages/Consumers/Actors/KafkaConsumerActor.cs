@@ -437,6 +437,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
             catch (Exception ex)
             {
+                if (ex is KafkaException kafkaException)
+                {
+                    _log.Error(kafkaException, "Received Kafka broker exception: {0}, [{1}]", kafkaException.Message, kafkaException.Error);
+                }
+                
                 // only this sender needs to be notified about the failure
                 SendFailure(ex, Sender);
             }
