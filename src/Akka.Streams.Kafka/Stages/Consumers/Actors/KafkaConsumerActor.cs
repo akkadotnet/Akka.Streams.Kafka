@@ -46,10 +46,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private readonly Internal.Poll<K, V> _delayedPollMessage;
 
         private TimeSpan _pollTimeout;
-
-        private ImmutableDictionary<TopicPartition, TopicPartitionOffset> _seekedOffset =
-            ImmutableDictionary<TopicPartition, TopicPartitionOffset>.Empty;
-
+        
         /// <summary>
         /// Limits the blocking on position in [[RebalanceListenerImpl]]
         /// </summary>
@@ -634,13 +631,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 foreach (var message in rawResult)
                 {
                     var currentTp = message.TopicPartition;
-
-                    if (_seekedOffset.TryGetValue(currentTp, out var seekedTpo))
-                    {
-                        if (message.Offset != seekedTpo.Offset)
-                            throw new Exception("Seek failed, received message offset is greater than seek offset");
-                        _seekedOffset = _seekedOffset.Remove(currentTp);
-                    }
 
                     // If requestor is interested in consumed topic, send him consumed result
                     if (request.Topics.Contains(currentTp))
