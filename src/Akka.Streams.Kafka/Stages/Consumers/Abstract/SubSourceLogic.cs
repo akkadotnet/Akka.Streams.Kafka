@@ -208,15 +208,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
         }
 
-        private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
+        private class FlushMessagesOfRevokedPartitionsHandler(SubSourceLogic<K, V, TMessage> stageLogic)
+            : IPartitionEventHandler
         {
             private IImmutableSet<TopicPartitionOffset> _lastRevoked = ImmutableHashSet<TopicPartitionOffset>.Empty;
-            private readonly SubSourceLogic<K, V, TMessage> _stageLogic;
-
-            public FlushMessagesOfRevokedPartitionsHandler(SubSourceLogic<K, V, TMessage> stageLogic)
-            {
-                _stageLogic = stageLogic;
-            }
 
             public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
                 IRestrictedConsumer consumer)
@@ -228,7 +223,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             {
                 foreach (var tp in revokedTopicPartitions)
                 {
-                    if (_stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
+                    if (stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
                         control.FilterRevokedPartitionsCb(revokedTopicPartitions);
                 }
             }
@@ -242,7 +237,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                 foreach (var tp in safeToRevoke)
                 {
-                    if(_stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
+                    if(stageLogic._subSources.TryGetValue(tp.TopicPartition, out var control))
                         control.FilterRevokedPartitionsCb(safeToRevoke);
                 }
             }
@@ -250,10 +245,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer){}
         }
 
-        /// <summary>
-        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
-        /// </summary>
-        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
+        private IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
         {
             return new PartitionEventHandlers.Chain(handler, new FlushMessagesOfRevokedPartitionsHandler(this));
         }
