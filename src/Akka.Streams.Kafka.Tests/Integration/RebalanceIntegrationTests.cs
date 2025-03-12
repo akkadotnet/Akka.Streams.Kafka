@@ -24,11 +24,10 @@ namespace Akka.Streams.Kafka.Tests.Integration;
 public class RebalanceIntegrationTests : KafkaIntegrationTests
 {
     public RebalanceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
-        : base(nameof(AtMostOnceSourceIntegrationTests), output, fixture)
+        : base(nameof(RebalanceIntegrationTests), output, fixture)
     {
     }
 
-    private static readonly IReadOnlyList<int> Numbers = Enumerable.Range(0, 5000).ToList();
     private const string ConsumerClientId1 = "consumer-1";
     private const string ConsumerClientId2 = "consumer-2";
 
