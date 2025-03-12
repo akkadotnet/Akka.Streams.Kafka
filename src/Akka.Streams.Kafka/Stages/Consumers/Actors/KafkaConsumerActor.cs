@@ -622,14 +622,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         var newlyAssignedButNotRequested = newlyAssigned.Except(partitionsToFetch);
                         if (newlyAssignedButNotRequested.Any())
                         {
-                            var originalUnrequestedCount = _unRequestedMessages.Count;
                             var (newUnrequested, requested) = polled.Partition(c => newlyAssignedButNotRequested.Contains(c.TopicPartition));
-                            _unRequestedMessages = _unRequestedMessages.AddRange(newUnrequested);
-                            var totalNewUnrequested = _unRequestedMessages.Count - originalUnrequestedCount;
-                            _log.Info("Stashing [{0}] messages for newly assigned but not requested partitions: {1} - [{2}] total unrequested messages",
-                               totalNewUnrequested,  string.Join(", ", newlyAssignedButNotRequested), _unRequestedMessages.Count);
+                            if (newUnrequested.Count > 0)
+                            {
+                                var originalUnrequestedCount = _unRequestedMessages.Count;
+                                _unRequestedMessages = _unRequestedMessages.AddRange(newUnrequested);
+                                var totalNewUnrequested = _unRequestedMessages.Count - originalUnrequestedCount;
+                                _log.Info("Stashing [{0}] messages for newly assigned but not requested partitions: {1} - [{2}] total unrequested messages",
+                                    totalNewUnrequested,  string.Join(", ", newlyAssignedButNotRequested), _unRequestedMessages.Count);
 
-                            polled = requested;
+                                polled = requested;
+                            }
                         }
                     }
                     
