@@ -245,7 +245,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         foreach (var offset in seek.Offsets)
                         {
-                            _seekedOffset = _seekedOffset.SetItem(offset.TopicPartition, offset);
+                            _consumer.Seek(offset);
                         }
 
                         Sender.Tell(Done.Instance);
@@ -549,26 +549,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
             }
             else
-            {
-                // Seek has to be done here because they can somehow fail.
-                // Would need to see if we can move this somewhere else
-                // because a seek can take up to 200ms to complete
-                foreach (var tpo in _seekedOffset.Select(kvp => kvp.Value))
-                {
-                    try
-                    {
-                        if (_log.IsDebugEnabled)
-                            _log.Debug("Seeking offset {0} in partition {1} for topic {2}", tpo.Offset, tpo.Partition,
-                                tpo.Topic);
-                        _consumer.Seek(tpo);
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.Error(ex, $"{tpo.TopicPartition} Failed to seek to {tpo.Offset}: {ex}");
-                        throw;
-                    }
-                }
-
+            {   
                 // resume partitions to fetch
                 var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
                 PausePartitions(
