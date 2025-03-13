@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Akka.Actor;
+using Akka.Streams.Implementation.Fusing;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Internal;
@@ -46,7 +47,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private readonly Internal.Poll<K, V> _delayedPollMessage;
 
         private TimeSpan _pollTimeout;
-        
+
         /// <summary>
         /// Limits the blocking on position in [[RebalanceListenerImpl]]
         /// </summary>
@@ -77,7 +78,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// While `true`, committing is delayed.
         /// Changed by `onPartitionsRevoked` and `onPartitionsAssigned` callbacks
         /// </summary>
-        private AtomicBoolean _rebalanceInProgress = new();
+        private bool _rebalanceInProgress = false;
 
         /// <summary>
         /// Keeps commit offsets during rebalances for later commit.
@@ -86,11 +87,29 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _rebalanceCommitStash = ImmutableHashSet<TopicPartitionOffset>.Empty;
 
         /// <summary>
+        /// Some important behavioral difference between the .NET and Java Kafka SDKs:
+        ///
+        /// 1.  Pausing partitions does not guarantee that previously retrieved messages stored
+        ///     inside <see cref="_consumer"/>'s buffer won't be returned.
+        /// 2.  The .NET SDK works from single messages rather than batches, therefore it is totally
+        ///     possible that assignment / re-balance events may occur in the middle of gathering messages
+        ///     via single Consume(int) calls.
+        /// 3. Therefore, it's possible that we will receive messages from partitions that have been
+        ///     assigned but not requested. Therefore, we need to make sure we buffer these messages until
+        ///     the <see cref="KafkaConsumerActorMetadata.Internal.RequestMessages"/> comes in.
+        ///
+        /// That's what this data structure is for - effectively it's a small stash of messages that have
+        /// been sent but not requested. This is designed to help us prevent issues such as
+        /// https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415 from prematurely terminating consumers.
+        /// </summary>
+        private IImmutableList<ConsumeResult<K, V>> _unRequestedMessages = ImmutableList<ConsumeResult<K, V>>.Empty;
+
+        /// <summary>
         /// Keeps commit senders that need a reply once stashed commits are made.
         /// </summary>
         private IImmutableList<IActorRef> _rebalanceCommitSenders = ImmutableArray<IActorRef>.Empty;
 
-        private ImmutableList<TopicPartition> _pausedPartitions = ImmutableList<TopicPartition>.Empty;
+        private ImmutableList<TopicPartition> _revokedPartitions = ImmutableList<TopicPartition>.Empty;
 
         /// <summary>
         /// KafkaConsumerActor
@@ -124,16 +143,25 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
-            _pausedPartitions = partitions.ToImmutableList();
-
+            // NOTE: we can't pause partitions here even though it's the right thing to do because the Kafka client will err out
+            
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
 
+            // clean up any unrequestedMessages belonging to revokedPartitions
+            if (_unRequestedMessages.Count > 0)
+            {
+                // get revoked partitions that do not appear in the assigned partitions list
+                var trulyRevokedPartitions = _revokedPartitions.Except(partitions);
+                _unRequestedMessages = _unRequestedMessages.Where(m => !trulyRevokedPartitions.Contains(m.TopicPartition))
+                    .ToImmutableList();
+            }
+               
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnAssign(partitions, _restrictedConsumer);
             watch.Stop();
             CheckDuration(watch, "onAssign");
 
-            _rebalanceInProgress.GetAndSet(false);
+            _rebalanceInProgress = false;
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -141,13 +169,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were revoked: {string.Join(", ", partitions)}");
+
+            // keep track of which partitions are being revoked, so we can clean up our "unrequested messages"
+            _revokedPartitions = partitions.Select(tp => tp.TopicPartition).ToImmutableList();
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnRevoke(partitions, _restrictedConsumer);
             watch.Stop();
             CheckDuration(watch, "onRevoke");
 
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress.GetAndSet(true);
+            _rebalanceInProgress = true;
         }
 
         // This is RebalanceListener.OnPartitionLost on JVM
@@ -155,13 +186,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
+            
+            if (_unRequestedMessages.Count > 0)
+            {
+                // immediately clean up any unrequestedMessages belonging to lost partitions
+                var lostPartitions = partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet();
+                _unRequestedMessages = _unRequestedMessages.Where(m => !lostPartitions.Contains(m.TopicPartition))
+                    .ToImmutableList();
+            }
+           
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
             CheckDuration(watch, "onLost");
 
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress.GetAndSet(true);
+            _rebalanceInProgress = true;
         }
 
         private void RebalancePostStop()
@@ -222,6 +262,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                     if (_stageActorsMap.GetOrElse(requestMessages.Topics, Sender).Equals(Sender))
                         _requests = _requests.SetItem(Sender, requestMessages);
+                    
+                    /* UNREQUESTED MESSAGES CHECK */
+                    if (_unRequestedMessages.Count > 0)
+                    {
+                        var (requested, unrequested) = _unRequestedMessages.Partition(m => requestMessages.Topics.Contains(m.TopicPartition));
+                        _unRequestedMessages = unrequested;
+                        if (requested.Count > 0)
+                        {
+                            _log.Info("Found [{0}] unrequested messages for requested partitions: {1} - [{2}] total remaining unrequested messages",
+                                requested.Count, string.Join(", ", requestMessages.Topics), _unRequestedMessages.Count);
+                            Sender.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(requestMessages.RequestId, requested.ToImmutableList()));
+                            _requests = _requests.Remove(Sender);
+                            
+                            // not going to schedule a poll of any kind here - wait until we receive the next request
+                            return true;
+                        }
+                    }
 
                     // When many requestors, e.g. many partitions with committablePartitionedSource the
                     // performance is much by collecting more requests/commits before performing the poll.
@@ -251,7 +308,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         SendFailure(ex, Sender);
                     }
-                    
+
                     return true;
 
 
@@ -348,7 +405,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
 
                 // reply to outstanding requests is important if the actor is restarted
-                foreach (var (actorRef, request) in _requests.ToTuples())
+                foreach (var (actorRef, request) in _requests)
                 {
                     var emptyMessages = new KafkaConsumerActorMetadata.Internal.Messages<K, V>(request.RequestId,
                         ImmutableList<ConsumeResult<K, V>>.Empty);
@@ -518,13 +575,12 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         private void Poll()
         {
             var currentAssignment = _consumer.Assignment.ToImmutableList();
-            var initialRebalanceInProcess = _rebalanceInProgress.Value;
+            var initialRebalanceInProcess = _rebalanceInProgress;
 
             var partitionsToFetch = _requests.Values.SelectMany(v => v.Topics)
-                .Where(p => currentAssignment.Contains(p))
                 .ToImmutableHashSet();
 
-            if (partitionsToFetch.IsEmpty || _requests.IsEmpty())
+            if (_requests.IsEmpty())
             {
                 if (_settings.VerboseLogging)
                     _log.Debug("Requests are empty - attempting to consume.");
@@ -533,9 +589,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var consumed = _consumer.Consume(0);
                     if (consumed is not null)
-                        throw new IllegalActorStateException("Consumed message should be null");
-                    PausePartitions(_pausedPartitions);
-                    _pausedPartitions = ImmutableList<TopicPartition>.Empty;
+                    {
+                        /*
+                         * We would normally expect a null result here, but it's totally possible for a partition
+                         * assignment + a message from that partition to arrive in the same Consume(0) call.
+                         * Were that to happen, we need to stash the message for future processing.
+                         */
+                        _unRequestedMessages = _unRequestedMessages.Add(consumed);
+                        _log.Info("Received [1] message from unrequested partition: {0} - stashing for later processing. " +
+                                  "Total unrequested messages: {1}",
+                            consumed.TopicPartition, _unRequestedMessages.Count);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -543,7 +607,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 }
             }
             else
-            {   
+            {
                 // resume partitions to fetch
                 var (resumeThese, pauseThese) = currentAssignment.Partition(partitionsToFetch.Contains);
                 PausePartitions(
@@ -553,6 +617,33 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 using (var cts = new CancellationTokenSource(_settings.PollTimeout))
                 {
                     var (polled, exception) = PollKafka(cts.Token);
+                    var assignedAtEnd = _consumer.Assignment.ToImmutableHashSet();
+                    
+                    /*
+                     * Any partitions that were NOT ASSIGNED at the start of the poll BUT ARE ASSIGNED NOW
+                     * got assigned to us mid-poll then. We need to stash these messages until they are requested.
+                     */
+                    var newlyAssigned = assignedAtEnd.Except(currentAssignment);
+                    if (newlyAssigned.Any())
+                    {
+                        // now filter again to see if any of these newlyAssigned partitions have not been requested
+                        var newlyAssignedButNotRequested = newlyAssigned.Except(partitionsToFetch);
+                        if (newlyAssignedButNotRequested.Any())
+                        {
+                            var (newUnrequested, requested) = polled.Partition(c => newlyAssignedButNotRequested.Contains(c.TopicPartition));
+                            if (newUnrequested.Count > 0)
+                            {
+                                var originalUnrequestedCount = _unRequestedMessages.Count;
+                                _unRequestedMessages = _unRequestedMessages.AddRange(newUnrequested);
+                                var totalNewUnrequested = _unRequestedMessages.Count - originalUnrequestedCount;
+                                _log.Info("Stashing [{0}] messages for newly assigned but not requested partitions: {1} - [{2}] total unrequested messages",
+                                    totalNewUnrequested,  string.Join(", ", newlyAssignedButNotRequested), _unRequestedMessages.Count);
+
+                                polled = requested;
+                            }
+                        }
+                    }
+                    
                     try
                     {
                         ProcessResult(partitionsToFetch, polled);
@@ -576,7 +667,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private (List<ConsumeResult<K, V>>, Exception?) PollKafka(CancellationToken token)
+        private (IReadOnlyCollection<ConsumeResult<K, V>>, Exception?) PollKafka(CancellationToken token)
         {
             var i = _settings.MaxPollRecords; // use the number of poll attempts specified in the settings
             var timeout = Math.Max((int)_pollTimeout.TotalMilliseconds / i, 1);
@@ -589,8 +680,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     var consumed = _consumer.Consume(timeout);
                     if (consumed is null)
                     {
-                        PausePartitions(_pausedPartitions);
-                        _pausedPartitions = ImmutableList<TopicPartition>.Empty;
                         return (polled, null);
                     }
 
@@ -606,14 +695,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             return (polled, null);
         }
 
-        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, List<ConsumeResult<K, V>> rawResult)
+        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, IReadOnlyCollection<ConsumeResult<K, V>> rawResult)
         {
             if (_log.IsDebugEnabled)
                 _log.Debug("Processing poll result with {0} records", rawResult.Count);
 
             if (rawResult.IsEmpty())
                 return;
-
+            
+            // TODO: remove after we verify the fix to https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415
             var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
             if (!fetchedTps.Except(partitionsToFetch).IsEmpty())
                 throw new ArgumentException(
@@ -707,7 +797,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private void CheckRebalanceState(bool initialRebalanceInProgress)
         {
-            if (initialRebalanceInProgress && !_rebalanceInProgress.Value && _rebalanceCommitSenders.Any())
+            if (initialRebalanceInProgress && !_rebalanceInProgress && _rebalanceCommitSenders.Any())
             {
                 _log.Debug(
                     $"Comitting stash {string.Join(", ", _rebalanceCommitStash)} replying to {string.Join(", ", _rebalanceCommitSenders)}");
