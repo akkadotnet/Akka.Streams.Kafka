@@ -143,7 +143,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
-
+            // NOTE: we can't pause partitions here even though it's the right thing to do because the Kafka client will err out
+            
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
 
             // clean up any unrequestedMessages belonging to revokedPartitions
