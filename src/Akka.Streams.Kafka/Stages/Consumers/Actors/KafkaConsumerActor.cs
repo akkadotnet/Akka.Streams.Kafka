@@ -589,7 +589,17 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var consumed = _consumer.Consume(0);
                     if (consumed is not null)
-                        throw new IllegalActorStateException("Consumed message should be null");
+                    {
+                        /*
+                         * We would normally expect a null result here, but it's totally possible for a partition
+                         * assignment + a message from that partition to arrive in the same Consume(0) call.
+                         * Were that to happen, we need to stash the message for future processing.
+                         */
+                        _unRequestedMessages = _unRequestedMessages.Add(consumed);
+                        _log.Info("Received [1] message from unrequested partition: {0} - stashing for later processing. " +,
+                                  "Total unrequested messages: {1}",
+                            consumed.TopicPartition, _unRequestedMessages.Count);
+                    }
                 }
                 catch (Exception e)
                 {
