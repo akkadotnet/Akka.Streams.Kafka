@@ -596,7 +596,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                          * Were that to happen, we need to stash the message for future processing.
                          */
                         _unRequestedMessages = _unRequestedMessages.Add(consumed);
-                        _log.Info("Received [1] message from unrequested partition: {0} - stashing for later processing. " +,
+                        _log.Info("Received [1] message from unrequested partition: {0} - stashing for later processing. " +
                                   "Total unrequested messages: {1}",
                             consumed.TopicPartition, _unRequestedMessages.Count);
                     }
