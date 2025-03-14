@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.Dispatch;
 using Akka.Pattern;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
@@ -67,7 +65,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <inheritdoc />
         public async Task Commit(ICommittableOffsetBatch batch)
         {
-            if (!(batch is CommittableOffsetBatch batchImpl))
+            if (batch is not CommittableOffsetBatch batchImpl)
                 throw new ArgumentException($"Unknown CommittableOffsetBatch, got {batch.GetType().FullName}, but expected {nameof(CommittableOffsetBatch)}");
             
             await Task.WhenAll(batchImpl.OffsetsAndMetadata.GroupBy(o => o.Key.GroupId).Select(group =>
