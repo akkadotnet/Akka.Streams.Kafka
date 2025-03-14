@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.5.37</AkkaVersion>
+    <AkkaVersion>1.5.39</AkkaVersion>
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>17.4.1</TestSdkVersion>
@@ -18,7 +18,6 @@
   <!-- Test dependencies -->
   <ItemGroup>
     <PackageVersion Include="EntityFramework" Version="6.4.4" />
-    <PackageVersion Include="Akka.Hosting.TestKit" Version="$(AkkaVersion)" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageVersion Include="xunit" Version="2.8.1" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.1" />
