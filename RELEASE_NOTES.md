@@ -1,3 +1,8 @@
+#### 1.5.39-beta2 March 14th 2025 ####
+
+* [Upgraded to Akka.NET v1.5.39](https://github.com/akkadotnet/akka.net/releases/tag/1.5.39)
+* [Resolved: Kafka Producer - Exception occured inside SelectAsync - Cancellation cause must not be null](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/426)
+
 #### 1.5.39-beta1 March 13th 2025 ####
 
 *v1.5.39 is a major update for Akka.Streams.Kafka*
