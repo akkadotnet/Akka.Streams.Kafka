@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 using System.Threading.Tasks;
 
@@ -13,6 +14,7 @@ namespace Akka.Streams.Kafka.Messages
         /// <summary>
         /// Commits an offset that is included in a <see cref="CommittableMessage{K,V}"/> 
         /// </summary>
+        [Obsolete("Do not use directly. Use Committer.Flow or Committer.Sink instead.")]
         Task Commit();
         
         /// <summary>
@@ -42,10 +44,6 @@ namespace Akka.Streams.Kafka.Messages
         /// Returns <c>true</c> if the batch contains no commits.
         /// </summary>
         bool IsEmpty { get; }
-
-        void TellCommitEmergency();
-
-        //void TellCommit();
     }
 
     /// <summary>

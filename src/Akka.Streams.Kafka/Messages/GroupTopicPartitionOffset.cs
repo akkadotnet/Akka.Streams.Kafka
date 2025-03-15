@@ -53,39 +53,10 @@ namespace Akka.Streams.Kafka.Messages
     /// <summary>
     /// Group, topic and partition info
     /// </summary>
-    public sealed record GroupTopicPartition
+    public sealed record GroupTopicPartition(string GroupId, string Topic, int Partition)
     {
-        public GroupTopicPartition(string groupId, string topic, int partition)
-        {
-            GroupId = groupId;
-            Topic = topic;
-            Partition = partition;
-        }
-        
-        /// <summary>
-        /// Consumer's group Id
-        /// </summary>
-        public string GroupId { get; }
-        /// <summary>
-        /// Topic
-        /// </summary>
-        public string Topic { get; }
-        /// <summary>
-        /// Partition
-        /// </summary>
-        public int Partition { get; }
+        public TopicPartition TopicPartition { get; } = new(Topic, Partition);
     }
-
-    public sealed record OffsetAndMetadata(Offset Offset, string Metadata)
-    {
-        /// <summary>
-        /// Kafka partition offset value
-        /// </summary>
-        public Offset Offset { get; } = Offset;
-
-        /// <summary>
-        /// Metadata
-        /// </summary>
-        public string Metadata { get; } = Metadata;
-    }
+    
+    public sealed record OffsetAndMetadata(Offset Offset, string Metadata);
 }

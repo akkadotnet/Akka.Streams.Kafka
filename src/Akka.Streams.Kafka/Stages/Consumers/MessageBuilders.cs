@@ -40,7 +40,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Committed object
         /// </summary>
-        public abstract IInternalCommitter Committer { get; }
+        public abstract KafkaAsyncConsumerCommitter Committer { get; }
         
         /// <summary>
         /// Consumer group Id
@@ -67,7 +67,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
         
         /// <inheritdoc />
-        public override IInternalCommitter Committer { get; }
+        public override KafkaAsyncConsumerCommitter Committer { get; }
 
         /// <inheritdoc />
         public override string GroupId { get; }
@@ -75,7 +75,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// CommittableSourceMessageBuilder
         /// </summary>
-        public CommittableSourceMessageBuilder(IInternalCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
+        public CommittableSourceMessageBuilder(KafkaAsyncConsumerCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
         {
             Committer = committer;
             GroupId = groupId;
@@ -98,7 +98,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// Committed object
         /// </summary>
-        public IInternalCommitter Committer { get; }
+        public KafkaAsyncConsumerCommitter Committer { get; }
         /// <summary>
         /// Consumer group Id
         /// </summary>
@@ -107,7 +107,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         /// <summary>
         /// OffsetContextBuilder
         /// </summary>
-        public OffsetContextBuilder(IInternalCommitter committer, ConsumerSettings<K, V> setting, Func<ConsumeResult<K, V>, string> metadataFromMessage)
+        public OffsetContextBuilder(KafkaAsyncConsumerCommitter committer, ConsumerSettings<K, V> setting, Func<ConsumeResult<K, V>, string> metadataFromMessage)
         {
             _metadataFromMessage = metadataFromMessage;
             Committer = committer;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,25 +13,10 @@ using Confluent.Kafka;
 namespace Akka.Streams.Kafka.Stages.Consumers
 {
     /// <summary>
-    /// Interface for implementing committing consumed messages
-    /// </summary>
-    internal interface IInternalCommitter 
-    {
-        /// <summary>
-        /// Commit all offsets (of different topics) belonging to the same stage
-        /// </summary>
-        Task Commit(ImmutableList<GroupTopicPartitionOffset> offsets);
-        /// <summary>
-        /// Commit offsets in batch
-        /// </summary>
-        Task Commit(ICommittableOffsetBatch batch);
-    }
-    
-    /// <summary>
     /// Used by <see cref="CommittableSourceMessageBuilder{K,V}"/> to commit messages by
     /// sending <see cref="KafkaConsumerActorMetadata.Internal.Commit"/> to <see cref="KafkaConsumerActor{K,V}"/>
     /// </summary>
-    internal class KafkaAsyncConsumerCommitter : IInternalCommitter
+    internal sealed class KafkaAsyncConsumerCommitter : IEquatable<KafkaAsyncConsumerCommitter>
     {
         private readonly TimeSpan _commitTimeout;
         private readonly Lazy<IActorRef> _consumerActor;
@@ -40,42 +26,102 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _commitTimeout = commitTimeout;
             _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
+        
+        public Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
+            SendWithReply(new KafkaConsumerActorMetadata.Internal.Commit(topicPartition, offsetAndMetadata));
 
-        /// <inheritdoc />
-        public Task Commit(ImmutableList<GroupTopicPartitionOffset> offsets)
+        public Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
+            SendWithReply(new KafkaConsumerActorMetadata.Internal.CommitSingle(topicPartition, offsetAndMetadata));
+        
+        public void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata, bool emergency) =>
+            _consumerActor.Value.Tell(new KafkaConsumerActorMetadata.Internal.CommitWithoutReply(topicPartition, offsetAndMetadata, emergency));
+
+        private Task<Done> SendWithReply(object msg)
         {
-            var topicPartitionOffsets = offsets.Select(offset => new TopicPartitionOffset(offset.Topic, offset.Partition, offset.Offset + 1)).ToImmutableHashSet();
+            return DoAsk();
 
-            return _consumerActor.Value.Ask(new KafkaConsumerActorMetadata.Internal.Commit(topicPartitionOffsets), _commitTimeout)
-                .ContinueWith(t =>
-                {
-                    if (t.Exception != null)
-                    {
-                        switch (t.Exception.InnerException)
-                        {
-                            case AskTimeoutException timeoutException:
-                                throw new CommitTimeoutException($"Kafka commit took longer than: {_commitTimeout}");
-                            default:
-                                throw t.Exception;
-                        }
-                    }
-                });
-        }
-
-        /// <inheritdoc />
-        public async Task Commit(ICommittableOffsetBatch batch)
-        {
-            if (batch is not CommittableOffsetBatch batchImpl)
-                throw new ArgumentException($"Unknown CommittableOffsetBatch, got {batch.GetType().FullName}, but expected {nameof(CommittableOffsetBatch)}");
-            
-            await Task.WhenAll(batchImpl.OffsetsAndMetadata.GroupBy(o => o.Key).Select(group =>
+            async Task<Done> DoAsk()
             {
-                if (!batchImpl.Committers.TryGetValue(group.Key, out var committer))
-                    throw new IllegalStateException($"Unknown committer, got groupId = {group.Key}");
-
-                var offsets = group.Select(offset => new GroupTopicPartitionOffset(offset.Key, offset.Value.Offset)).ToImmutableList();
-                return committer.Commit(offsets);
-            }));
+                try
+                {
+                    var askOp = await _consumerActor.Value.Ask(msg, _commitTimeout);
+                    return Done.Instance;
+                }
+                catch (Exception ex)
+                {
+                    switch (ex)
+                    {
+                        case AskTimeoutException:
+                            throw new CommitTimeoutException($"Kafka commit took longer than: {_commitTimeout}");
+                        default:
+                            throw;
+                    }
+                }
+            }
         }
+
+        public static Task Commit(CommittableOffset committableOffset)
+        {
+            var committer = committableOffset.Committer;
+            return committer.CommitSingle(committableOffset.Offset.GroupTopicPartition.TopicPartition,
+                // Scala code has an Offset + 1 here but I don't think that's right
+                new OffsetAndMetadata(committableOffset.Offset.Offset, committableOffset.Metadata));
+        }
+
+        public static Task Commit(CommittableOffsetBatch batch)
+        {
+            var tasks = ForBatch(batch, (committer, partition, metadata) => committer.CommitOneOfMany(partition, metadata));
+            return Task.WhenAll(tasks);
+        }
+
+        public static void TellCommit(CommittableOffsetBatch batch, bool emergency)
+        {
+            ForBatch(batch, (committer, partition, metadata) =>
+            {
+                committer.TellCommit(partition, metadata, emergency);
+                return Done.Instance;
+            });
+        }
+
+        private static IEnumerable<T> ForBatch<T>(CommittableOffsetBatch batch,
+            Func<KafkaAsyncConsumerCommitter, TopicPartition, OffsetAndMetadata, T> sendMsg)
+        {
+            var results = batch.OffsetsAndMetadata.Select(c =>
+            {
+                var (groupTopicPartition, offsetAndMetadata) = c;
+                // sends one message per partition; they are aggregated together in the KafkaConsumerActor
+                var committer = batch.CommitterFor(groupTopicPartition);
+                return sendMsg(committer, groupTopicPartition.TopicPartition, offsetAndMetadata);
+            });
+
+            return results;
+        }
+        
+        /*
+         * Have to override equality members for both the commitTimeout and the consumerActor. This comparison is used
+         * inside the CommittableOffsetBatch. The comparison is mostly relevant when multiple sources share a consumer
+         * actor.
+         */
+
+        public bool Equals(KafkaAsyncConsumerCommitter? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return _commitTimeout.Equals(other._commitTimeout) && _consumerActor.Value.Equals(other._consumerActor.Value);
+        }
+
+        public override bool Equals(object? obj) => ReferenceEquals(this, obj) || obj is KafkaAsyncConsumerCommitter other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (_commitTimeout.GetHashCode() * 397) ^ _consumerActor.Value.GetHashCode();
+            }
+        }
+
+        public static bool operator ==(KafkaAsyncConsumerCommitter? left, KafkaAsyncConsumerCommitter? right) => Equals(left, right);
+
+        public static bool operator !=(KafkaAsyncConsumerCommitter? left, KafkaAsyncConsumerCommitter? right) => !Equals(left, right);
     }
 }

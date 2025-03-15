@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Stages.Consumers;
 
@@ -18,7 +17,6 @@ namespace Akka.Streams.Kafka.Messages
             return CommittableOffsetBatch.Create([this, offset]);
         }
 
-
         /// <summary>
         /// Offset value
         /// </summary>
@@ -27,12 +25,13 @@ namespace Akka.Streams.Kafka.Messages
         /// Consumed record metadata
         /// </summary>
         public string Metadata { get; }
+        
         /// <summary>
         /// Committer
         /// </summary>
-        public IInternalCommitter Committer { get; }
+        public KafkaAsyncConsumerCommitter Committer { get; }
 
-        public CommittableOffset(IInternalCommitter committer, GroupTopicPartitionOffset offset, string metadata)
+        public CommittableOffset(KafkaAsyncConsumerCommitter committer, GroupTopicPartitionOffset offset, string metadata)
         {
             Committer = committer;
             Offset = offset;
@@ -44,7 +43,7 @@ namespace Akka.Streams.Kafka.Messages
         /// </summary>
         public Task Commit()
         {
-            return Committer.Commit(ImmutableList.Create(Offset));
+            return KafkaAsyncConsumerCommitter.Commit(this);
         }
     }
 }
