@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private ICommitRefreshing<K, V> _commitRefreshing = null!;
         private IConsumer<K, V> _consumer = null!;
-        //private int _commitsInProgress = 0;
+        private int _commitsInProgress = 0;
         private RestrictedConsumer<K, V> _restrictedConsumer = null!;
         private IActorRef _connectionCheckerActor = null!;
         private readonly ILoggingAdapter _log;
@@ -79,20 +79,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// <summary>
         /// Collect commit offset maps until the next poll
         /// </summary>
-        private IImmutableList<(TopicPartition tp, OffsetAndMetadata offsetAndMetadata)> _commitMaps =
-            ImmutableList<(TopicPartition, OffsetAndMetadata)>.Empty;
-
+        private IImmutableList<(TopicPartition tp, Offset offsetAndMetadata)> _commitMaps =
+            ImmutableList<(TopicPartition, Offset)>.Empty;
+        
         /// <summary>
-        /// While `true`, committing is delayed.
-        /// Changed by `onPartitionsRevoked` and `onPartitionsAssigned` callbacks
+        /// Keep commit senders that need a reply once stashed commits are made
         /// </summary>
-        private bool _rebalanceInProgress = false;
-
-        /// <summary>
-        /// Keeps commit offsets during rebalances for later commit.
-        /// </summary>
-        private IImmutableSet<TopicPartitionOffset>
-            _rebalanceCommitStash = ImmutableHashSet<TopicPartitionOffset>.Empty;
+        private ImmutableHashSet<IActorRef> _commitSenders = ImmutableHashSet<IActorRef>.Empty;
 
         /// <summary>
         /// Some important behavioral difference between the .NET and Java Kafka SDKs:
@@ -111,11 +104,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415 from prematurely terminating consumers.
         /// </summary>
         private IImmutableList<ConsumeResult<K, V>> _unRequestedMessages = ImmutableList<ConsumeResult<K, V>>.Empty;
-
-        /// <summary>
-        /// Keeps commit senders that need a reply once stashed commits are made.
-        /// </summary>
-        private IImmutableList<IActorRef> _rebalanceCommitSenders = ImmutableArray<IActorRef>.Empty;
 
         private ImmutableList<TopicPartition> _revokedPartitions = ImmutableList<TopicPartition>.Empty;
 
@@ -169,8 +157,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             _partitionEventHandler.OnAssign(partitions, _restrictedConsumer);
             watch.Stop();
             CheckDuration(watch, "onAssign");
-
-            _rebalanceInProgress = false;
         }
 
         // This is RebalanceListener.OnPartitionRevoked on JVM
@@ -187,7 +173,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onRevoke");
 
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
         }
 
         // This is RebalanceListener.OnPartitionLost on JVM
@@ -210,7 +195,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             CheckDuration(watch, "onLost");
 
             _commitRefreshing.Revoke(partitions.Select(tp => tp.TopicPartition).ToImmutableHashSet());
-            _rebalanceInProgress = true;
         }
 
         private void RebalancePostStop()
@@ -239,19 +223,34 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             switch (message)
             {
-                case KafkaConsumerActorMetadata.Internal.Commit commit when _rebalanceInProgress:
-                    _rebalanceCommitStash = _rebalanceCommitStash.Union(commit.Offsets);
-                    _rebalanceCommitSenders = _rebalanceCommitSenders.Add(Sender);
-                    return true;
-
                 case KafkaConsumerActorMetadata.Internal.Commit commit:
-                    _commitRefreshing.Add(commit.Offsets);
-                    var replyTo = Sender;
-                    Commit(commit.Offsets, msg => replyTo.Tell(msg));
+                    // prepending as later received offsets are most likely higher
+                    _commitMaps = ImmutableList<(TopicPartition tp, OffsetAndMetadata offsetAndMetadata)>.Empty
+                        .Add((commit.TopicPartition, commit.OffsetAndMetadata))
+                        .AddRange(_commitMaps);
+                    _commitSenders = _commitSenders.Add(Sender);
                     return true;
 
-                case Internal.Poll<K, V> poll:
-                    ReceivePoll(poll);
+                case KafkaConsumerActorMetadata.Internal.CommitWithoutReply commitWithoutReply:
+                    // prepending as later received offsets are most likely higher
+                    _commitMaps = ImmutableList<(TopicPartition tp, OffsetAndMetadata offsetAndMetadata)>.Empty
+                        .Add((commitWithoutReply.TopicPartition, commitWithoutReply.OffsetAndMetadata))
+                        .AddRange(_commitMaps);
+
+                    if (commitWithoutReply.Emergency)
+                    {
+                        EmergencyPoll();
+                    }
+                    
+                    return true;
+                
+                case KafkaConsumerActorMetadata.Internal.CommitSingle commitSingle:
+                    // prepending as later received offsets are most likely higher
+                    _commitMaps = ImmutableList<(TopicPartition tp, OffsetAndMetadata offsetAndMetadata)>.Empty
+                        .Add((commitSingle.TopicPartition, commitSingle.OffsetAndMetadata))
+                        .AddRange(_commitMaps);
+                    _commitSenders = _commitSenders.Add(Sender);
+                    RequestDelayedPoll();
                     return true;
 
                 case KafkaConsumerActorMetadata.Internal.ISubscriptionRequest subscribe:
@@ -260,6 +259,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                 case KafkaConsumerActorMetadata.Internal.RegisterSubStage subStage:
                     _stageActorsMap = _stageActorsMap.SetItem(subStage.TopicPartitions, Sender);
+                    return true;
+                
+                case Internal.Poll<K, V> poll:
+                    ReceivePoll(poll);
                     return true;
 
                 case KafkaConsumerActorMetadata.Internal.RequestMessages requestMessages:
@@ -330,7 +333,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     return true;
 
                 case KafkaConsumerActorMetadata.Internal.Stop:
-                    _log.Debug($"Received Stop from {Sender}, stopping");
+                    _log.Debug("Received Stop from {0}, stopping", Sender);
                     Context.Stop(Self);
                     return true;
 
@@ -585,10 +588,20 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
+        private void CommitAndPoll()
+        {
+            var refreshOffsets = _commitRefreshing.RefreshOffsets;
+            if (refreshOffsets.Any())
+            {
+                _log.Debug("Refreshing committed offsets: {0}", refreshOffsets.JoinToString(", "));
+                Commit(refreshOffsets, msg => Context.System.DeadLetters.Tell(msg));
+            }
+            Poll();
+        }
+
         private void Poll()
         {
             var currentAssignment = _consumer.Assignment.ToImmutableList();
-            var initialRebalanceInProcess = _rebalanceInProgress;
 
             var partitionsToFetch = _requests.Values.SelectMany(v => v.Topics)
                 .ToImmutableHashSet();
@@ -773,15 +786,21 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             }
         }
 
-        private void Commit(IImmutableSet<TopicPartitionOffset> commitMap, Action<object> sendReply)
+        private void Commit(IImmutableSet<TopicPartitionOffset> commitMap, IImmutableSet<IActorRef> replyTo)
         {
             try
             {
                 _commitRefreshing.UpdateRefreshDeadlines(commitMap.Select(tp => tp.TopicPartition)
                     .ToImmutableHashSet());
+                _commitsInProgress += 1;
+
+                void RetryCommits(TimeSpan duration, Exception e)
+                {
+                    _log.Warning(e, "Kafka commit is to be retried after {0} ms due to error", duration.TotalMilliseconds);
+                    
+                }
 
                 var watch = Stopwatch.StartNew();
-
                 _consumer.Commit(commitMap);
 
                 watch.Stop();
