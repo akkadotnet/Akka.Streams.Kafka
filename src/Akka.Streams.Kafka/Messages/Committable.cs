@@ -37,6 +37,15 @@ namespace Akka.Streams.Kafka.Messages
         /// Get current offset positions
         /// </summary>
         IImmutableSet<GroupTopicPartitionOffset> Offsets { get; }
+        
+        /// <summary>
+        /// Returns <c>true</c> if the batch contains no commits.
+        /// </summary>
+        bool IsEmpty { get; }
+
+        void TellCommitEmergency();
+
+        //void TellCommit();
     }
 
     /// <summary>

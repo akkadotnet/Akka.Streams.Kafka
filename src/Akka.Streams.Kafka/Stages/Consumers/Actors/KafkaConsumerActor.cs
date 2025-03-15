@@ -9,6 +9,7 @@ using Akka.Streams.Implementation.Fusing;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Internal;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util;
 using Akka.Util.Internal;
@@ -67,12 +68,19 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private ICommitRefreshing<K, V> _commitRefreshing = null!;
         private IConsumer<K, V> _consumer = null!;
+        //private int _commitsInProgress = 0;
         private RestrictedConsumer<K, V> _restrictedConsumer = null!;
         private IActorRef _connectionCheckerActor = null!;
         private readonly ILoggingAdapter _log;
         private bool _stopInProgress = false;
         private bool _delayedPollInFlight = false;
         private readonly Decider _decider;
+
+        /// <summary>
+        /// Collect commit offset maps until the next poll
+        /// </summary>
+        private IImmutableList<(TopicPartition tp, OffsetAndMetadata offsetAndMetadata)> _commitMaps =
+            ImmutableList<(TopicPartition, OffsetAndMetadata)>.Empty;
 
         /// <summary>
         /// While `true`, committing is delayed.
@@ -144,7 +152,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were assigned: {string.Join(", ", partitions)}");
             // NOTE: we can't pause partitions here even though it's the right thing to do because the Kafka client will err out
-            
+
             _commitRefreshing.AssignedPositions(partitions, _consumer, _settings.PositionTimeout);
 
             // clean up any unrequestedMessages belonging to revokedPartitions
@@ -152,10 +160,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             {
                 // get revoked partitions that do not appear in the assigned partitions list
                 var trulyRevokedPartitions = _revokedPartitions.Except(partitions);
-                _unRequestedMessages = _unRequestedMessages.Where(m => !trulyRevokedPartitions.Contains(m.TopicPartition))
+                _unRequestedMessages = _unRequestedMessages
+                    .Where(m => !trulyRevokedPartitions.Contains(m.TopicPartition))
                     .ToImmutableList();
             }
-               
+
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnAssign(partitions, _restrictedConsumer);
             watch.Stop();
@@ -186,7 +195,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         {
             if (_log.IsDebugEnabled)
                 _log.Debug($"Partitions were lost: {string.Join(", ", partitions)}");
-            
+
             if (_unRequestedMessages.Count > 0)
             {
                 // immediately clean up any unrequestedMessages belonging to lost partitions
@@ -194,7 +203,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _unRequestedMessages = _unRequestedMessages.Where(m => !lostPartitions.Contains(m.TopicPartition))
                     .ToImmutableList();
             }
-           
+
             var watch = Stopwatch.StartNew();
             _partitionEventHandler.OnLost(partitions, _restrictedConsumer);
             watch.Stop();
@@ -262,19 +271,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
                     if (_stageActorsMap.GetOrElse(requestMessages.Topics, Sender).Equals(Sender))
                         _requests = _requests.SetItem(Sender, requestMessages);
-                    
+
                     /* UNREQUESTED MESSAGES CHECK */
                     if (_unRequestedMessages.Count > 0)
                     {
-                        var (requested, unrequested) = _unRequestedMessages.Partition(m => requestMessages.Topics.Contains(m.TopicPartition));
+                        var (requested, unrequested) =
+                            _unRequestedMessages.Partition(m => requestMessages.Topics.Contains(m.TopicPartition));
                         _unRequestedMessages = unrequested;
                         if (requested.Count > 0)
                         {
-                            _log.Info("Found [{0}] unrequested messages for requested partitions: {1} - [{2}] total remaining unrequested messages",
+                            _log.Info(
+                                "Found [{0}] unrequested messages for requested partitions: {1} - [{2}] total remaining unrequested messages",
                                 requested.Count, string.Join(", ", requestMessages.Topics), _unRequestedMessages.Count);
-                            Sender.Tell(new KafkaConsumerActorMetadata.Internal.Messages<K, V>(requestMessages.RequestId, requested.ToImmutableList()));
+                            Sender.Tell(
+                                new KafkaConsumerActorMetadata.Internal.Messages<K, V>(requestMessages.RequestId,
+                                    requested.ToImmutableList()));
                             _requests = _requests.Remove(Sender);
-                            
+
                             // not going to schedule a poll of any kind here - wait until we receive the next request
                             return true;
                         }
@@ -459,7 +472,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         var topicPartitions = assignWithOffset.TopicPartitionOffsets.Select(o => o.TopicPartition)
                             .ToImmutableHashSet();
                         CheckOverlappingRequests("AssignWithOffset", Sender, topicPartitions);
-                        
+
                         _consumer.IncrementalAssign(assignWithOffset.TopicPartitionOffsets);
                         _commitRefreshing.AssignedPositions(topicPartitions, assignWithOffset.TopicPartitionOffsets);
                         break;
@@ -596,8 +609,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                          * Were that to happen, we need to stash the message for future processing.
                          */
                         _unRequestedMessages = _unRequestedMessages.Add(consumed);
-                        _log.Info("Received [1] message from unrequested partition: {0} - stashing for later processing. " +
-                                  "Total unrequested messages: {1}",
+                        _log.Info(
+                            "Received [1] message from unrequested partition: {0} - stashing for later processing. " +
+                            "Total unrequested messages: {1}",
                             consumed.TopicPartition, _unRequestedMessages.Count);
                     }
                 }
@@ -618,7 +632,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     var (polled, exception) = PollKafka(cts.Token);
                     var assignedAtEnd = _consumer.Assignment.ToImmutableHashSet();
-                    
+
                     /*
                      * Any partitions that were NOT ASSIGNED at the start of the poll BUT ARE ASSIGNED NOW
                      * got assigned to us mid-poll then. We need to stash these messages until they are requested.
@@ -630,20 +644,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                         var newlyAssignedButNotRequested = newlyAssigned.Except(partitionsToFetch);
                         if (newlyAssignedButNotRequested.Any())
                         {
-                            var (newUnrequested, requested) = polled.Partition(c => newlyAssignedButNotRequested.Contains(c.TopicPartition));
+                            var (newUnrequested, requested) = polled.Partition(c =>
+                                newlyAssignedButNotRequested.Contains(c.TopicPartition));
                             if (newUnrequested.Count > 0)
                             {
                                 var originalUnrequestedCount = _unRequestedMessages.Count;
                                 _unRequestedMessages = _unRequestedMessages.AddRange(newUnrequested);
                                 var totalNewUnrequested = _unRequestedMessages.Count - originalUnrequestedCount;
-                                _log.Info("Stashing [{0}] messages for newly assigned but not requested partitions: {1} - [{2}] total unrequested messages",
-                                    totalNewUnrequested,  string.Join(", ", newlyAssignedButNotRequested), _unRequestedMessages.Count);
+                                _log.Info(
+                                    "Stashing [{0}] messages for newly assigned but not requested partitions: {1} - [{2}] total unrequested messages",
+                                    totalNewUnrequested, string.Join(", ", newlyAssignedButNotRequested),
+                                    _unRequestedMessages.Count);
 
                                 polled = requested;
                             }
                         }
                     }
-                    
+
                     try
                     {
                         ProcessResult(partitionsToFetch, polled);
@@ -695,14 +712,15 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             return (polled, null);
         }
 
-        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch, IReadOnlyCollection<ConsumeResult<K, V>> rawResult)
+        private void ProcessResult(IImmutableSet<TopicPartition> partitionsToFetch,
+            IReadOnlyCollection<ConsumeResult<K, V>> rawResult)
         {
             if (_log.IsDebugEnabled)
                 _log.Debug("Processing poll result with {0} records", rawResult.Count);
 
             if (rawResult.IsEmpty())
                 return;
-            
+
             // TODO: remove after we verify the fix to https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415
             var fetchedTps = rawResult.Select(m => m.TopicPartition).ToImmutableSet();
             if (!fetchedTps.Except(partitionsToFetch).IsEmpty())

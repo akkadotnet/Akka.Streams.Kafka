@@ -31,7 +31,10 @@ namespace Akka.Streams.Kafka.Messages
         
         /// <inheritdoc />
         public IImmutableSet<GroupTopicPartitionOffset> Offsets => OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset)).ToImmutableHashSet();
-        
+
+        public bool IsEmpty => BatchSize == 0;
+        public void TellCommitEmergency() => throw new NotImplementedException();
+
         /// <summary>
         /// Committers
         /// </summary>
@@ -166,5 +169,7 @@ namespace Akka.Streams.Kafka.Messages
                 Offsets.ToImmutableDictionary(c => c.GroupTopicPartition, v => CommitterFor(v.GroupTopicPartition));
             return new CommittableOffsetBatch(newOffsets, newCommiters, BatchSize);
         }
+
+        public override string ToString() => $"CommittableOffsetBatch(BatchSize={BatchSize}, {string.Join(",", Offsets)})";
     }
 }

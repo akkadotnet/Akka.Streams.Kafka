@@ -3,6 +3,7 @@ using System.Threading;
 using Akka.Actor;
 using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
+using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
@@ -90,7 +91,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             /// Used to send commit requests to <see cref="KafkaConsumerActor{K,V}"/>
             /// </summary>
             public sealed record Commit(IImmutableSet<TopicPartitionOffset> Offsets) : INoSerializationVerificationNeeded;
-
+            public sealed record CommitWithoutReply(
+                TopicPartition TopicPartition,
+                OffsetAndMetadata OffsetAndMetadata,
+                bool Emergency) : INoSerializationVerificationNeeded;
             
             /* RESPONSES */
 
