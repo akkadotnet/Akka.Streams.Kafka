@@ -26,7 +26,7 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
     public override FlowShape<ICommittable, ICommittableOffsetBatch> Shape { get; }
 
     protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes) =>
-        throw new System.NotImplementedException();
+        new CommitCollectorStageLogic(Shape, this, inheritedAttributes);
 
     private class CommitCollectorStageLogic : TimerGraphStageLogic
     {
