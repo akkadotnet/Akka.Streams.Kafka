@@ -96,6 +96,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             /// </summary>
             public sealed record RequestMessages(int RequestId, ImmutableHashSet<TopicPartition> Topics);
 
+            internal interface ICommitLike
+            {
+                TopicPartitionOffset TopicPartitionOffset { get; }
+            }
+
             /// <summary>
             /// Used to send commit requests to <see cref="KafkaConsumerActor{K,V}"/>
             /// </summary>
@@ -103,18 +108,27 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             /// These belong to a batch commit.
             /// </remarks>
             public sealed record Commit(TopicPartition TopicPartition, OffsetAndMetadata OffsetAndMetadata)
-                : INoSerializationVerificationNeeded;
+                : INoSerializationVerificationNeeded, ICommitLike
+            {
+                public TopicPartitionOffset TopicPartitionOffset => new(TopicPartition, OffsetAndMetadata.Offset);
+            }
 
             public sealed record CommitWithoutReply(
                 TopicPartition TopicPartition,
                 OffsetAndMetadata OffsetAndMetadata,
-                bool Emergency) : INoSerializationVerificationNeeded;
+                bool Emergency) : INoSerializationVerificationNeeded, ICommitLike
+            {
+                public TopicPartitionOffset TopicPartitionOffset => new(TopicPartition, OffsetAndMetadata.Offset);
+            }
 
             /// <summary>
             /// Execute a single commit without batching
             /// </summary>
             public sealed record CommitSingle(TopicPartition TopicPartition, OffsetAndMetadata OffsetAndMetadata)
-                : INoSerializationVerificationNeeded;
+                : INoSerializationVerificationNeeded, ICommitLike
+            {
+                public TopicPartitionOffset TopicPartitionOffset => new(TopicPartition, OffsetAndMetadata.Offset);
+            }
 
             /* RESPONSES */
 
