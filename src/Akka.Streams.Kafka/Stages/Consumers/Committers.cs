@@ -68,7 +68,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             if (batch is not CommittableOffsetBatch batchImpl)
                 throw new ArgumentException($"Unknown CommittableOffsetBatch, got {batch.GetType().FullName}, but expected {nameof(CommittableOffsetBatch)}");
             
-            await Task.WhenAll(batchImpl.OffsetsAndMetadata.GroupBy(o => o.Key.GroupId).Select(group =>
+            await Task.WhenAll(batchImpl.OffsetsAndMetadata.GroupBy(o => o.Key).Select(group =>
             {
                 if (!batchImpl.Committers.TryGetValue(group.Key, out var committer))
                     throw new IllegalStateException($"Unknown committer, got groupId = {group.Key}");

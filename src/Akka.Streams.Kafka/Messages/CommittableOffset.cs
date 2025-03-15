@@ -10,14 +10,21 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     internal sealed class CommittableOffset : ICommittableOffsetMetadata
     {
-        /// <inheritdoc />
         public long BatchSize => 1;
+
+        public ICommittableOffsetBatch Updated(ICommittable offset)
+        {
+            // need to combine this offset AND offset to form a new batch
+            return CommittableOffsetBatch.Create([this, offset]);
+        }
+
+
         /// <summary>
         /// Offset value
         /// </summary>
         public GroupTopicPartitionOffset Offset { get; }
         /// <summary>
-        /// Cosumed record metadata
+        /// Consumed record metadata
         /// </summary>
         public string Metadata { get; }
         /// <summary>
