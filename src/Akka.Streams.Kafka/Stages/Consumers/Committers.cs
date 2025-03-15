@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.Pattern;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
 using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
@@ -16,7 +14,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
     /// Used by <see cref="CommittableSourceMessageBuilder{K,V}"/> to commit messages by
     /// sending <see cref="KafkaConsumerActorMetadata.Internal.Commit"/> to <see cref="KafkaConsumerActor{K,V}"/>
     /// </summary>
-    internal sealed class KafkaAsyncConsumerCommitter : IEquatable<KafkaAsyncConsumerCommitter>
+    internal class KafkaAsyncConsumerCommitter : IEquatable<KafkaAsyncConsumerCommitter>
     {
         private readonly TimeSpan _commitTimeout;
         private readonly Lazy<IActorRef> _consumerActor;
@@ -27,13 +25,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             _consumerActor = new Lazy<IActorRef>(consumerActorFactory);
         }
         
-        public Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
+        public virtual Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
             SendWithReply(new KafkaConsumerActorMetadata.Internal.Commit(topicPartition, offsetAndMetadata));
 
-        public Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
+        public virtual Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) =>
             SendWithReply(new KafkaConsumerActorMetadata.Internal.CommitSingle(topicPartition, offsetAndMetadata));
         
-        public void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata, bool emergency) =>
+        public virtual void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata, bool emergency) =>
             _consumerActor.Value.Tell(new KafkaConsumerActorMetadata.Internal.CommitWithoutReply(topicPartition, offsetAndMetadata, emergency));
 
         private Task<Done> SendWithReply(object msg)
@@ -65,7 +63,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             var committer = committableOffset.Committer;
             return committer.CommitSingle(committableOffset.Offset.GroupTopicPartition.TopicPartition,
                 // Scala code has an Offset + 1 here but I don't think that's right
-                new OffsetAndMetadata(committableOffset.Offset.Offset, committableOffset.Metadata));
+                new OffsetAndMetadata(committableOffset.Offset.Offset + 1, committableOffset.Metadata));
         }
 
         public static Task Commit(CommittableOffsetBatch batch)

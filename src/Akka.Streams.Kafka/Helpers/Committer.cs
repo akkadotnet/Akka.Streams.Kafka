@@ -4,6 +4,7 @@ using Akka.Annotations;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Streams.Kafka.Stages.Consumers;
 
 namespace Akka.Streams.Kafka.Helpers
 {
@@ -17,12 +18,11 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         public static Flow<ICommittable, ICommittableOffsetBatch, NotUsed> BatchFlow(CommitterSettings settings)
         {
-            return Akka.Streams.Dsl.Flow.Create<ICommittable>().GroupedWithin(settings.MaxBatch, settings.MaxInterval)
-                .Select(CommittableOffsetBatch.Create)
-                .SelectAsync(settings.Parallelism, async batch =>
+            return Akka.Streams.Dsl.Flow.FromGraph(new CommitCollectorStage(settings))
+                .SelectAsyncUnordered(settings.Parallelism, async batch =>
                 {
-                   await batch.Commit();
-                   return batch;
+                    await ((CommittableOffsetBatch)batch).Commit();
+                    return batch;
                 });
         }
 
@@ -44,7 +44,7 @@ namespace Akka.Streams.Kafka.Helpers
         public static FlowWithContext<E, ICommittableOffset, NotUsed, ICommittableOffsetBatch, NotUsed> FlowWithOffsetContext<E>(CommitterSettings settings)
         {
             var value = Akka.Streams.Dsl.Flow.Create<(E, ICommittableOffset)>()
-                .Select(m => m.Item2 as ICommittable)
+                .Select(ICommittable (m) => m.Item2)
                 .Via(BatchFlow(settings))
                 .Select(b => (NotUsed.Instance, b));
 
