@@ -47,7 +47,8 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
             Log.Debug(ex, "OnUpstreamFailure with exception with {0}", ObservationLogic.OffsetBatch);
             if (ActiveBatchInProgress)
             {
-                ObservationLogic.OffsetBatch.TellCommitEmergency();
+                // TODO: probably need to do some base-class work or something to avoid interface abuse here
+                ((CommittableOffsetBatch)ObservationLogic.OffsetBatch).TellCommitEmergency();
                 ObservationLogic.OffsetBatch = CommittableOffsetBatch.Empty;
             }
             FailStage(ex);

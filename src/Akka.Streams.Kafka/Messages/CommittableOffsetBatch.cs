@@ -47,19 +47,19 @@ namespace Akka.Streams.Kafka.Messages
         /// <summary>
         /// Create empty offset batch
         /// </summary>
-        public static CommittableOffsetBatch Empty => new(ImmutableDictionary<GroupTopicPartition, OffsetAndMetadata>.Empty, 
+        public static ICommittableOffsetBatch Empty => new CommittableOffsetBatch(ImmutableDictionary<GroupTopicPartition, OffsetAndMetadata>.Empty, 
                                                                                   ImmutableDictionary<GroupTopicPartition, KafkaAsyncConsumerCommitter>.Empty, 
                                                                                   0);
         
         /// <summary>
         /// Create an offset batch out of a first offsets.
         /// </summary>
-        public static CommittableOffsetBatch Create(ICommittableOffset offset) => Empty.Updated(offset);
+        public static ICommittableOffsetBatch Create(ICommittableOffset offset) => Empty.Updated(offset);
         
         /// <summary>
         /// Create an offset batch out of a list of offsets.
         /// </summary>
-        public static CommittableOffsetBatch Create(IEnumerable<ICommittable> offsets)
+        public static ICommittableOffsetBatch Create(IEnumerable<ICommittable> offsets)
         {
             return offsets.Aggregate(Empty, (batch, offset) => batch.Updated(offset));
         }
