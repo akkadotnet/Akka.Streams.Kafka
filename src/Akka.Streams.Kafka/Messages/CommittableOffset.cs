@@ -45,5 +45,7 @@ namespace Akka.Streams.Kafka.Messages
         {
             return KafkaAsyncConsumerCommitter.Commit(this);
         }
+
+        public override string ToString() => $"CommittableOffset({Offset}, Metadata={Metadata})";
     }
 }
