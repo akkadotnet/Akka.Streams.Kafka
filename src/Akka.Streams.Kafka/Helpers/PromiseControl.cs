@@ -1,65 +1,86 @@
 using System;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
-using Akka.Streams.Util;
 
-#nullable enable
 namespace Akka.Streams.Kafka.Helpers
 {
+    internal static class PromiseControl
+    {
+        public interface IControlOperation;
+
+        public sealed class ControlStop : IControlOperation
+        {
+            public static readonly ControlStop Instance = new();
+            private ControlStop(){}
+        }
+
+        public sealed class ControlShutdown : IControlOperation
+        {
+            public static readonly ControlShutdown Instance = new();
+            private ControlShutdown(){}
+        }
+    }
+    
     /// <summary>
     /// Used in source logic classes to provide <see cref="IControl"/> implementation.
     /// </summary>
     /// <typeparam name="TSourceOut"></typeparam>
-    internal abstract class PromiseControl<TSourceOut> : IControl
+    internal class PromiseControl<TSourceOut> : IControl
     {
         private readonly SourceShape<TSourceOut> _shape;
         private readonly Action<Outlet<TSourceOut>> _completeStageOutlet;
         private readonly Action<bool> _setStageKeepGoing;
 
-        private readonly TaskCompletionSource<Done> _shutdownTaskSource = new TaskCompletionSource<Done>();
-        private readonly TaskCompletionSource<Done> _stopTaskSource = new TaskCompletionSource<Done>();
-        private readonly Action _stopCallback;
-        private readonly Action<Exception?> _shutdownCallback;
+        private readonly TaskCompletionSource<Done> _shutdownTaskSource = new();
+        private readonly TaskCompletionSource<Done> _stopTaskSource = new();
+        private readonly Action<PromiseControl.IControlOperation> _controlCallback;
+        private readonly Action _performShutdown;
 
         public PromiseControl(
             SourceShape<TSourceOut> shape, 
             Action<Outlet<TSourceOut>> completeStageOutlet, 
             Action<bool> setStageKeepGoing,  
-            Func<Action, Action> asyncCallbackFactory,
-            Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory)
+            Func<Action<PromiseControl.IControlOperation>, Action<PromiseControl.IControlOperation>> asyncShutdownCallbackFactory,
+            Action performShutdown)
         {
             _shape = shape;
             _completeStageOutlet = completeStageOutlet;
             _setStageKeepGoing = setStageKeepGoing;
-
-            _stopCallback = asyncCallbackFactory(PerformStop);
-            _shutdownCallback = asyncShutdownCallbackFactory(PerformShutdown);
+            _performShutdown = performShutdown;
+            _controlCallback = asyncShutdownCallbackFactory(c =>
+            {
+                switch (c)
+                {
+                    case PromiseControl.ControlStop:
+                        PerformStop();
+                        break;
+                    case PromiseControl.ControlShutdown:
+                        PerformShutdown();
+                        break;
+                }
+            });
         }
-
-        /// <inheritdoc />
+        
         public Task Stop()
         {
-            _stopCallback();
+            _controlCallback(PromiseControl.ControlStop.Instance);
             return _stopTaskSource.Task;
         }
-
-        /// <inheritdoc />
-        public Task Shutdown(Exception? ex)
+        
+        public Task Shutdown()
         {
-            _shutdownCallback(ex);
+            _controlCallback(PromiseControl.ControlShutdown.Instance);
             return _shutdownTaskSource.Task;
         }
-
-        /// <inheritdoc />
+        
         public Task IsShutdown => _shutdownTaskSource.Task;
-
-        /// <inheritdoc />
+        
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
 
         /// <summary>
         /// Performs source logic stop
         /// </summary>
-        public virtual void PerformStop()
+        protected virtual void PerformStop()
         {
             _setStageKeepGoing(true);
             _completeStageOutlet(_shape.Outlet);
@@ -69,7 +90,10 @@ namespace Akka.Streams.Kafka.Helpers
         /// <summary>
         /// Performs source logic shutdown
         /// </summary>
-        public abstract void PerformShutdown(Exception? ex);
+        protected virtual void PerformShutdown()
+        {
+            _performShutdown();
+        }
 
         /// <summary>
         /// Executed on source logic stop

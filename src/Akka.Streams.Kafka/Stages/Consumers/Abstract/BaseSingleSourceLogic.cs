@@ -7,6 +7,7 @@ using Akka.Actor;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers.Actors;
+using Akka.Streams.Kafka.Stages.Consumers.Exceptions;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
@@ -31,16 +32,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public Action<IImmutableSet<TopicPartitionOffset>> FilterRevokedPartitionAsyncCallback =>
             GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(FilterRevokedPartitions);
-        
+
         private void FilterRevokedPartitions(IImmutableSet<TopicPartitionOffset> partitions)
         {
             if (partitions.Count > 0)
             {
                 Log.Debug("Filtering out messages from revoked partitions [{0}]", string.Join(", ", partitions));
                 var tps = partitions.Select(tpo => tpo.TopicPartition).ToImmutableHashSet();
-                
+
                 // TODO: maybe it makes sense to look at offsets too
-                
+
                 // Thread-safe - happens inside an async callback
                 _buffer = new Queue<ConsumeResult<K, V>>(_buffer.Where(m => !tps.Contains(m.TopicPartition)));
             }
@@ -69,7 +70,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _shape = shape;
             Subscription = subscription;
             _messageBuilder = messageBuilderFactory(this);
-            Control = new BaseSingleSourceControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback,
+            Control = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback,
                 PerformShutdown);
 
             // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
@@ -136,8 +137,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
             {
-                return new PartitionEventHandlers.Chain(subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance), new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
-                    partitionsRevokedCb));
+                return new PartitionEventHandlers.Chain(
+                    subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance),
+                    new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                        partitionsRevokedCb));
             }
         }
 
@@ -232,9 +235,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
                     break;
 
-                case Terminated terminated:
-                    if (Log.IsInfoEnabled)
-                        Log.Info("Consumer actor terminated: {0}", terminated.ActorRef.Path);
+                case Terminated:
+                    FailStage(new ConsumerFailed());
                     break;
             }
         }
@@ -265,26 +267,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                     TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
         }
 
-        protected abstract void PerformShutdown(Exception? ex);
-
-        protected class BaseSingleSourceControl : PromiseControl<TMessage>
+        protected virtual void PerformShutdown()
         {
-            private readonly Action<Exception?> _performShutdown;
-
-            public BaseSingleSourceControl(
-                SourceShape<TMessage> shape,
-                Action<Outlet<TMessage>> completeStageOutlet,
-                Action<bool> setStageKeepGoing,
-                Func<Action, Action> asyncCallbackFactory,
-                Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
-                Action<Exception?> performShutdown)
-                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory,
-                    asyncShutdownCallbackFactory)
-            {
-                _performShutdown = performShutdown;
-            }
-
-            public override void PerformShutdown(Exception? ex) => _performShutdown(ex);
+            Log.Info("Completing");
         }
     }
 }

@@ -23,7 +23,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// Shutdown the consumer `Source`. It will wait for outstanding offset
         /// commit requests to finish before shutting down.
         /// </summary>
-        Task Shutdown(Exception? ex = null);
+        Task Shutdown();
 
         /// <summary>
         /// Shutdown status. The task will be completed when the stage has been shut down
@@ -51,28 +51,19 @@ namespace Akka.Streams.Kafka.Helpers
     {
         public IControl Control { get; }
         public Task<T> StreamCompletion { get; }
-
-        /// <summary>
-        /// DrainingControl
-        /// </summary>
-        /// <param name="control"></param>
-        /// <param name="streamCompletion"></param>
+        
         private DrainingControl(IControl control, Task<T> streamCompletion)
         {
             Control = control;
             StreamCompletion = streamCompletion;
         }
-
-        /// <inheritdoc />
+        
         public Task Stop() => Control.Stop();
-
-        /// <inheritdoc />
-        public Task Shutdown(Exception? ex = null) => Control.Shutdown(ex);
-
-        /// <inheritdoc />
+        
+        public Task Shutdown() => Control.Shutdown();
+        
         public Task IsShutdown => Control.IsShutdown;
-
-        /// <inheritdoc />
+        
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => Control.DrainAndShutdown(streamCompletion);
 
         /// <summary>
@@ -118,18 +109,14 @@ namespace Akka.Streams.Kafka.Helpers
     /// </summary>
     public class NoopControl : IControl
     {
-        private static Exception Exception => new Exception("The correct Consumer.Control has not been assigned, yet.");
-
-        /// <inheritdoc />
+        private static Exception Exception => new("The correct Consumer.Control has not been assigned, yet.");
+        
         public Task Stop() => Task.FromException(Exception);
-
-        /// <inheritdoc />
-        public Task Shutdown(Exception? ex) => Task.FromException(new Exception("The correct Consumer.Control has not been assigned, yet.", ex));
-
-        /// <inheritdoc />
+        
+        public Task Shutdown() => Task.FromException(new Exception("The correct Consumer.Control has not been assigned, yet."));
+        
         public Task IsShutdown => Task.FromException(Exception);
-
-        /// <inheritdoc />
+        
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
     }
 }

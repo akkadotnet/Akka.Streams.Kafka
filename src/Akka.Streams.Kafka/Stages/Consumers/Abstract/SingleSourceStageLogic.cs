@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Kafka.Helpers;
@@ -23,9 +24,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private readonly SourceShape<TMessage> _shape;
         private readonly ConsumerSettings<K, V> _settings;
 
-        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings, 
-                                      ISubscription subscription, Attributes attributes, 
-                                      Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory) 
+        public SingleSourceStageLogic(SourceShape<TMessage> shape, ConsumerSettings<K, V> settings,
+            ISubscription subscription, Attributes attributes,
+            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory)
             : base(shape, attributes, messageBuilderFactory, settings.AutoCreateTopicsEnabled, subscription)
         {
             _shape = shape;
@@ -36,8 +37,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             get
             {
-                var strPart = (_settings.Properties.TryGetValue("client.id", out var clientId)) ?
-                    $"client-{_settings.GroupId}-{clientId}" : $"client-{_settings.GroupId}";
+                var strPart = (_settings.Properties.TryGetValue("client.id", out var clientId))
+                    ? $"client-{_settings.GroupId}-{clientId}"
+                    : $"client-{_settings.GroupId}";
                 return Akka.Event.LogSource.Create(strPart, GetType());
             }
         }
@@ -47,15 +49,16 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         {
             IStatisticsHandler statisticsHandler = Subscription.StatisticsHandler.HasValue
                 ? Subscription.StatisticsHandler.Value
-                :  StatisticsHandlers.Empty.Instance;
-            
+                : StatisticsHandlers.Empty.Instance;
+
             if (Materializer is not ActorMaterializer actorMaterializer)
                 throw new ArgumentException($"Expected {typeof(ActorMaterializer)} but got {Materializer.GetType()}");
-            
+
             var extendedActorSystem = actorMaterializer.System.AsInstanceOf<ExtendedActorSystem>();
-            var actor = extendedActorSystem.SystemActorOf(KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider, statisticsHandler),
-                                                          $"kafka-consumer-{KafkaConsumerActorMetadata.NextNumber()}");
-            
+            var actor = extendedActorSystem.SystemActorOf(
+                KafkaConsumerActorMetadata.GetProps(SourceActor.Ref, _settings, Decider, statisticsHandler),
+                $"kafka-consumer-{KafkaConsumerActorMetadata.NextNumber()}");
+
             return actor;
         }
 
@@ -66,8 +69,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
             ConfigureSubscription(partitionsAssignedHandler, partitionsRevokedHandler);
         }
-        
-        
+
 
         public override void PostStop()
         {
@@ -76,40 +78,42 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             base.PostStop();
         }
 
-        protected override void PerformShutdown(Exception? ex)
+        protected override void PerformShutdown()
         {
-            if (ex is not null and not SubscriptionWithCancelException.NonFailureCancellation)
-                Log.Info(ex, $"{nameof(SingleSourceStageLogic<K, V, TMessage>)} was shutdown due to exception");
-            
+            base.PerformShutdown();
             SetKeepGoing(true);
-            
+
             if (!IsClosed(_shape.Outlet))
                 Complete(_shape.Outlet);
-            
+
             SourceActor.Become(ShuttingDownReceive);
             StopConsumerActor();
         }
 
         protected virtual void ShuttingDownReceive((IActorRef, object) args)
         {
-            switch (args.Item2)
+            switch (args)
             {
-                case Terminated _:
+                case (_, Terminated terminated) when terminated.ActorRef.Equals(ConsumerActor):
                     Control.OnShutdown();
                     CompleteStage();
                     break;
-                default:
-                    // Ignoring any consumed messages, because downstream is already closed
-                    return;
+                // Prevent stage failure during shutdown by ignoring Messages
+                // TODO: pretty sure the StageRefs in Akka.NET don't do this properly anyway - failing when they receive an unhandled message
+                case (_, KafkaConsumerActorMetadata.Internal.Messages<K, V> messages):
+                    if (messages.MessagesList.Any())
+                        Log.Debug(
+                            "Unexpected `Messages` received with requestId={0} and a non-empty collection of messages: [{1}]",
+                            messages.RequestId,
+                            string.Join(", ", messages.MessagesList));
+                    break;
             }
         }
 
         protected virtual void StopConsumerActor()
         {
-            Materializer.ScheduleOnce(_settings.StopTimeout, () =>
-            {
-                ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
-            });
+            Materializer.ScheduleOnce(_settings.StopTimeout,
+                () => { ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref); });
         }
 
         private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
@@ -138,26 +142,30 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 // remove all of our previous revoked partitions that are not in the new assignment
                 _stageLogic.FilterRevokedPartitionAsyncCallback(_lastRevoked
                     .Where(c => !assignedTopicPartitions.Contains(c.TopicPartition))
-                        .ToImmutableHashSet());
+                    .ToImmutableHashSet());
             }
 
-            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer){}
+            public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer)
+            {
+            }
         }
 
-        protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler) => 
-           new PartitionEventHandlers.Chain(new FlushMessagesOfRevokedPartitionsHandler(this), handler);
+        protected override IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler) =>
+            new PartitionEventHandlers.Chain(new FlushMessagesOfRevokedPartitionsHandler(this), handler);
 
         private void PartitionsAssigned(IImmutableSet<TopicPartition> partitions)
         {
             TopicPartitions = TopicPartitions.Union(partitions);
-            Log.Debug("[{0}] Partitions were assigned: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
+            Log.Debug("[{0}] Partitions were assigned: {1}. All partitions: {2}", ConsumerActor.Path.Name,
+                string.Join(", ", partitions), string.Join(", ", TopicPartitions));
             RequestMessages();
         }
-        
+
         private void PartitionsRevoked(IImmutableSet<TopicPartitionOffset> partitions)
         {
             TopicPartitions = TopicPartitions.Except(partitions.Select(tpo => tpo.TopicPartition));
-            Log.Debug("[{0}] Partitions were revoked: {1}. All partitions: {2}", ConsumerActor.Path.Name, string.Join(", ", partitions), string.Join(", ", TopicPartitions));
+            Log.Debug("[{0}] Partitions were revoked: {1}. All partitions: {2}", ConsumerActor.Path.Name,
+                string.Join(", ", partitions), string.Join(", ", TopicPartitions));
         }
     }
 }
