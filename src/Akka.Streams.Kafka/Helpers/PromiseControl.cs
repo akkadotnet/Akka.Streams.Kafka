@@ -75,7 +75,7 @@ namespace Akka.Streams.Kafka.Helpers
         
         public Task IsShutdown => _shutdownTaskSource.Task;
         
-        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
+        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefaultAsync(streamCompletion);
 
         /// <summary>
         /// Performs source logic stop

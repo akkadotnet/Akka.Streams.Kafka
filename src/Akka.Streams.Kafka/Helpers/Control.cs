@@ -42,12 +42,55 @@ namespace Akka.Streams.Kafka.Helpers
     }
 
     /// <summary>
+    /// Helper class for creating a <see cref="DrainingControl{T}"/> instances.
+    /// </summary>
+    public static class DrainingControl
+    {
+        public static DrainingControl<T> Create<T>(IControl control, Task<T> streamCompletion)=> DrainingControl<T>.Create(control, streamCompletion);
+        
+        /// <summary>
+        /// Stop producing messages from the `Source`, wait for stream completion
+        /// and shut down the consumer `Source` so that all consumed messages
+        /// reach the end of the stream.
+        /// Failures in stream completion will be propagated, the source will be shut down anyway.
+        /// </summary>
+        internal static async Task<TResult> DrainAndShutdownDefaultAsync<TResult>(this IControl control, Task<TResult> streamCompletion)
+        {
+            TResult result;
+
+            try
+            {
+                await control.Stop();
+                result = await streamCompletion;
+            }
+            catch (Exception completionError)
+            {
+                try
+                {
+                    await control.Shutdown();
+                    return await streamCompletion;
+                }
+                catch (Exception)
+                {
+                    throw completionError;
+                }
+            }
+            finally
+            {
+                await control.Shutdown();
+            }
+
+            return result;
+        }
+    }
+
+    /// <summary>
     /// Combine control and a stream completion signal materialized values into
     /// one, so that the stream can be stopped in a controlled way without losing
     /// commits.
     /// </summary>
     /// <typeparam name="T">Stream completion result type</typeparam>
-    public class DrainingControl<T> : IControl
+    public sealed class DrainingControl<T> : IControl
     {
         public IControl Control { get; }
         public Task<T> StreamCompletion { get; }
@@ -107,7 +150,7 @@ namespace Akka.Streams.Kafka.Helpers
     /// <summary>
     /// An implementation of Control to be used as an empty value, all methods return a failed task.
     /// </summary>
-    public class NoopControl : IControl
+    public sealed class NoopControl : IControl
     {
         private static Exception Exception => new("The correct Consumer.Control has not been assigned, yet.");
         
@@ -117,6 +160,6 @@ namespace Akka.Streams.Kafka.Helpers
         
         public Task IsShutdown => Task.FromException(Exception);
         
-        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
+        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefaultAsync(streamCompletion);
     }
 }
