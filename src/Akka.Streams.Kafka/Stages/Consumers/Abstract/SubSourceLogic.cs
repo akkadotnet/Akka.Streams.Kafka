@@ -158,7 +158,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             _decider = supervisionStrategy != null ? supervisionStrategy.Decider : Deciders.StoppingDecider;
 
-            Control = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, GetAsyncCallback,
+            Control = new SubSourcePromiseControl(_shape, Complete, SetKeepGoing, GetAsyncCallback, 
                 PerformStop, PerformShutdown);
 
             _updatePendingPartitionsAndEmitSubSourcesCallback =
@@ -173,7 +173,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 GetAsyncCallback<(IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>)>(
                     OffsetsFromExternalResponseCallback);
 
-            SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: PerformShutdown);
+            SetHandler(shape.Outlet, onPull: EmitSubSourcesForPendingPartitions, onDownstreamFinish: _ => PerformShutdown());
         }
 
         protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
@@ -312,7 +312,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _partitionsToRevoke.ForEach(tp =>
                 {
                     if (_subSources.TryGetValue(tp, out var source))
-                        source.ControlAndStageActor.Control.Shutdown(PartitionWasRevoked.Instance);
+                        source.ControlAndStageActor.Control.Shutdown();
                 });
                 _subSources = _subSources.RemoveRange(_partitionsToRevoke);
                 _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
@@ -436,7 +436,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             if (!_partitionsInStartup.Contains(tp))
             {
                 // Partition was revoked while starting up. Kill!
-                control.Shutdown(PartitionWasRevoked.Instance);
+                control.Shutdown();
             }
             else
             {
@@ -494,15 +494,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             Control.OnStop();
         }
 
-        private void PerformShutdown(Exception? ex)
+        private void PerformShutdown()
         {
-            if (ex is not null and not SubscriptionWithCancelException.NonFailureCancellation)
-                Log.Info(ex, $"{nameof(SubSourceLogic<K, V, TMessage>)} was shutdown due to exception");
-
+            Log.Info("Completing. Partitions [{0}], StageActor {1}", string.Join(", ", _subSources.Keys), SourceActor.Ref);
             SetKeepGoing(true);
 
             // TODO from alpakka: we should wait for subsources to be shutdown and next shutdown main stage
-            _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Shutdown(ex));
+            _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Shutdown());
 
             if (!IsClosed(_shape.Outlet))
                 Complete(_shape.Outlet);
@@ -533,29 +531,22 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected class SubSourcePromiseControl : PromiseControl<(TopicPartition, Source<TMessage, NotUsed>)>
         {
             private readonly Action _performStop;
-            private readonly Action<Exception?> _performShutdown;
 
             public SubSourcePromiseControl(SourceShape<(
                     TopicPartition,
                     Source<TMessage, NotUsed>)> shape,
                 Action<Outlet<(TopicPartition, Source<TMessage, NotUsed>)>> completeStageOutlet,
                 Action<bool> setStageKeepGoing,
-                Func<Action, Action> asyncCallbackFactory,
-                Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
+                Func<Action<PromiseControl.IControlOperation>, Action<PromiseControl.IControlOperation>> asyncCallbackFactory,
                 Action performStop,
-                Action<Exception?> performShutdown)
+                Action performShutdown)
                 : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory,
-                    asyncShutdownCallbackFactory)
+                   performShutdown)
             {
                 _performStop = performStop;
-                _performShutdown = performShutdown;
             }
-
-            /// <inheritdoc />
-            public override void PerformStop() => _performStop();
-
-            /// <inheritdoc />
-            public override void PerformShutdown(Exception? ex) => _performShutdown(ex);
+            
+            protected override void PerformStop() => _performStop();
         }
     }
 
@@ -659,16 +650,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             _requestMessages =
                 new KafkaConsumerActorMetadata.Internal.RequestMessages(0, ImmutableHashSet.Create(topicPartition));
 
-            Control = new SubSourceStreamPromiseControl(
-                shape: shape,
-                completeStageOutlet: Complete,
-                setStageKeepGoing: SetKeepGoing,
-                asyncCallbackFactory: GetAsyncCallback,
-                asyncShutdownCallbackFactory: GetAsyncCallback,
-                debugLog: (message, args) => Log.Debug(message, args),
-                actorNumber: actorNumber,
-                topicPartition: topicPartition,
-                completeStage: ex => CompleteStage());
+            Control = new PromiseControl<TMessage>(shape, Complete, SetKeepGoing, GetAsyncCallback, PerformShutdown);
 
             SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: ex =>
             {
@@ -720,8 +702,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public override void PostStop()
         {
+            // TODO: need to try to shut consumer actor down here
             Control.OnShutdown();
-
             base.PostStop();
         }
 
@@ -749,37 +731,10 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             }
         }
 
-        private class SubSourceStreamPromiseControl : PromiseControl<TMessage>
+        private void PerformShutdown()
         {
-            private readonly Action<string, object[]> _debugLog;
-            private readonly int _actorNumber;
-            private readonly TopicPartition _topicPartition;
-            private readonly Action<Exception?> _completeStage;
-
-            public SubSourceStreamPromiseControl(
-                SourceShape<TMessage> shape,
-                Action<Outlet<TMessage>> completeStageOutlet,
-                Action<bool> setStageKeepGoing,
-                Func<Action, Action> asyncCallbackFactory,
-                Func<Action<Exception?>, Action<Exception?>> asyncShutdownCallbackFactory,
-                Action<string, object[]> debugLog,
-                int actorNumber,
-                TopicPartition topicPartition,
-                Action<Exception?> completeStage)
-                : base(shape, completeStageOutlet, setStageKeepGoing, asyncCallbackFactory,
-                    asyncShutdownCallbackFactory)
-            {
-                _debugLog = debugLog;
-                _actorNumber = actorNumber;
-                _topicPartition = topicPartition;
-                _completeStage = completeStage;
-            }
-
-            public override void PerformShutdown(Exception? ex)
-            {
-                _debugLog("#{0} Completing SubSource for partition {1}", [_actorNumber, _topicPartition]);
-                _completeStage(ex);
-            }
+            Log.Info("Completing. Partition {0}", _topicPartition);
+            CompleteStage();
         }
     }
 }

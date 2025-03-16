@@ -28,7 +28,7 @@ namespace Akka.Streams.Kafka.Extensions
             {
                 try
                 {
-                    await control.Shutdown(completionError);
+                    await control.Shutdown();
                     return await streamCompletion;
                 }
                 catch (Exception ex)
@@ -37,7 +37,7 @@ namespace Akka.Streams.Kafka.Extensions
                 }
             }
 
-            await control.Shutdown(SubscriptionWithCancelException.StageWasCompleted.Instance);
+            await control.Shutdown();
 
             return result;
         }
