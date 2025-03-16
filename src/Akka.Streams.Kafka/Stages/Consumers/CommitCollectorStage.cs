@@ -77,10 +77,11 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
                 {
                     PushDownStream(CommitTrigger.BatchSize.Instance);
                 }
-                else
-                {
-                    TryPull(Stage.In);
-                }
+                
+            }
+            else
+            {
+                TryPull(Stage.In);
             }
         }
 

@@ -23,7 +23,9 @@ namespace Akka.Streams.Kafka.Tests.Internal;
 
 public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 {
-    public CommitCollectorStageSpecs(ITestOutputHelper output) : base(KafkaExtensions.DefaultSettings, output: output)
+    private static readonly Akka.Configuration.Config Config = "akka.loglevel=DEBUG";
+    
+    public CommitCollectorStageSpecs(ITestOutputHelper output) : base(Config.WithFallback(KafkaExtensions.DefaultSettings), output: output)
     {
         DefaultCommitterSettings = CommitterSettings.Create(Sys);
     }
