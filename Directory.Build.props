@@ -1,15 +1,15 @@
 <Project>
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Generated.props', '$(MSBuildThisFileDirectory)'))" />
   <PropertyGroup>
-    <Copyright>Copyright Â© 2015-2025 Akka.NET Team</Copyright>
+    <Copyright>Copyright © 2015-2025 Akka.NET Team</Copyright>
     <Authors>Akka.NET Team</Authors>
     <Tags>akka, akka.streams, kafka, akkadotnet, akka streams, akka.streams.kafka</Tags>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <VersionPrefix>1.5.39-beta2</VersionPrefix>
-    <VersionSuffix>beta2</VersionSuffix>
+    <VersionPrefix>1.5.39</VersionPrefix>
+    <PackageReleaseNotes>[Upgraded to Akka.NET v1.5.39](https://github.com/akkadotnet/akka.net/releases/tag/1.5.39)
+[Resolved: Kafka Producer - Exception occured inside SelectAsync - Cancellation cause must not be null](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/426)</PackageReleaseNotes>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Visual Studio C# settings -->
