@@ -1,17 +1,21 @@
 using System;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Stages.Consumers;
+using Akka.Streams.Kafka.Tests.TestKit;
 using Akka.Streams.Kafka.Tests.TestKit.Internal;
 using Akka.Streams.TestKit;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
+using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,7 +23,7 @@ namespace Akka.Streams.Kafka.Tests.Internal;
 
 public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 {
-    public CommitCollectorStageSpecs(ITestOutputHelper output) : base(output: output)
+    public CommitCollectorStageSpecs(ITestOutputHelper output) : base(KafkaExtensions.DefaultSettings, output: output)
     {
         DefaultCommitterSettings = CommitterSettings.Create(Sys);
     }
@@ -30,22 +34,51 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     [Fact]
     public async Task CommitCollectorStage_when_BatchIsFull_batch_commit_without_errors()
     {
+        var settings = DefaultCommitterSettings.WithMaxBatch(2).WithMaxInterval(TimeSpan.FromHours(10));
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        var (msg1, msg2) = (offsetFactory.MakeOffset(), offsetFactory.MakeOffset());
+        
+        await sinkProbe.RequestAsync(100);
+        
+        // first message should nolt be committed but 'batched-up'
+        sourceProbe.SendNext(msg1);
+        await sourceProbe.ExpectNoMsgAsync(MessageAbsenceTimeout);
+        offsetFactory.Committer.Commits.Should().BeEmpty();
+        
+        // now send second message to complete the batch
+        sourceProbe.SendNext(msg2);
+        
+        var committedBatch = await sinkProbe.ExpectNextAsync();
+        
+        committedBatch.BatchSize.Should().Be(2);
+        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
+        committedBatch.Offsets.Last().Offset.Should().Be(msg2.Offset.Offset);
+        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+
+        control.IsShutdown.IsCompleted.Should().BeTrue();
     }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
         TestSubscriber.Probe<ICommittableOffsetBatch> subscriber) StreamProbes(CommitterSettings committerSettings)
     {
         var flow = Committer.BatchFlow(committerSettings);
-        
-        var ((source, control), sink)  = this.SourceProbe<ICommittable>()
-            .ViaMaterialized(ConsumerCon)
+
+        var ((source, control), sink) = this.SourceProbe<ICommittable>()
+            .ViaMaterialized(ConsumerControlFactory.ControlFlow<ICommittable>(), Keep.Both)
+            .Via(flow)
+            .ToMaterialized(this.SinkProbe<ICommittableOffsetBatch>(), Keep.Both)
+            .Run(Sys);
+
+        return (source, control, sink);
     }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
         TestSubscriber.Probe<ICommittableOffsetBatch> subscriber, TestOffsetFactory factory)
         StreamProbesWithOffsetFactory(CommitterSettings committerSettings)
     {
-        
+        var (source, control, sink) = StreamProbes(committerSettings);
+        var factory = new TestOffsetFactory(new TestBatchCommitter(Sys, committerSettings));
+        return (source, control, sink, factory);
     }
 }
 
@@ -62,6 +95,7 @@ public static class TestCommittableOffset
 
 public class TestOffsetFactory(TestBatchCommitter committer)
 {
+    public TestBatchCommitter Committer => committer;
     private readonly AtomicCounterLong _offsetCounter = new AtomicCounterLong(0);
 
     public ICommittableOffset MakeOffset(Option<Exception> failWith = default, int partitionNum = 1)
@@ -80,6 +114,8 @@ public class TestBatchCommitter
     private readonly ActorSystem _system;
     public CommitterSettings CommitSettings { get; }
     public Func<TimeSpan> CommitDelay { get; }
+    
+    public TestBatchCommitter(ActorSystem system, CommitterSettings commitSettings) : this(system, commitSettings, () => TimeSpan.Zero) { }
 
     public TestBatchCommitter(ActorSystem system, CommitterSettings commitSettings, Func<TimeSpan> commitDelay)
     {
