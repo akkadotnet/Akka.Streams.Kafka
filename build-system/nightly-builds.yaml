@@ -20,12 +20,8 @@ jobs:
       vmImage: windows-latest
       demands: Cmd
     steps:
-      - script: dotnet restore
-        displayName: 'Restore packages'
-
-      # Update version from RELEASE_NOTES.md
-      - script: .\version.ps1
-        displayName: 'Update version from RELEASE_NOTES.md'
+      - powershell: ./build.ps1
+        displayName: 'Update Release Notes'
 
       # Update version with beta suffix
       - pwsh: |
