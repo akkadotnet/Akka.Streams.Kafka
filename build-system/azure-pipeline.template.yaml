@@ -59,3 +59,8 @@ jobs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)/nuget'
           ArtifactName: 'nuget'
           publishLocation: 'Container'
+
+      - script: 'echo 1>&2'
+        failOnStderr: true
+        displayName: 'If above is partially succeeded, then fail'
+        condition: eq(variables['Agent.JobStatus'], 'SucceededWithIssues')
