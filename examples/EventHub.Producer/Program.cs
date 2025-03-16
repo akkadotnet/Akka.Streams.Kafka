@@ -47,7 +47,7 @@ namespace EventHub.Producer
                 .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(producerSettings))
                 .Select(result =>
                 {
-                    var response = result as Result<Null, string, NotUsed>;
+                    var response = (Result<Null, string, NotUsed>)result;
                     Console.WriteLine($"Producer: {response.Metadata.Topic}/{response.Metadata.Partition} {response.Metadata.Offset}: {response.Metadata.Value}");
                     return result;
                 })

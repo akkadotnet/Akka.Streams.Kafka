@@ -18,7 +18,7 @@ namespace Kafka.Partitioned.Consumer.Actors
         private readonly ILoggingAdapter _log;
         private readonly ConsumerSettings<TKey, TValue> _settings;
         private readonly ISubscription _subscription;
-        private DrainingControl<NotUsed> _control;
+        private DrainingControl<NotUsed>? _control;
         private readonly Random _rnd = new Random();
         
         public ConsumerWorkerActor(ConsumerSettings<TKey, TValue> settings, ISubscription subscription)
