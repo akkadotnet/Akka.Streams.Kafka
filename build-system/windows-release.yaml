@@ -1,9 +1,5 @@
-# Release task for PbLib projects
+# Release task for Akka.Streams.Kafka
 # See https://docs.microsoft.com/en-us/azure/devops/pipelines/yaml-schema for reference
-
-pool:
-  vmImage: windows-latest
-  demands: Cmd
 
 trigger:
   branches:
@@ -12,8 +8,7 @@ trigger:
 pr: none
 
 variables:
-  - group: signingSecrets #create this group with SECRET variables `signingUsername` and `signingPassword`
-  - group: nugetKeys #create this group with SECRET variables `nugetKey`
+  - group: nugetKeys
   - name: githubConnectionName
     value: AkkaDotNet_Releases
   - name: projectName
@@ -21,23 +16,31 @@ variables:
   - name: githubRepositoryName
     value: akkadotnet/Akka.Streams.Kafka
 
-steps:
-- task: UseDotNet@2
-  displayName: 'Use .NET Core SDK 7'
-  inputs:
-    version: 9.x
-- task: BatchScript@1
-  displayName: 'FAKE Build'
-  inputs:
-    filename: build.cmd
-    arguments: 'nuget nugetpublishurl=https://api.nuget.org/v3/index.json nugetkey=$(nugetKey)'
+jobs:
+  - job: Release
+    pool:
+      vmImage: windows-latest
+      demands: Cmd
+    steps:
+      - script: dotnet restore
+        displayName: 'Restore packages'
 
-- task: GitHubRelease@0
-  displayName: 'GitHub release (create)'
-  inputs:
-    gitHubConnection: $(githubConnectionName)
-    repositoryName: $(githubRepositoryName)
-    title: '$(projectName) v$(Build.SourceBranchName)'
-    releaseNotesFile: 'RELEASE_NOTES.md'
-    assets: |
-     bin\nuget\*.nupkg
+      # Update version from RELEASE_NOTES.md
+      - script: .\version.ps1
+        displayName: 'Update version from RELEASE_NOTES.md'
+
+      # Pack without version suffix for release
+      - script: dotnet pack -c Release -o $(Build.ArtifactStagingDirectory)/nuget
+        displayName: 'Create packages'
+
+      - script: dotnet nuget push "$(Build.ArtifactStagingDirectory)\nuget\*.nupkg" --api-key $(nugetKey) --source https://api.nuget.org/v3/index.json --skip-duplicate
+        displayName: 'Publish to NuGet.org'
+
+      - task: GitHubRelease@0
+        displayName: 'GitHub release (create)'
+        inputs:
+          gitHubConnection: $(githubConnectionName)
+          repositoryName: $(githubRepositoryName)
+          title: '$(projectName) v$(Build.SourceBranchName)'
+          releaseNotesFile: 'RELEASE_NOTES.md'
+          assets: '$(Build.ArtifactStagingDirectory)/nuget/*.nupkg'

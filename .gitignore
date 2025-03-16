@@ -204,3 +204,4 @@ build/
 .nuget/
 .dotnet/
 .idea
+/.cursor

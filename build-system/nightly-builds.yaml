@@ -1,9 +1,5 @@
-# Release task for PbLib projects
+# Nightly build task for Akka.Streams.Kafka
 # See https://docs.microsoft.com/en-us/azure/devops/pipelines/yaml-schema for reference
-
-pool:
-  vmImage: windows-latest
-  demands: Cmd
 
 trigger: none
 pr: none
@@ -16,16 +12,32 @@ schedules:
     - dev
 
 variables:
-  - group: nugetKeys #create this group with SECRET variables `nugetKey`
+  - group: nugetKeys
 
-steps:
-  - task: UseDotNet@2
-    displayName: 'Use .NET Core SDK 9'
-    inputs:
-      packageType: sdk
-      version: 9.x
-  - task: BatchScript@1
-    displayName: 'FAKE Build'
-    inputs:
-      filename: build.cmd
-      arguments: 'Nuget nugetprerelease=dev nugetpublishurl=$(nightlyUrl) nugetkey=$(nightlyKey)'
+jobs:
+  - job: Nightly
+    pool:
+      vmImage: windows-latest
+      demands: Cmd
+    steps:
+      - script: dotnet restore
+        displayName: 'Restore packages'
+
+      # Update version from RELEASE_NOTES.md
+      - script: .\version.ps1
+        displayName: 'Update version from RELEASE_NOTES.md'
+
+      # Update version with beta suffix
+      - script: |
+          $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm")
+          $suffix = "beta$timestamp"
+          echo "##vso[task.setvariable variable=VersionSuffix]$suffix"
+        displayName: 'Generate version suffix'
+        powershell: true
+
+      # Pack with version suffix
+      - script: dotnet pack -c Release --version-suffix $(VersionSuffix) -o $(Build.ArtifactStagingDirectory)/nuget
+        displayName: 'Create packages'
+
+      - script: dotnet nuget push "$(Build.ArtifactStagingDirectory)\nuget\*.nupkg" --api-key $(nightlyKey) --source $(nightlyUrl) --skip-duplicate
+        displayName: 'Publish to internal feed'

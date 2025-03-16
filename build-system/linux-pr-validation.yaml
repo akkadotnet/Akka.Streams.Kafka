@@ -14,9 +14,8 @@ pr:
     include: [ dev, master ] # branch names which will trigger a build
 
 jobs:
-- template: azure-pipeline.template.yaml
-  parameters:
-    name: Ubuntu
-    vmImage: 'ubuntu-latest'
-    scriptFileName: ./build.sh
-    scriptArgs: all
+  - template: azure-pipeline.template.yaml
+    parameters:
+      name: Linux
+      vmImage: 'ubuntu-latest'
+      timeoutInMinutes: 120
