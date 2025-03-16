@@ -32,91 +32,106 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     {
     }
 
-    //private (TestPublisher.Probe<ICommittable> publisher, IControl control, TestSubscriber.Probe<ICommittableOffsetBatch> subscriber)
+    private (TestPublisher.Probe<ICommittable> publisher, IControl control,
+        TestSubscriber.Probe<ICommittableOffsetBatch> subscriber) StreamProbes(CommitterSettings committerSettings)
+    {
+        var flow = Committer.BatchFlow(committerSettings);
+        
+        var ((source, control), sink)  = this.SourceProbe<ICommittable>()
+            .ViaMaterialized(ConsumerCon)
+    }
+
+    private (TestPublisher.Probe<ICommittable> publisher, IControl control,
+        TestSubscriber.Probe<ICommittableOffsetBatch> subscriber, TestOffsetFactory factory)
+        StreamProbesWithOffsetFactory(CommitterSettings committerSettings)
+    {
+        
+    }
 }
 
-    public static class TestCommittableOffset
+public static class TestCommittableOffset
+{
+    public static ICommittableOffset Create(AtomicCounterLong offsetCounter,
+        TestBatchCommitter committer, Option<Exception> failWith = default, int partitionNum = 1)
     {
-        public static ICommittableOffset Create(AtomicCounterLong offsetCounter,
-            TestBatchCommitter committer, Option<Exception> failWith = default, int partitionNum = 1)
-        {
-            return new CommittableOffset(committer.Underlying,
-                ConsumerResultFactory.PartitionOffset("group1", "topic1", partitionNum,
-                    offsetCounter.IncrementAndGet()), "metadata1");
-        }
+        return new CommittableOffset(committer.Underlying,
+            ConsumerResultFactory.PartitionOffset("group1", "topic1", partitionNum,
+                offsetCounter.IncrementAndGet()), "metadata1");
+    }
+}
+
+public class TestOffsetFactory(TestBatchCommitter committer)
+{
+    private readonly AtomicCounterLong _offsetCounter = new AtomicCounterLong(0);
+
+    public ICommittableOffset MakeOffset(Option<Exception> failWith = default, int partitionNum = 1)
+    {
+        return TestCommittableOffset.Create(_offsetCounter, committer, failWith, partitionNum);
     }
 
-    public class TestOffsetFactory(TestBatchCommitter committer)
+    public ICommittableOffsetBatch MakeBatch(Option<Exception> failWith = default, int partitionNum = 1)
     {
-        private readonly AtomicCounterLong _offsetCounter = new AtomicCounterLong(0);
+        return CommittableOffsetBatch.Create(MakeOffset(failWith, partitionNum));
+    }
+}
 
-        public ICommittableOffset MakeOffset(Option<Exception> failWith = default, int partitionNum = 1)
-        {
-            return TestCommittableOffset.Create(_offsetCounter, committer, failWith, partitionNum);
-        }
+public class TestBatchCommitter
+{
+    private readonly ActorSystem _system;
+    public CommitterSettings CommitSettings { get; }
+    public Func<TimeSpan> CommitDelay { get; }
 
-        public ICommittableOffsetBatch MakeBatch(Option<Exception> failWith = default, int partitionNum = 1)
-        {
-            return CommittableOffsetBatch.Create(MakeOffset(failWith, partitionNum));
-        }
+    public TestBatchCommitter(ActorSystem system, CommitterSettings commitSettings, Func<TimeSpan> commitDelay)
+    {
+        _system = system;
+        CommitSettings = commitSettings;
+        CommitDelay = commitDelay;
+        Underlying = new TestCommitterConsumer(this);
     }
 
-    public class TestBatchCommitter
+    public IImmutableList<TopicPartitionOffset> Commits { get; private set; } =
+        ImmutableList<TopicPartitionOffset>.Empty;
+
+    private Task CompleteCommit()
     {
-        private readonly ActorSystem _system;
-        public CommitterSettings CommitSettings { get; }
-        public Func<TimeSpan> CommitDelay { get; }
+        var promisedCommit = new TaskCompletionSource();
+        _system.Scheduler.Advanced.ScheduleOnce(CommitDelay(), () => { promisedCommit.SetResult(); });
+        return promisedCommit.Task;
+    }
 
-        public TestBatchCommitter(ActorSystem system, CommitterSettings commitSettings, Func<TimeSpan> commitDelay)
+    internal KafkaAsyncConsumerCommitter Underlying { get; }
+
+    private class TestCommitterConsumer : KafkaAsyncConsumerCommitter
+    {
+        private readonly TestBatchCommitter _committer;
+
+        public TestCommitterConsumer(TestBatchCommitter committer) : base(() => ActorRefs.Nobody,
+            committer.CommitSettings.MaxInterval)
         {
-            _system = system;
-            CommitSettings = commitSettings;
-            CommitDelay = commitDelay;
-            Underlying = new TestCommitterConsumer(this);
+            _committer = committer;
         }
 
-        public IImmutableList<TopicPartitionOffset> Commits { get; private set; } =
-            ImmutableList<TopicPartitionOffset>.Empty;
-
-        private Task CompleteCommit()
+        public override Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
         {
-            var promisedCommit = new TaskCompletionSource();
-            _system.Scheduler.Advanced.ScheduleOnce(CommitDelay(), () => { promisedCommit.SetResult(); });
-            return promisedCommit.Task;
+            var commit = new TopicPartitionOffset(topicPartition, offsetAndMetadata.Offset);
+            _committer.Commits = _committer.Commits.Add(commit);
+            return _committer.CompleteCommit();
         }
 
-        internal KafkaAsyncConsumerCommitter Underlying { get; }
-
-        private class TestCommitterConsumer : KafkaAsyncConsumerCommitter
+        public override Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
         {
-            private readonly TestBatchCommitter _committer;
+            // CommittableOffsetBatchImpl.offsetsAndMetadata points the next committed message.
+            // So to get committed message offset we need to subtract 1
+            var commitOffset = offsetAndMetadata.Offset - 1;
+            var commit = new TopicPartitionOffset(topicPartition, commitOffset);
+            _committer.Commits = _committer.Commits.Add(commit);
+            return _committer.CompleteCommit();
+        }
 
-            public TestCommitterConsumer(TestBatchCommitter committer) : base(() => ActorRefs.Nobody,
-                committer.CommitSettings.MaxInterval)
-            {
-                _committer = committer;
-            }
-
-            public override Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
-            {
-                var commit = new TopicPartitionOffset(topicPartition, offsetAndMetadata.Offset);
-                _committer.Commits = _committer.Commits.Add(commit);
-                return _committer.CompleteCommit();
-            }
-            
-            public override Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
-            {
-                // CommittableOffsetBatchImpl.offsetsAndMetadata points the next committed message.
-                // So to get committed message offset we need to subtract 1
-                var commitOffset = offsetAndMetadata.Offset - 1;
-                var commit = new TopicPartitionOffset(topicPartition, commitOffset);
-                _committer.Commits = _committer.Commits.Add(commit);
-                return _committer.CompleteCommit();
-            }
-            
-            public override void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata, bool emergency)
-            {
-                _ = CommitOneOfMany(topicPartition, offsetAndMetadata);
-            }
+        public override void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata,
+            bool emergency)
+        {
+            _ = CommitOneOfMany(topicPartition, offsetAndMetadata);
         }
     }
+}
