@@ -10,30 +10,17 @@ jobs:
       vmImage: ${{ parameters.vmImage }}
     
     steps:
-      - task: UseDotNet@2
-        displayName: 'Install .NET SDK'
-        inputs:
-          useGlobalJson: true
+      - script: dotnet --info
+        displayName: 'Show dotnet SDK info'
           
-      - task: PowerShell@2
-        displayName: 'Update version from RELEASE_NOTES.md'
-        inputs:
-          filePath: './version.ps1'
+      - script: dotnet restore
+        displayName: 'Restore packages'
           
-      - task: DotNetCoreCLI@2
+      - script: dotnet build -c Release
         displayName: 'Build'
-        inputs:
-          command: 'build'
-          projects: '**/*.sln'
-          arguments: '-c Release'
           
-      - task: DotNetCoreCLI@2
+      - script: dotnet test -c Release --no-build --logger:trx
         displayName: 'Run tests'
-        inputs:
-          command: 'test'
-          projects: '**/*.Tests.csproj'
-          arguments: '-c Release --no-build'
-          publishTestResults: true
           
       - task: PublishTestResults@2
         displayName: 'Publish test results'
@@ -44,14 +31,8 @@ jobs:
           mergeTestResults: true
         condition: succeededOrFailed()
           
-      - task: DotNetCoreCLI@2
-        displayName: 'Package'
-        inputs:
-          command: 'pack'
-          configuration: Release
-          packDirectory: '$(Build.ArtifactStagingDirectory)/nuget'
-          nobuild: true
-          verbosityPack: 'normal'
+      - script: dotnet pack -c Release --no-build -o $(Build.ArtifactStagingDirectory)/nuget
+        displayName: 'Create packages'
           
       - task: PublishBuildArtifacts@1
         displayName: 'Publish artifacts'
