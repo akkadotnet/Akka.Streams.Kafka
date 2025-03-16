@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Akka.Streams.Kafka.Extensions;
 
 namespace Akka.Streams.Kafka.Helpers
 {

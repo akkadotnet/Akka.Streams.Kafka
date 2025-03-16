@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 
-#nullable enable
 namespace Akka.Streams.Kafka.Helpers
 {
     /// <summary>
@@ -101,6 +100,14 @@ namespace Akka.Streams.Kafka.Helpers
     /// <typeparam name="T">Stream completion result type</typeparam>
     public sealed class DrainingControl<T> : IControl
     {
+        /// <summary>
+        /// Combine control and a stream completion signal materialized values into
+        /// one, so that the stream can be stopped in a controlled way without losing
+        /// commits.
+        /// </summary>
+        public static DrainingControl<T> Create(IControl control, Task<T> streamCompletion) =>
+            new DrainingControl<T>(control, streamCompletion);
+        
         public IControl Control { get; }
         public Task<T> StreamCompletion { get; }
 
@@ -126,13 +133,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         public Task<T> DrainAndShutdown() => Control.DrainAndShutdown(StreamCompletion);
 
-        /// <summary>
-        /// Combine control and a stream completion signal materialized values into
-        /// one, so that the stream can be stopped in a controlled way without losing
-        /// commits.
-        /// </summary>
-        public static DrainingControl<T> Create(IControl control, Task<T> streamCompletion) =>
-            new DrainingControl<T>(control, streamCompletion);
+       
 
         /// <summary>
         /// Combine control and a stream completion signal materialized values into
