@@ -20,9 +20,6 @@ jobs:
       vmImage: windows-latest
       demands: Cmd
     steps:
-      - script: dotnet restore
-        displayName: 'Restore packages'
-
       - powershell: ./build.ps1
         displayName: 'Update Release Notes'
 

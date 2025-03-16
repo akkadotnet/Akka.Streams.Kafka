@@ -12,9 +12,6 @@ jobs:
     steps:
       - script: dotnet --info
         displayName: 'Show dotnet SDK info'
-          
-      - script: dotnet restore
-        displayName: 'Restore packages'
 
       # Update version from RELEASE_NOTES.md
       - powershell: ./build.ps1
