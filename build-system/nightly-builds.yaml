@@ -28,12 +28,11 @@ jobs:
         displayName: 'Update version from RELEASE_NOTES.md'
 
       # Update version with beta suffix
-      - script: |
+      - pwsh: |
           $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm")
           $suffix = "beta$timestamp"
           echo "##vso[task.setvariable variable=VersionSuffix]$suffix"
         displayName: 'Generate version suffix'
-        powershell: true
 
       # Pack with version suffix
       - script: dotnet pack -c Release --version-suffix $(VersionSuffix) -o $(Build.ArtifactStagingDirectory)/nuget
