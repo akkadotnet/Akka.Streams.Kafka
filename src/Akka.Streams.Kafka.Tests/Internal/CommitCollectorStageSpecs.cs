@@ -12,6 +12,7 @@ using Akka.Streams.Kafka.Stages.Consumers;
 using Akka.Streams.Kafka.Tests.TestKit;
 using Akka.Streams.Kafka.Tests.TestKit.Internal;
 using Akka.Streams.TestKit;
+using Akka.TestKit.Extensions;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
@@ -57,7 +58,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         committedBatch.Offsets.Last().Offset.Should().Be(msg2.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
-        control.IsShutdown.IsCompleted.Should().BeTrue();
+        await control.IsShutdown.WaitAsync(TimeSpan.FromSeconds(3));
     }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
