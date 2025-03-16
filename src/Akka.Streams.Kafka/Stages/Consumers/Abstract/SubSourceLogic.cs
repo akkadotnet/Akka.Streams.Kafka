@@ -486,11 +486,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         private void PerformStop()
         {
             SetKeepGoing(true);
-
             _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Stop());
-
             Complete(_shape.Outlet);
-
             Control.OnStop();
         }
 

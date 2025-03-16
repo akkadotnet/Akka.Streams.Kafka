@@ -350,8 +350,7 @@ public class RebalanceExtTests : KafkaIntegrationTests
             await Task.WhenAll(topicMetadata.TpFutureMap.Values.Select(t => t.Task)).WaitAsync(RemainingOrDefault);
 
             // shutdown the consumers
-            Assert.True(control1.Shutdown().IsCompleted);
-            //Assert.True(control2.Shutdown().IsCompleted); // TODO: this is still buggy
+            await Task.WhenAll(control1.Shutdown(), control2.Shutdown()).WaitAsync(RemainingOrDefault);
             sharedKillSwitch1.Shutdown();
             sharedKillSwitch2.Shutdown();
 
