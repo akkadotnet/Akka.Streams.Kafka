@@ -62,13 +62,15 @@ namespace Akka.Streams.Kafka.Helpers
         
         public Task Stop()
         {
-            _controlCallback(PromiseControl.ControlStop.Instance);
+            if(!_stopTaskSource.Task.IsCompleted)
+                _controlCallback(PromiseControl.ControlStop.Instance);
             return _stopTaskSource.Task;
         }
         
         public Task Shutdown()
         {
-            _controlCallback(PromiseControl.ControlShutdown.Instance);
+            if(!_shutdownTaskSource.Task.IsCompleted)
+                _controlCallback(PromiseControl.ControlShutdown.Instance);
             return _shutdownTaskSource.Task;
         }
         
