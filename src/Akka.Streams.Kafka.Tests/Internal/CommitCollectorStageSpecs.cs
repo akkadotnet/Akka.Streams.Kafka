@@ -43,7 +43,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         
         await sinkProbe.RequestAsync(100);
         
-        // first message should nolt be committed but 'batched-up'
+        // first message should not be committed but 'batched-up'
         sourceProbe.SendNext(msg1);
         await sourceProbe.ExpectNoMsgAsync(MessageAbsenceTimeout);
         offsetFactory.Committer.Commits.Should().BeEmpty();
@@ -58,7 +58,52 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         committedBatch.Offsets.Last().Offset.Should().Be(msg2.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
-        await control.IsShutdown.WaitAsync(TimeSpan.FromSeconds(3));
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
+    }
+    
+    [Fact]
+    public async Task CommitCollectorStage_when_BatchDurationHasElapsed_batch_commit_without_errors()
+    {
+        var settings = DefaultCommitterSettings.WithMaxBatch(int.MaxValue).WithMaxInterval(TimeSpan.FromMilliseconds(1));
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+      
+        await sinkProbe.RequestAsync(100);
+        
+        var msg = offsetFactory.MakeOffset();
+        
+        sourceProbe.SendNext(msg);
+        var committedBatch = await sinkProbe.ExpectNextAsync();
+        committedBatch.BatchSize.Should().Be(1);
+        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
+        committedBatch.Offsets.Last().Offset.Should().Be(msg.Offset.Offset);
+        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
+    }
+    
+    [Fact]
+    public async Task CommitCollectorStage_when_BatchDurationHasElapsed_emit_immediately_if_pending_demand()
+    {
+        var settings = DefaultCommitterSettings.WithMaxBatch(int.MaxValue).WithMaxInterval(TimeSpan.FromMilliseconds(1));
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+      
+        await sinkProbe.RequestAsync(1);
+        
+        // interval triggers, but there is no demand
+        await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(200));
+        
+        // next trigger should emit this single value immediately
+        var msg = offsetFactory.MakeOffset();
+        
+        sourceProbe.SendNext(msg);
+        var committedBatch = await sinkProbe.ExpectNextAsync(TimeSpan.FromMilliseconds(50));
+        
+        committedBatch.BatchSize.Should().Be(1);
+        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
+        committedBatch.Offsets.Last().Offset.Should().Be(msg.Offset.Offset);
+        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
