@@ -1,6 +1,7 @@
 using System;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Engines;
+using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Loggers;
@@ -24,8 +25,9 @@ public class MacroBenchmarkConfig : ManualConfig
 
         AddJob(Job.LongRun
                 .WithGcMode(new GcMode { Server = true, Concurrent = true })
-                .WithWarmupCount(5)   // Reduced from 25
-                .WithIterationCount(15) // Reduced from 50
+                .WithEvaluateOverhead(false)
+                .WithWarmupCount(3)   // Reduced from 25
+                .WithIterationCount(10) // Reduced from 50
                 .WithStrategy(RunStrategy.Monitoring)
                 //.WithAffinity(affinityMask) // Optional
         );

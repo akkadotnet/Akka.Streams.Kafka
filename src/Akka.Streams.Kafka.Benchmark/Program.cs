@@ -34,7 +34,7 @@ namespace Akka.Streams.Kafka.Benchmark
                 return;
             }
             
-            BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run(args, new DebugInProcessConfig());
+            BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run();
         }
     }
 }

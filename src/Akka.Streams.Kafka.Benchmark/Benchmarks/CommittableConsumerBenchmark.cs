@@ -12,7 +12,7 @@ using Confluent.Kafka;
 namespace Akka.Streams.Kafka.Benchmark.Benchmarks
 {
     [Config(typeof(MacroBenchmarkConfig))]
-    public class BatchCommitBenchmark : KafkaConsumerBenchmark<ICommittableOffsetBatch>
+    public class CommittableConsumerBenchmark : KafkaConsumerBenchmark<ICommittableOffsetBatch>
     {
         [Params(10, 100, 500)]
         public int PollBatchSize { get; set; }

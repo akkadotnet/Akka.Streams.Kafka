@@ -34,7 +34,11 @@ public class PlainPartitionedConsumerBenchmark : KafkaConsumerBenchmark<ConsumeR
 
         paritionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
-        return trueSource.Select(c => c).MapMaterializedValue(_ => control);
+        return trueSource.Select(c =>
+        {
+            
+            return c;
+        }).MapMaterializedValue(_ => control);
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
