@@ -51,7 +51,8 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             
             // Create unique topic and group names for this benchmark run
             BenchmarkRunId = Guid.NewGuid().ToString("N");
-            Console.WriteLine("Benchmark run ID: " + BenchmarkRunId);
+            Console.WriteLine($"[Setup] Benchmark run ID: {BenchmarkRunId}");
+            Console.WriteLine($"[Setup] Topic name will be: {TopicName}");
             
             // Create topic
             using var adminClient = new AdminClientBuilder(new AdminClientConfig
@@ -69,14 +70,14 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                         ReplicationFactor = 1
                     }
                 ]);
+                Console.WriteLine($"[Setup] Successfully created topic: {TopicName}");
             }
             catch (CreateTopicsException e) when (e.Message.Contains("already exists"))
             {
                 // Topic already exists - can happen if cleanup failed last time
                 // We'll just reuse it
+                Console.WriteLine($"[Setup] Topic already exists: {TopicName}");
             }
-            
-            Console.WriteLine("Topic created: " + TopicName);
             
             // Setup actor system
             var config = ConfigurationFactory.ParseString(@"
@@ -108,6 +109,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             DemandControl = new TaskCompletionSource<Done>();
             // need a new group id for each iteration
             GroupId = $"benchmark-group-{BenchmarkRunId}-{Guid.NewGuid():N}";
+            Console.WriteLine($"[Iteration] Using topic: {TopicName} with group: {GroupId}");
         }
         
         [IterationCleanup]

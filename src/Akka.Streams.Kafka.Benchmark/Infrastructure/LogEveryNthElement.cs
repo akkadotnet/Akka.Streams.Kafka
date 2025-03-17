@@ -39,12 +39,11 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
             SetHandler(stage.Inlet, onPush: () =>
             {
                 var element = Grab(stage.Inlet);
-                _countdownToNextLog--;
+                _countdownToNextLog++;
                 
-                if (_countdownToNextLog == 0)
+                if (_countdownToNextLog % _stage._n == 0)
                 {
                     Log.Info(_stage._logMessageFn(_countdownToNextLog));
-                    ResetCountdown();
                 }
 
                 Push(stage.Outlet, element);
@@ -56,6 +55,6 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
             });
         }
 
-        private void ResetCountdown() => _countdownToNextLog =  _stage._n;
+        private void ResetCountdown() => _countdownToNextLog =  0;
     }
 }
