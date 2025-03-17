@@ -268,8 +268,8 @@ public class RebalanceExtTests : KafkaIntegrationTests
 
             var consumer1Partitions = await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
             var consumer2Partitions = await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
-            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:", string.Join(", ", consumer1Partitions),
-                string.Join(", ", consumer2Partitions));
+            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:", string.Join(", ", consumer1Partitions.Partitions),
+                string.Join(", ", consumer2Partitions.Partitions));
 
             // figure out how the Assignor assigned the partitions
             var doesConsumer1HaveFirstPartition = consumer1Partitions.Partitions.Single().Partition.Value == 0;
