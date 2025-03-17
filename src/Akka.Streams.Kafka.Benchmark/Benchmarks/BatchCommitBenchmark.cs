@@ -29,10 +29,10 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
             await base.SetupAsync();
             
             // First produce test data
-            var producerSettings = CreateProducerSettings<Null, string>();
+            var producerSettings = CreateProducerSettings<Null?, string>();
             await Source
                 .From(Enumerable.Range(1, TestMessageCount))
-                .Select(i => new ProducerRecord<Null, string>(TopicName, default, i.ToString()))
+                .Select(i => new ProducerRecord<Null?, string>(TopicName, null, i.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), ActorSystem.Materializer());
             
             // Then set up consumer with batch commit

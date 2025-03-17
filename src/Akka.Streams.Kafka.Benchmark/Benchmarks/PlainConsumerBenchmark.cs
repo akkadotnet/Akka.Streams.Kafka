@@ -30,7 +30,7 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
             var producerSettings = CreateProducerSettings<Null, string>();
             await Source
                 .From(Enumerable.Range(1, TestMessageCount))
-                .Select(i => new ProducerRecord<Null, string>(TopicName, default, i.ToString()))
+                .Select(i => new ProducerRecord<Null, string>(TopicName, i.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), ActorSystem.Materializer());
             
             // Then set up consumer

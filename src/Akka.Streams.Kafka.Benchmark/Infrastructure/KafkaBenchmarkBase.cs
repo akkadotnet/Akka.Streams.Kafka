@@ -85,7 +85,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             
             try
             {
-                await adminClient.DeleteTopicsAsync(new[] { TopicName });
+                await adminClient.DeleteTopicsAsync([TopicName]);
             }
             catch
             {
@@ -93,8 +93,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             }
             
             // Cleanup actor system
-            if (ActorSystem != null)
-                await ActorSystem.Terminate();
+            await ActorSystem.Terminate();
         }
         
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>()
