@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Infrastructure;
 using Akka.Streams.Kafka.Dsl;
@@ -16,57 +13,20 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
     [MaxWarmupCount(5)]
     [MinIterationCount(3)]
     [MaxIterationCount(5)]
-    public class BatchCommitBenchmark : KafkaBenchmarkBase
+    public class BatchCommitBenchmark : KafkaConsumerBenchmark<ICommittableOffsetBatch>
     {
         [Params(10, 100, 1000)]
         public int BatchSize { get; set; }
 
-        protected override Task PopulateTestDataAsync() => 
-            GenerateTestDataStringsAsync();
-
-        public override async Task SetupAsync()
+        protected override Source<ICommittableOffsetBatch, IControl> CreateSource()
         {
-            await base.SetupAsync();
-            
-            // Then set up consumer with batch commit
             var consumerSettings = CreateConsumerSettings<Null, string>();
             var committerSettings = CommitterSettings.Create(ActorSystem)
                 .WithMaxBatch(BatchSize);
-            
-            var (control, queue) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
+
+            return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
                 .Select(ICommittable (message) => message.CommitableOffset)
-                .Via(Committer.BatchFlow(committerSettings))
-                .ToMaterialized(Sink.Queue<ICommittableOffsetBatch>(), Keep.Both)
-                .Run(ActorSystem.Materializer());
-
-            _control = control;
-            _sink = queue;
-        }
-        
-        [Benchmark]
-        public async Task ConsumeAndCommitBatchAsync()
-        {
-            var messagesProcessed = 0;
-            while (messagesProcessed < TestMessageCount)
-            {
-                var result = await _sink.PullAsync();
-                if (result.HasValue)
-                {
-                    await result.Value.Commit();
-                    messagesProcessed += (int)result.Value.BatchSize;
-                }
-            }
-        }
-
-        protected override Task SetupStreamAsync()
-        {
-            
-        }
-
-        public override async Task CleanupAsync()
-        {
-            await _control.Shutdown();
-            await base.CleanupAsync();
+                .Via(Committer.BatchFlow(committerSettings));
         }
     }
 } 
