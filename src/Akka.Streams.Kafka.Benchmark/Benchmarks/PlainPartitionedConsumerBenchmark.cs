@@ -17,7 +17,7 @@ public class PlainPartitionedConsumerBenchmark : KafkaConsumerBenchmark<ConsumeR
 
     protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
     {
-        var mergeHubSource = MergeHub.Source<ConsumeResult<Null, string>>();
+        var mergeHubSource = MergeHub.Source<ConsumeResult<Null, string>>(perProducerBufferSize:10);
         var (sink, trueSource) = mergeHubSource.PreMaterialize(ActorSystem);
 
         var consumerSettings = CreateConsumerSettings<Null, string>()
@@ -28,13 +28,13 @@ public class PlainPartitionedConsumerBenchmark : KafkaConsumerBenchmark<ConsumeR
             .Select(tup =>
             {
                 var (partition, src) = tup;
-                src.RunWith(sink, ActorSystem);
+                return src.RunWith(sink, ActorSystem);
             })
             .PreMaterialize(ActorSystem);
 
         paritionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
-        return trueSource.MapMaterializedValue(_ => control);
+        return trueSource.Select(c => c).MapMaterializedValue(_ => control);
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
