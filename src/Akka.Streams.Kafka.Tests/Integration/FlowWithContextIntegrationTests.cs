@@ -101,7 +101,7 @@ namespace Akka.Streams.Kafka.Tests.Integration
             }
 
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown(null));
+            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
             AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
         }
     }
