@@ -85,6 +85,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                     log-config-on-start = off
                     stdout-loglevel = INFO
                     loglevel = INFO
+                    log-dead-letters = off # no dead letters
                     actor {
                         debug {
                             receive = off
