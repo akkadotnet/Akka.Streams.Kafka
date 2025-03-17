@@ -21,14 +21,22 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
     {
         private const string KafkaServer = "localhost:29092";
         protected ActorSystem ActorSystem { get; private set; } = null!;
-        protected string TopicName { get; private set; } = null!;
+        
+        private string BenchmarkRunId { get; set; } = null!;
+        
+        protected string TopicName => $"benchmark-topic-{BenchmarkRunId}";
+        
+        
+        /// <summary>
+        /// Has to be randomized on every iteration to ensure we start with a clean slate
+        /// </summary>
         protected string GroupId { get; private set; } = null!;
         protected IControl? StreamControl { get; set; }
         
         protected TaskCompletionSource<Done>? DemandControl { get; private set; }
         protected Task<Done>? CompletionTask { get; set; }
         
-        protected virtual int TestMessageCount => 100_000;
+        public const int TestMessageCount = 100_000;
         protected virtual int PartitionCount => 3;
         
         /// <summary>
@@ -40,9 +48,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         public virtual async Task SetupAsync()
         {
             // Create unique topic and group names for this benchmark run
-            var benchmarkId = Guid.NewGuid().ToString("N");
-            TopicName = $"benchmark-topic-{benchmarkId}";
-            GroupId = $"benchmark-group-{benchmarkId}";
+            BenchmarkRunId = Guid.NewGuid().ToString("N");
             
             // Create topic
             using var adminClient = new AdminClientBuilder(new AdminClientConfig
@@ -93,6 +99,8 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         public virtual void IterationSetup()
         {
             DemandControl = new TaskCompletionSource<Done>();
+            // need a new group id for each iteration
+            GroupId = $"benchmark-group-{BenchmarkRunId}-{Guid.NewGuid():N}";
         }
         
         [IterationCleanup]
@@ -149,7 +157,11 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                 .Create(ActorSystem, null, null)
                 .WithBootstrapServers(KafkaServer)
                 .WithGroupId(GroupId)
-                .WithProperty("auto.offset.reset", "earliest");
+                
+                // Start consuming from the beginning of the topic
+                // see https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
+                
+                .WithProperty("auto.offset.reset", "beginning");
         }
         
         protected ProducerSettings<TKey, TValue> CreateProducerSettings<TKey, TValue>()

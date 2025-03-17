@@ -47,7 +47,7 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
         StreamControl = control;
     }
 
-    [Benchmark]
+    [Benchmark(OperationsPerInvoke = TestMessageCount)]
     public virtual Task ConsumeMessageAsync()
     {
         StartDemand();
