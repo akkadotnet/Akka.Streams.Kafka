@@ -27,7 +27,7 @@ public static class StreamHelpers
         var nThMessage = (int)(maxMessageCount * percentageFrequency);
 
         return Flow.Create<T>()
-            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i/(double)maxMessageCount}%"));
+            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{(i/(double)maxMessageCount)*100}%"));
     }
 
     /// <summary>

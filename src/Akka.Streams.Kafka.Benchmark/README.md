@@ -36,7 +36,6 @@ This directory contains benchmarks for measuring the performance of Akka.Streams
 
 ### Producer Benchmarks
 - `PlainProducerBenchmark`: Measures throughput of plain Kafka producer
-- `TransactionalProducerBenchmark`: Measures throughput with transactions
 
 ## Configuration
 

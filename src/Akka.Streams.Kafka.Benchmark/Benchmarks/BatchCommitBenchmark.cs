@@ -14,14 +14,18 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
     [Config(typeof(MacroBenchmarkConfig))]
     public class BatchCommitBenchmark : KafkaConsumerBenchmark<ICommittableOffsetBatch>
     {
-        [Params(10, 100, 1000)]
-        public int BatchSize { get; set; }
+        [Params(10, 100, 500)]
+        public int PollBatchSize { get; set; }
+        
+        [Params(10, 100, 500)]
+        public int CommitBatchSize { get; set; }
 
         protected override Source<ICommittableOffsetBatch, IControl> CreateSource()
         {
-            var consumerSettings = CreateConsumerSettings<Null, string>();
+            var consumerSettings = CreateConsumerSettings<Null, string>()
+                .WithMaxPollRecords(PollBatchSize);
             var committerSettings = CommitterSettings.Create(ActorSystem!)
-                .WithMaxBatch(BatchSize);
+                .WithMaxBatch(CommitBatchSize);
 
             return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
                 .Select(ICommittable (message) => message.CommitableOffset)
