@@ -2,11 +2,8 @@ using System;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
-using Akka.Streams;
 using Akka.Streams.Dsl;
-using Akka.Streams.Implementation.Stages;
 using Akka.Streams.Kafka.Settings;
-using Akka.Streams.Stage;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
@@ -119,6 +116,17 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         /// <summary>
         /// Creates a sink that counts messages and completes when either:
         /// 1. TestMessageCount messages have been processed
+        /// 2. The upstream completes
+        /// 3. An error occurs
+        /// </summary>
+        protected Sink<T, Task<Done>> CreateCountingSink<T>()
+        {
+            return CreateCountingSink<T>(TestMessageCount);
+        }
+
+        /// <summary>
+        /// Creates a sink that counts messages and completes when either:
+        /// 1. The specified number of messages have been processed
         /// 2. The upstream completes
         /// 3. An error occurs
         /// </summary>
