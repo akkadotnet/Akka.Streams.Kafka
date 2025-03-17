@@ -47,6 +47,8 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         [GlobalSetup]
         public virtual async Task SetupAsync()
         {
+            Console.WriteLine("Setting up Kafka benchmark...");
+            
             // Create unique topic and group names for this benchmark run
             BenchmarkRunId = Guid.NewGuid().ToString("N");
             Console.WriteLine("Benchmark run ID: " + BenchmarkRunId);
@@ -81,7 +83,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                 akka {
                     log-config-on-start = off
                     stdout-loglevel = INFO
-                    loglevel = WARNING
+                    loglevel = INFO
                     actor {
                         debug {
                             receive = off
@@ -94,6 +96,8 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                 }").WithFallback(KafkaExtensions.DefaultSettings);
             
             ActorSystem = ActorSystem.Create("kafka-benchmark", config);
+            
+            Console.WriteLine("Kafka benchmark setup complete.");
         }
         
         /**/

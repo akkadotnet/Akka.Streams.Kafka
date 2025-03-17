@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
 using Akka.Streams.Kafka.Benchmark.Infrastructure;
@@ -16,6 +17,13 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         {
             var consumerSettings = CreateConsumerSettings<Null, string>();
             return KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(TopicName));
+        }
+        
+        [Benchmark(OperationsPerInvoke = TestMessageCount)]
+        public Task ConsumeMessageAsync()
+        {
+            StartDemand();
+            return CompletionTask!;
         }
     }
 } 

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
 using Akka.Streams.Kafka.Benchmark.Infrastructure;
@@ -25,6 +26,13 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
             return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
                 .Select(ICommittable (message) => message.CommitableOffset)
                 .Via(Committer.BatchFlow(committerSettings));
+        }
+        
+        [Benchmark(OperationsPerInvoke = TestMessageCount)]
+        public Task ConsumeMessageAsync()
+        {
+            StartDemand();
+            return CompletionTask!;
         }
     }
 } 

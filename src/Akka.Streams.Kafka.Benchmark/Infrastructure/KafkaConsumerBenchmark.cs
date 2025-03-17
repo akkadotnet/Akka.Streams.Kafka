@@ -49,11 +49,4 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
         CompletionTask = completionTask;
         StreamControl = control;
     }
-
-    [Benchmark(OperationsPerInvoke = TestMessageCount)]
-    public virtual Task ConsumeMessageAsync()
-    {
-        StartDemand();
-        return CompletionTask!;
-    }
 }
