@@ -44,19 +44,19 @@ public class RebalanceExtTests : KafkaIntegrationTests
         public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
             IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnRevoke: clientId {0} tps {1} consumer {2}", clientId,
-                revokedTopicPartitions, consumer);
+                string.Join(", ", revokedTopicPartitions), consumer);
 
         public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnLost: clientId {0} tps {1} consumer {2}", clientId,
-                revokedTopicPartitions, consumer);
+                string.Join(", ", revokedTopicPartitions), consumer);
 
         public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnAssign: clientId {0} tps {1} consumer {2}", clientId,
-                assignedTopicPartitions, consumer);
+                string.Join(",", assignedTopicPartitions), consumer);
 
         public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnStop: clientId {0} tps {1} consumer {2}", clientId,
-                topicPartitions, consumer);
+                string.Join(", ", topicPartitions), consumer);
     }
 
     private ConsumerSettings<Null, string> CreateConsumerSettings(string groupId, int maxPollRecords) =>
