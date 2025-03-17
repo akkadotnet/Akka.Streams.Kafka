@@ -24,10 +24,10 @@ public static class StreamHelpers
     /// </summary>
     public static Flow<T, T, NotUsed> ProgressLogger<T>(int maxMessageCount, double percentageFrequency)
     {
-        var nThMessage = (int)(maxMessageCount * percentageFrequency / 100);
+        var nThMessage = (int)(maxMessageCount * percentageFrequency);
 
         return Flow.Create<T>()
-            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i}/{maxMessageCount} messages processed"));
+            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i/(double)maxMessageCount}%"));
     }
 
     /// <summary>

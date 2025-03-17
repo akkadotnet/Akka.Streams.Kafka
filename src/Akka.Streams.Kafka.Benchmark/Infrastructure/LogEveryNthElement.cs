@@ -7,14 +7,16 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
 {
     private readonly int _n;
     private readonly Func<int,string> _logMessageFn;
+    private readonly LogLevel _logLevel;
 
-    public LogEveryNthElement(int n, Func<int,string> logMessageFn)
+    public LogEveryNthElement(int n, Func<int,string> logMessageFn, LogLevel minLogLevel = LogLevel.InfoLevel)
     {
         if (n <= 0)
             throw new ArgumentException("N must be a positive integer", nameof(n));
         
         _n = n;
         _logMessageFn = logMessageFn;
+        _logLevel = minLogLevel;
         Shape = new FlowShape<T, T>(Inlet, Outlet);
     }
 
@@ -41,7 +43,7 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
                 
                 if (_countdownToNextLog % stage._n == 0)
                 {
-                    Log.Info(stage._logMessageFn(_countdownToNextLog));
+                    Log.Log(stage._logLevel, stage._logMessageFn(_countdownToNextLog));
                 }
 
                 Push(stage.Outlet, element);
