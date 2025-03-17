@@ -25,11 +25,11 @@ public static class StreamHelpers
     public static Flow<T, T, NotUsed> ProgressLogger<T>(int maxMessageCount, double percentageFrequency)
     {
         var nThMessage = (int)(maxMessageCount * percentageFrequency / 100);
-        
+
         return Flow.Create<T>()
             .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i}/{maxMessageCount} messages processed"));
     }
-    
+
     /// <summary>
     /// Creates a flow that controls demand. Basically designed to stop a stream from automatically
     /// running as soon as it is materialized during Setup. This will add a small amount of overhead
@@ -41,7 +41,9 @@ public static class StreamHelpers
         return Flow.Create<T>()
             .SelectAsync(1, async elem =>
             {
-                await startSignal;
+                if (!startSignal.IsCompleted)
+                    await startSignal;
+                
                 return elem;
             });
     }
