@@ -105,6 +105,36 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
+    
+    [Fact]
+    public async Task CommitCollectorStage_when_BatchDurationHasElapsed_emit_after_triggered_batch_when_next_Batch_is_full()
+    {
+        var settings = DefaultCommitterSettings.WithMaxBatch(2).WithMaxInterval(TimeSpan.FromMilliseconds(50));
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        
+        var msg1 = offsetFactory.MakeOffset();
+        sourceProbe.SendNext(msg1);
+        
+        var committedBatch = await sinkProbe.RequestNextAsync(TimeSpan.FromMilliseconds(80));
+        
+        var msg2 = offsetFactory.MakeOffset();
+        sourceProbe.SendNext(msg2);
+        var msg3 = offsetFactory.MakeOffset();
+        sourceProbe.SendNext(msg3);
+        
+        // triggered by size
+        var committedBatch2 = await sinkProbe.RequestNextAsync();
+        
+        committedBatch.BatchSize.Should().Be(1);
+        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
+        committedBatch.Offsets.Last().Offset.Should().Be(msg1.Offset.Offset);
+        
+        committedBatch2.BatchSize.Should().Be(2);
+        committedBatch2.Offsets.Count.Should().Be(1); // 1 offset value per partition
+        committedBatch2.Offsets.Last().Offset.Should().Be(msg3.Offset.Offset);
+        
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
+    }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
         TestSubscriber.Probe<ICommittableOffsetBatch> subscriber) StreamProbes(CommitterSettings committerSettings)
