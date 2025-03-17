@@ -20,45 +20,35 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
     public class PlainConsumerBenchmark : KafkaBenchmarkBase
     {
         private IControl _control = null!;
-        private ISinkQueue<ConsumeResult<Null, string>> _sink = null!;
+        private Task<Done> _completion = null!;
         
         public override async Task SetupAsync()
         {
             await base.SetupAsync();
             
             // First produce test data
-            var producerSettings = CreateProducerSettings<Null, string>();
+            var producerSettings = CreateProducerSettings<Null?, string>();
             await Source
                 .From(Enumerable.Range(1, TestMessageCount))
-                .Select(i => new ProducerRecord<Null, string>(TopicName, i.ToString()))
+                .Select(i => new ProducerRecord<Null?, string>(TopicName, null, i.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), ActorSystem.Materializer());
             
             // Then set up consumer
             var consumerSettings = CreateConsumerSettings<Null, string>();
-            var (control, queue) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(TopicName))
-                .ToMaterialized(
-                    Sink.Queue<ConsumeResult<Null, string>>()
-                        .AddAttributes(new Attributes(new Attributes.InputBuffer(2000, 4000))), 
-                    Keep.Both)
+            var (control, completion) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(TopicName))
+                .ToMaterialized(CreateCountingSink<ConsumeResult<Null, string>>(TestMessageCount), Keep.Both)
                 .Run(ActorSystem.Materializer());
 
             _control = control;
-            _sink = queue;
+            _completion = completion;
         }
         
         [Benchmark]
-        public async Task ConsumeMessageAsync()
-        {
-            var result = await _sink.PullAsync();
-            if (!result.HasValue)
-                throw new InvalidOperationException("Consumer timed out");
-        }
+        public Task ConsumeMessageAsync() => _completion;
         
         public override async Task CleanupAsync()
         {
-            if (_control != null)
-                await _control.Shutdown();
-                
+            await _control.Shutdown();
             await base.CleanupAsync();
         }
     }
