@@ -18,6 +18,17 @@ public static class StreamHelpers
             .WatchTermination((used, task) => Task.FromResult(Done.Instance))
             .To(Sink.Ignore<T>());
     }
+
+    /// <summary>
+    /// Log our process every <see cref="percentageFrequency"/>% through the <see cref="maxMessageCount"/>
+    /// </summary>
+    public static Flow<T, T, NotUsed> ProgressLogger<T>(int maxMessageCount, double percentageFrequency)
+    {
+        var nThMessage = (int)(maxMessageCount * percentageFrequency / 100);
+        
+        return Flow.Create<T>()
+            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i}/{maxMessageCount} messages processed"));
+    }
     
     /// <summary>
     /// Creates a flow that controls demand. Basically designed to stop a stream from automatically

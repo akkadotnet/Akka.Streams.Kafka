@@ -49,6 +49,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         {
             // Create unique topic and group names for this benchmark run
             BenchmarkRunId = Guid.NewGuid().ToString("N");
+            Console.WriteLine("Benchmark run ID: " + BenchmarkRunId);
             
             // Create topic
             using var adminClient = new AdminClientBuilder(new AdminClientConfig
@@ -72,6 +73,8 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                 // Topic already exists - can happen if cleanup failed last time
                 // We'll just reuse it
             }
+            
+            Console.WriteLine("Topic created: " + TopicName);
             
             // Setup actor system
             var config = ConfigurationFactory.ParseString(@"

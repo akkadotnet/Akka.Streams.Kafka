@@ -3,6 +3,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Engines;
 using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Loggers;
 
 namespace Akka.Streams.Kafka.Benchmark.Configs;
 
@@ -12,6 +13,7 @@ public class MacroBenchmarkConfig : ManualConfig
     {
         AddExporter(MarkdownExporter.GitHub);
         AddColumn(new MessagesPerSecondColumn());
+        AddLogger(ConsoleLogger.Default);
 
         // Safer affinity mask (optional; remove if not needed)
         int processorCount = Environment.ProcessorCount;
@@ -25,7 +27,7 @@ public class MacroBenchmarkConfig : ManualConfig
                 .WithWarmupCount(5)   // Reduced from 25
                 .WithIterationCount(15) // Reduced from 50
                 .WithStrategy(RunStrategy.Monitoring)
-            //.WithAffinity(affinityMask) // Optional
+                //.WithAffinity(affinityMask) // Optional
         );
     }
 }
