@@ -44,19 +44,19 @@ public class RebalanceExtTests : KafkaIntegrationTests
         public void OnRevoke(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions,
             IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnRevoke: clientId {0} tps {1} consumer {2}", clientId,
-                revokedTopicPartitions, consumer);
+                string.Join(", ", revokedTopicPartitions), consumer);
 
         public void OnLost(IImmutableSet<TopicPartitionOffset> revokedTopicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnLost: clientId {0} tps {1} consumer {2}", clientId,
-                revokedTopicPartitions, consumer);
+                string.Join(", ", revokedTopicPartitions), consumer);
 
         public void OnAssign(IImmutableSet<TopicPartition> assignedTopicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnAssign: clientId {0} tps {1} consumer {2}", clientId,
-                assignedTopicPartitions, consumer);
+                string.Join(",", assignedTopicPartitions), consumer);
 
         public void OnStop(IImmutableSet<TopicPartition> topicPartitions, IRestrictedConsumer consumer) =>
             log.Debug("AssignmentHandler::OnStop: clientId {0} tps {1} consumer {2}", clientId,
-                topicPartitions, consumer);
+                string.Join(", ", topicPartitions), consumer);
     }
 
     private ConsumerSettings<Null, string> CreateConsumerSettings(string groupId, int maxPollRecords) =>
@@ -268,8 +268,8 @@ public class RebalanceExtTests : KafkaIntegrationTests
 
             var consumer1Partitions = await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
             var consumer2Partitions = await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
-            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:", string.Join(", ", consumer1Partitions),
-                string.Join(", ", consumer2Partitions));
+            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:", string.Join(", ", consumer1Partitions.Partitions),
+                string.Join(", ", consumer2Partitions.Partitions));
 
             // figure out how the Assignor assigned the partitions
             var doesConsumer1HaveFirstPartition = consumer1Partitions.Partitions.Single().Partition.Value == 0;
@@ -350,8 +350,7 @@ public class RebalanceExtTests : KafkaIntegrationTests
             await Task.WhenAll(topicMetadata.TpFutureMap.Values.Select(t => t.Task)).WaitAsync(RemainingOrDefault);
 
             // shutdown the consumers
-            Assert.True(control1.Shutdown().IsCompleted);
-            //Assert.True(control2.Shutdown().IsCompleted); // TODO: this is still buggy
+            await Task.WhenAll(control1.Shutdown(), control2.Shutdown()).WaitAsync(RemainingOrDefault);
             sharedKillSwitch1.Shutdown();
             sharedKillSwitch2.Shutdown();
 
