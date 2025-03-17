@@ -1,0 +1,31 @@
+using System;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Engines;
+using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Jobs;
+
+namespace Akka.Streams.Kafka.Benchmark.Configs;
+
+public class MacroBenchmarkConfig : ManualConfig
+{
+    public MacroBenchmarkConfig()
+    {
+        AddExporter(MarkdownExporter.GitHub);
+        AddColumn(new MessagesPerSecondColumn());
+
+        // Safer affinity mask (optional; remove if not needed)
+        int processorCount = Environment.ProcessorCount;
+        ulong affinityMaskValue = processorCount == 64 
+            ? ulong.MaxValue 
+            : (1UL << processorCount) - 1;
+        IntPtr affinityMask = (IntPtr)affinityMaskValue;
+
+        AddJob(Job.LongRun
+                .WithGcMode(new GcMode { Server = true, Concurrent = true })
+                .WithWarmupCount(5)   // Reduced from 25
+                .WithIterationCount(15) // Reduced from 50
+                .WithStrategy(RunStrategy.Monitoring)
+            //.WithAffinity(affinityMask) // Optional
+        );
+    }
+}

@@ -52,15 +52,14 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             
             try
             {
-                await adminClient.CreateTopicsAsync(new[]
-                {
+                await adminClient.CreateTopicsAsync([
                     new TopicSpecification
                     {
                         Name = TopicName,
                         NumPartitions = PartitionCount,
                         ReplicationFactor = 1
                     }
-                });
+                ]);
             }
             catch (CreateTopicsException e) when (e.Message.Contains("already exists"))
             {
@@ -88,24 +87,25 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             ActorSystem = ActorSystem.Create("kafka-benchmark", config);
         }
         
+        /**/
+        
         [IterationSetup]
-        public virtual Task IterationSetupAsync()
+        public virtual void IterationSetup()
         {
             DemandControl = new TaskCompletionSource<Done>();
-            return Task.CompletedTask;
         }
         
         [IterationCleanup]
-        public virtual async Task IterationCleanupAsync()
+        public virtual void IterationCleanup()
         {
             if (StreamControl != null && CompletionTask != null)
             {
-                await DrainingControl.Create(StreamControl, CompletionTask).DrainAndShutdown();
+                DrainingControl.Create(StreamControl, CompletionTask).DrainAndShutdown().Wait();
                 StreamControl = null;
             }
             else if (CompletionTask != null)
             {
-                await CompletionTask;
+                CompletionTask.Wait();
                 CompletionTask = null;
             }
         }

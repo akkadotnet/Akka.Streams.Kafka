@@ -22,7 +22,7 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
     protected virtual Task PopulateTestDataAsync() => 
         GenerateTestDataStringsAsync();
 
-    protected virtual Task<(IControl control, Task<Done> completionTask)> SetupConsumerAsync()
+    protected virtual (IControl control, Task<Done> completionTask) SetupConsumer()
     {
         var source = CreateSource();
         
@@ -32,17 +32,17 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
             .ToMaterialized(CreateCountingSink<TMessage>(TestMessageCount), Keep.Both)
             .Run(ActorSystem.Materializer());
         
-        return Task.FromResult((control, completionTask));
+        return (control, completionTask);
     }
 
     protected abstract Source<TMessage, IControl> CreateSource();
 
     // IterationSetup (need to re-create the consumer)
-    public override async Task IterationSetupAsync()
+    public override void IterationSetup()
     {
-        await base.IterationSetupAsync();
+        base.IterationSetup();
             
-        var (control, completionTask) = await SetupConsumerAsync();
+        var (control, completionTask) = SetupConsumer();
         CompletionTask = completionTask;
         StreamControl = control;
     }

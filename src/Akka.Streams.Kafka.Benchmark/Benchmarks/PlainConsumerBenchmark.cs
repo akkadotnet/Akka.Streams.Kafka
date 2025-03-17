@@ -1,4 +1,5 @@
 using Akka.Streams.Dsl;
+using Akka.Streams.Kafka.Benchmark.Configs;
 using Akka.Streams.Kafka.Benchmark.Infrastructure;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
@@ -8,10 +9,7 @@ using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Benchmark.Benchmarks
 {
-    [MinWarmupCount(3)]
-    [MaxWarmupCount(5)]
-    [MinIterationCount(3)]
-    [MaxIterationCount(5)]
+    [Config(typeof(MacroBenchmarkConfig))]
     public class PlainConsumerBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
     {
         protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
