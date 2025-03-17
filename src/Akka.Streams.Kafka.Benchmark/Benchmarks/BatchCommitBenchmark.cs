@@ -34,7 +34,7 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
                 .WithMaxBatch(BatchSize);
             
             var (control, queue) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
-                .Select(message => message.CommitableOffset as ICommittable)
+                .Select(ICommittable (message) => message.CommitableOffset)
                 .Via(Committer.BatchFlow(committerSettings))
                 .ToMaterialized(Sink.Queue<ICommittableOffsetBatch>(), Keep.Both)
                 .Run(ActorSystem.Materializer());

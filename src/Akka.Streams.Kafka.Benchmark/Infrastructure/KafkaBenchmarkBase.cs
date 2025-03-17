@@ -3,8 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
-using Akka.Pattern;
-using Akka.Streams;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Helpers;
@@ -25,13 +23,18 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         protected ActorSystem ActorSystem { get; private set; } = null!;
         protected string TopicName { get; private set; } = null!;
         protected string GroupId { get; private set; } = null!;
-        protected IControl? StreamControl { get; private set; }
+        protected IControl? StreamControl { get; set; }
         
         protected TaskCompletionSource<Done>? DemandControl { get; private set; }
-        protected Task<Done>? CompletionTask { get; private set; }
+        protected Task<Done>? CompletionTask { get; set; }
         
         protected virtual int TestMessageCount => 100_000;
         protected virtual int PartitionCount => 3;
+        
+        /// <summary>
+        /// Amount of time we're going to give to an individual benchmark iteration to complete
+        /// </summary>
+        protected virtual TimeSpan CompletionTimeout => TimeSpan.FromSeconds(30);
         
         [GlobalSetup]
         public virtual async Task SetupAsync()
@@ -83,43 +86,24 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
                 }").WithFallback(KafkaExtensions.DefaultSettings);
             
             ActorSystem = ActorSystem.Create("kafka-benchmark", config);
-            
-            // Populate test data if needed (for consumer benchmarks)
-            await PopulateTestDataAsync();
         }
-
-        /// <summary>
-        /// Override this method to populate test data in global setup
-        /// No-op by default (for producer benchmarks)
-        /// </summary>
-        protected virtual Task PopulateTestDataAsync() => Task.CompletedTask;
         
         [IterationSetup]
-        public virtual async Task IterationSetupAsync()
+        public virtual Task IterationSetupAsync()
         {
             DemandControl = new TaskCompletionSource<Done>();
-            
-            // Setup stream but don't start demand
-            await SetupStreamAsync();
+            return Task.CompletedTask;
         }
-        
-        /// <summary>
-        /// Override this to setup your stream configuration.
-        /// The stream should be fully materialized but not yet demanding data.
-        /// Use CreateDemandControlFlow() to control when data starts flowing.
-        /// </summary>
-        protected abstract Task SetupStreamAsync();
         
         [IterationCleanup]
         public virtual async Task IterationCleanupAsync()
         {
-            if (StreamControl != null)
+            if (StreamControl != null && CompletionTask != null)
             {
-                await StreamControl.Shutdown();
+                await DrainingControl.Create(StreamControl, CompletionTask).DrainAndShutdown();
                 StreamControl = null;
             }
-            
-            if (CompletionTask != null)
+            else if (CompletionTask != null)
             {
                 await CompletionTask;
                 CompletionTask = null;
@@ -176,50 +160,11 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         }
 
         /// <summary>
-        /// Creates a sink that counts messages and completes when either:
-        /// 1. TestMessageCount messages have been processed
-        /// 2. The upstream completes
-        /// 3. An error occurs
-        /// </summary>
-        protected Sink<T, Task<Done>> CreateCountingSink<T>()
-        {
-            return CreateCountingSink<T>(TestMessageCount);
-        }
-
-        /// <summary>
-        /// Creates a sink that counts messages and completes when either:
-        /// 1. The specified number of messages have been processed
-        /// 2. The upstream completes
-        /// 3. An error occurs
-        /// </summary>
-        protected static Sink<T, Task<Done>> CreateCountingSink<T>(int stopAt)
-        {
-            return Flow.Create<T>()
-                .Take(stopAt)
-                .WatchTermination((used, task) => Task.FromResult(Done.Instance))
-                .To(Sink.Ignore<T>());
-        }
-
-        /// <summary>
-        /// Creates a flow that controls demand. Insert this flow in your stream to control when data starts flowing.
-        /// Call StartDemand() to begin processing.
-        /// </summary>
-        protected Flow<T, T, NotUsed> CreateDemandControlFlow<T>(Task startSignal)
-        {
-            return Flow.Create<T>()
-                .SelectAsync(1, async elem =>
-                {
-                    await startSignal;
-                    return elem;
-                });
-        }
-
-        /// <summary>
         /// Starts demand flowing through the stream. Call this in your benchmark method.
         /// </summary>
         protected void StartDemand()
         {
-            DemandControl?.Success(Done.Instance);
+            DemandControl?.TrySetResult(Done.Instance);
         }
     }
 } 

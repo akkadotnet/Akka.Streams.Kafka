@@ -42,7 +42,6 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
             _completion = completion;
         }
         
-        [Benchmark]
         public Task ConsumeMessageAsync() => _completion;
 
         protected override Task SetupStreamAsync() => throw new NotImplementedException();
