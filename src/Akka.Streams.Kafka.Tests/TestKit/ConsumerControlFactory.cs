@@ -40,7 +40,7 @@ public class FakeControl : IControl
         return ShutdownPromise.Task;
     }
 
-    public Task Shutdown(Exception? ex = null) => Stop();
+    public Task Shutdown() => Stop();
 
     public Task IsShutdown => ShutdownPromise.Task;
 
