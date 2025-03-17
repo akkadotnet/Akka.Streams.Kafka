@@ -22,16 +22,15 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         private IControl _control = null!;
         private Task<Done> _completion = null!;
         
+        protected override Task PopulateTestDataAsync() => 
+            GenerateTestDataStringsAsync();
+        
         public override async Task SetupAsync()
         {
             await base.SetupAsync();
             
             // First produce test data
-            var producerSettings = CreateProducerSettings<Null?, string>();
-            await Source
-                .From(Enumerable.Range(1, TestMessageCount))
-                .Select(i => new ProducerRecord<Null?, string>(TopicName, null, i.ToString()))
-                .RunWith(KafkaProducer.PlainSink(producerSettings), ActorSystem.Materializer());
+            await GenerateTestDataStringsAsync();
             
             // Then set up consumer
             var consumerSettings = CreateConsumerSettings<Null, string>();
@@ -45,7 +44,9 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         
         [Benchmark]
         public Task ConsumeMessageAsync() => _completion;
-        
+
+        protected override Task SetupStreamAsync() => throw new NotImplementedException();
+
         public override async Task CleanupAsync()
         {
             await _control.Shutdown();

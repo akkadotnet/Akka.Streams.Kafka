@@ -18,22 +18,15 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
     [MaxIterationCount(5)]
     public class BatchCommitBenchmark : KafkaBenchmarkBase
     {
-        private IControl _control = null!;
-        private ISinkQueue<ICommittableOffsetBatch> _sink = null!;
-        
         [Params(10, 100, 1000)]
         public int BatchSize { get; set; }
-        
+
+        protected override Task PopulateTestDataAsync() => 
+            GenerateTestDataStringsAsync();
+
         public override async Task SetupAsync()
         {
             await base.SetupAsync();
-            
-            // First produce test data
-            var producerSettings = CreateProducerSettings<Null?, string>();
-            await Source
-                .From(Enumerable.Range(1, TestMessageCount))
-                .Select(i => new ProducerRecord<Null?, string>(TopicName, null, i.ToString()))
-                .RunWith(KafkaProducer.PlainSink(producerSettings), ActorSystem.Materializer());
             
             // Then set up consumer with batch commit
             var consumerSettings = CreateConsumerSettings<Null, string>();
@@ -64,7 +57,12 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
                 }
             }
         }
-        
+
+        protected override Task SetupStreamAsync()
+        {
+            
+        }
+
         public override async Task CleanupAsync()
         {
             await _control.Shutdown();
