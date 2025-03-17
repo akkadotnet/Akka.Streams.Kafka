@@ -205,3 +205,4 @@ build/
 .dotnet/
 .idea
 /.cursor
+BenchmarkDotNet.Artifacts/

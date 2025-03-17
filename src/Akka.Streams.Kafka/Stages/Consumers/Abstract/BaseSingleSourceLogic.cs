@@ -77,7 +77,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
             var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
             Decider = supervisionStrategy.Decider;
 
-            SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: ex => PerformShutdown());
+            SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: _ => PerformShutdown());
         }
 
         public override void PreStart()
