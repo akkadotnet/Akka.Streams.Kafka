@@ -1,9 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using Akka.Streams.Kafka.Extensions;
 using Confluent.Kafka;
 
-#nullable enable
 namespace Akka.Streams.Kafka.Helpers
 {
     /// <summary>
@@ -23,7 +21,7 @@ namespace Akka.Streams.Kafka.Helpers
         /// Shutdown the consumer `Source`. It will wait for outstanding offset
         /// commit requests to finish before shutting down.
         /// </summary>
-        Task Shutdown(Exception? ex = null);
+        Task Shutdown();
 
         /// <summary>
         /// Shutdown status. The task will be completed when the stage has been shut down
@@ -42,38 +40,91 @@ namespace Akka.Streams.Kafka.Helpers
     }
 
     /// <summary>
+    /// Helper class for creating a <see cref="DrainingControl{T}"/> instances.
+    /// </summary>
+    public static class DrainingControl
+    {
+        public static DrainingControl<T> Create<T>(IControl control, Task<T> streamCompletion) =>
+            DrainingControl<T>.Create(control, streamCompletion);
+
+        /// <summary>
+        /// Stop producing messages from the `Source`, wait for stream completion
+        /// and shut down the consumer `Source` so that all consumed messages
+        /// reach the end of the stream.
+        /// Failures in stream completion will be propagated, the source will be shut down anyway.
+        /// </summary>
+        internal static async Task<TResult> DrainAndShutdownDefaultAsync<TResult>(this IControl control,
+            Task<TResult> streamCompletion)
+        {
+            TResult result;
+
+            try
+            {
+                await control.Stop();
+            }
+            catch
+            {
+                // suppress stop errors
+            }
+
+            try
+            {
+                result = await streamCompletion;
+            }
+            catch (Exception)
+            {
+                try
+                {
+                    await control.Shutdown();
+                }
+                catch
+                {
+                    // suppress shutdown errors
+                }
+
+                // we want to throw the stream termination exception
+                throw;
+            }
+
+            await control.Shutdown();
+
+            return result;
+        }
+    }
+
+    /// <summary>
     /// Combine control and a stream completion signal materialized values into
     /// one, so that the stream can be stopped in a controlled way without losing
     /// commits.
     /// </summary>
     /// <typeparam name="T">Stream completion result type</typeparam>
-    public class DrainingControl<T> : IControl
+    public sealed class DrainingControl<T> : IControl
     {
+        /// <summary>
+        /// Combine control and a stream completion signal materialized values into
+        /// one, so that the stream can be stopped in a controlled way without losing
+        /// commits.
+        /// </summary>
+        public static DrainingControl<T> Create(IControl control, Task<T> streamCompletion) =>
+            new DrainingControl<T>(control, streamCompletion);
+        
         public IControl Control { get; }
         public Task<T> StreamCompletion { get; }
 
-        /// <summary>
-        /// DrainingControl
-        /// </summary>
-        /// <param name="control"></param>
-        /// <param name="streamCompletion"></param>
         private DrainingControl(IControl control, Task<T> streamCompletion)
         {
             Control = control;
             StreamCompletion = streamCompletion;
         }
 
-        /// <inheritdoc />
         public Task Stop() => Control.Stop();
 
-        /// <inheritdoc />
-        public Task Shutdown(Exception? ex = null) => Control.Shutdown(ex);
+        public Task Shutdown() => Control.Shutdown();
 
-        /// <inheritdoc />
         public Task IsShutdown => Control.IsShutdown;
 
-        /// <inheritdoc />
-        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => Control.DrainAndShutdown(streamCompletion);
+        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) =>
+            Control.DrainAndShutdown(streamCompletion);
 
         /// <summary>
         /// Stop producing messages from the `Source`, wait for stream completion
@@ -81,21 +132,17 @@ namespace Akka.Streams.Kafka.Helpers
         /// reach the end of the stream.
         /// </summary>
         public Task<T> DrainAndShutdown() => Control.DrainAndShutdown(StreamCompletion);
-        
+
+       
+
         /// <summary>
         /// Combine control and a stream completion signal materialized values into
         /// one, so that the stream can be stopped in a controlled way without losing
         /// commits.
         /// </summary>
-        public static DrainingControl<T> Create(IControl control, Task<T> streamCompletion) => new DrainingControl<T>(control, streamCompletion);
-        
-        /// <summary>
-        /// Combine control and a stream completion signal materialized values into
-        /// one, so that the stream can be stopped in a controlled way without losing
-        /// commits.
-        /// </summary>
-        public static DrainingControl<T> Create((IControl, Task<T>) tuple) => new DrainingControl<T>(tuple.Item1, tuple.Item2);
-        
+        public static DrainingControl<T> Create((IControl, Task<T>) tuple) =>
+            new DrainingControl<T>(tuple.Item1, tuple.Item2);
+
         /// <summary>
         /// Combine control and a stream completion signal materialized values into
         /// one, so that the stream can be stopped in a controlled way without losing
@@ -103,33 +150,32 @@ namespace Akka.Streams.Kafka.Helpers
         /// </summary>
         public static DrainingControl<NotUsed> Create((IControl, Task<Done>) tuple)
         {
-            return new DrainingControl<NotUsed>(tuple.Item1, tuple.Item2.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
+            return new DrainingControl<NotUsed>(tuple.Item1,
+                tuple.Item2.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
         }
 
         public static DrainingControl<NotUsed> Create(IControl control, Task streamCompletion)
         {
-            return new DrainingControl<NotUsed>(control, streamCompletion.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
+            return new DrainingControl<NotUsed>(control,
+                streamCompletion.ContinueWith(t => NotUsed.Instance, TaskContinuationOptions.NotOnFaulted));
         }
-
     }
 
     /// <summary>
     /// An implementation of Control to be used as an empty value, all methods return a failed task.
     /// </summary>
-    public class NoopControl : IControl
+    public sealed class NoopControl : IControl
     {
-        private static Exception Exception => new Exception("The correct Consumer.Control has not been assigned, yet.");
+        private static Exception Exception => new("The correct Consumer.Control has not been assigned, yet.");
 
-        /// <inheritdoc />
         public Task Stop() => Task.FromException(Exception);
 
-        /// <inheritdoc />
-        public Task Shutdown(Exception? ex) => Task.FromException(new Exception("The correct Consumer.Control has not been assigned, yet.", ex));
+        public Task Shutdown() =>
+            Task.FromException(new Exception("The correct Consumer.Control has not been assigned, yet."));
 
-        /// <inheritdoc />
         public Task IsShutdown => Task.FromException(Exception);
 
-        /// <inheritdoc />
-        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) => this.DrainAndShutdownDefault(streamCompletion);
+        public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) =>
+            this.DrainAndShutdownDefaultAsync(streamCompletion);
     }
 }
