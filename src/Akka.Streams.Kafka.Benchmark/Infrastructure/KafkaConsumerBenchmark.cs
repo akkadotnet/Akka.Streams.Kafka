@@ -40,7 +40,7 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
         }
         
         var (control, completionTask) = source
-            .Via(CreateDemandControlFlow<TMessage>(DemandControl!.Task)) // block demand until the benchmark is ready
+            //.Via(CreateDemandControlFlow<TMessage>(DemandControl!.Task)) // block demand until the benchmark is ready
             .Via(Flow.Create<TMessage>().CompletionTimeout(CompletionTimeout)) // fail the stream if it doesn't complete in time
             .Via(ProgressLogger<TMessage>(TestMessageCount, 0.05)) // log every 5% of the stream
             .ToMaterialized(CreateCountingSink<TMessage>(TestMessageCount), Keep.Both)
