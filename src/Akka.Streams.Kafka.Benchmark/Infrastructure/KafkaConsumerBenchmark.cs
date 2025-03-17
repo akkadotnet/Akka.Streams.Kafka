@@ -1,7 +1,7 @@
+using System;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Helpers;
-using BenchmarkDotNet.Attributes;
 using static Akka.Streams.Kafka.Benchmark.Infrastructure.StreamHelpers;
 
 namespace Akka.Streams.Kafka.Benchmark.Infrastructure;
@@ -13,12 +13,12 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
     {
         await base.SetupAsync();
             
-        ActorSystem.Log.Info($"Populating data for Topic: {TopicName} [{TestMessageCount} messages]");
+        ActorSystem!.Log.Info($"Populating data for Topic: {TopicName} [{TestMessageCount} messages]");
         
         // Populate test data if needed (for consumer benchmarks)
         await PopulateTestDataAsync();
         
-        ActorSystem.Log.Info($"Test messages populated.");
+        ActorSystem.Log.Info("Test messages populated.");
     }
         
     protected virtual Task PopulateTestDataAsync() => 
@@ -28,12 +28,16 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
     {
         var source = CreateSource();
         
+        ActorSystem!.Log.Info("Starting consumer stream...");
+        
         var (control, completionTask) = source
             .Via(CreateDemandControlFlow<TMessage>(DemandControl!.Task)) // block demand until the benchmark is ready
             .Via(Flow.Create<TMessage>().CompletionTimeout(CompletionTimeout)) // fail the stream if it doesn't complete in time
             .Via(ProgressLogger<TMessage>(TestMessageCount, 0.05)) // log every 5% of the stream
             .ToMaterialized(CreateCountingSink<TMessage>(TestMessageCount), Keep.Both)
             .Run(ActorSystem.Materializer());
+        
+        ActorSystem.Log.Info("Consumer stream started.");
         
         return (control, completionTask);
     }
@@ -44,9 +48,18 @@ public abstract class KafkaConsumerBenchmark<TMessage> : KafkaBenchmarkBase
     public override void IterationSetup()
     {
         base.IterationSetup();
-            
-        var (control, completionTask) = SetupConsumer();
-        CompletionTask = completionTask;
-        StreamControl = control;
+
+        if (ActorSystem != null)
+        {
+            var (control, completionTask) = SetupConsumer();
+            CompletionTask = completionTask;
+            StreamControl = control;
+        }
+        else // can happen during overhead JIT compilation
+        {
+            Console.WriteLine("### WARNING: ActorSystem is null, skipping IterationSetup ###");
+            Console.WriteLine("Looks like GlobalSetup failed or never ran, check the logs for more information.");
+        }
+
     }
 }

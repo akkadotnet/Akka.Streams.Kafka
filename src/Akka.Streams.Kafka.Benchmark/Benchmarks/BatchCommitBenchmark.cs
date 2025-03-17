@@ -20,7 +20,7 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         protected override Source<ICommittableOffsetBatch, IControl> CreateSource()
         {
             var consumerSettings = CreateConsumerSettings<Null, string>();
-            var committerSettings = CommitterSettings.Create(ActorSystem)
+            var committerSettings = CommitterSettings.Create(ActorSystem!)
                 .WithMaxBatch(BatchSize);
 
             return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))

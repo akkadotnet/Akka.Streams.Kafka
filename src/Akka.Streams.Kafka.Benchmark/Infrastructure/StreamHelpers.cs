@@ -15,7 +15,7 @@ public static class StreamHelpers
     {
         return Flow.Create<T>()
             .Take(stopAt)
-            .WatchTermination((used, task) => Task.FromResult(Done.Instance))
+            .WatchTermination((_, task) => task)
             .To(Sink.Ignore<T>());
     }
 

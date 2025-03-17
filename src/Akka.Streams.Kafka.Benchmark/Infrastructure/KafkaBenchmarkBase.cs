@@ -20,7 +20,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
     public abstract class KafkaBenchmarkBase
     {
         private const string KafkaServer = "localhost:29092";
-        protected ActorSystem ActorSystem { get; private set; } = null!;
+        protected ActorSystem? ActorSystem { get; private set; }
         
         private string BenchmarkRunId { get; set; } = null!;
         
@@ -144,7 +144,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
             }
             
             // Cleanup actor system
-            await ActorSystem.Terminate();
+            await ActorSystem!.Terminate();
         }
         
         protected async Task<int> GenerateTestDataStringsAsync()
@@ -161,7 +161,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>()
         {
             return ConsumerSettings<TKey, TValue>
-                .Create(ActorSystem, null, null)
+                .Create(ActorSystem!, null, null)
                 .WithBootstrapServers(KafkaServer)
                 .WithGroupId(GroupId)
                 
@@ -174,7 +174,7 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure
         protected ProducerSettings<TKey, TValue> CreateProducerSettings<TKey, TValue>()
         {
             return ProducerSettings<TKey, TValue>
-                .Create(ActorSystem, null, null)
+                .Create(ActorSystem!, null, null)
                 .WithBootstrapServers(KafkaServer);
         }
 
