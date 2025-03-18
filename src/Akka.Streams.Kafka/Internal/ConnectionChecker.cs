@@ -48,11 +48,11 @@ namespace Akka.Streams.Kafka.Internal
                         Context.Stop(Self);
                         return true;
 
-                    case Internal.CheckConnection _:
+                    case Internal.CheckConnection:
                         Context.Parent.Tell(Metadata.ListTopics.Instance);
                         return true;
 
-                    case Metadata.Topics topics when topics.Response.Failure.Value is TimeoutException:
+                    case Metadata.Topics { Response.Failure.Value: TimeoutException } topics:
                         // failedAttempts is a sum of first triggered failure and retries (retries + 1)
                         if (failedAttempts == _maxRetries)
                         {
@@ -67,11 +67,11 @@ namespace Akka.Streams.Kafka.Internal
                         return true;
 
                     // This is a debug, to check to see if C# Confluent.Kafka behaves differently compared to JVM
-                    case Metadata.Topics topics when topics.Response.Failure.HasValue:
+                    case Metadata.Topics { Response.Failure.HasValue: true } topics:
                         _log.Warning($"Caught an exception while testing broker connection: {topics.Response.Failure.Value}");
                         return false;
 
-                    case Metadata.Topics topics when topics.Response.IsSuccess:
+                    case Metadata.Topics { Response.IsSuccess: true }:
                         StartTimer();
                         Become(Regular());
                         return true;
