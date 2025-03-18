@@ -37,21 +37,16 @@ namespace Akka.Streams.Kafka.Messages
     /// </summary>
     /// <typeparam name="K">Type of key</typeparam>
     /// <typeparam name="V">Type of value</typeparam>
-    public class ProducerRecord<K, V> : IEquatable<ProducerRecord<K, V>>
+    public sealed record ProducerRecord<K, V>
     {
-        /// <summary>
-        /// ProducerRecord
-        /// </summary>
         public ProducerRecord(string topic, int? partition, long? timestamp, Message<K, V> message)
         {
-            if (topic == null)
-                throw new ArgumentNullException(nameof(topic), "Topic cannot be null");
-            if (timestamp != null && timestamp < 0)
+            if (timestamp is < 0)
                 throw new ArgumentException($"Invalid timestamp: {timestamp}. Timestamp should always be non-negative or null.");
-            if (partition != null && partition < 0)
+            if (partition is < 0)
                 throw new ArgumentException($"Invalid partition: {partition}. Partition number should always be non-negative or null.");
             
-            Topic = topic;
+            Topic = topic ?? throw new ArgumentNullException(nameof(topic), "Topic cannot be null");
             Partition = partition;
             Timestamp = timestamp;
             Message = message;
@@ -109,56 +104,20 @@ namespace Akka.Streams.Kafka.Messages
         /// Topic to send to.
         /// </summary>
         public string Topic { get; set; }
+        
         /// <summary>
         /// Partition to sent to.
         /// </summary>
         public int? Partition { get; set; }
+        
         /// <summary>
         /// Timestamp
         /// </summary>
         public long? Timestamp { get; set; }
+        
         /// <summary>
         /// The message to send
         /// </summary>
         public Message<K, V> Message { get; set; }
-
-        /// <inheritdoc />
-        public override string ToString()
-        {
-            return $"ProducerRecord(" +
-                       $"topic={Topic}, " +
-                       $"partition={Partition?.ToString() ?? "null"}, " +
-                       $"key={Message?.Key?.ToString() ?? "null"}, " +
-                       $"value={Message?.Value?.ToString() ?? "null"}, " +
-                       $"timestamp={Timestamp?.ToString() ?? "null"}" +
-                   $")";
-        }
-
-        public bool Equals(ProducerRecord<K, V>? other)
-        {
-            if (ReferenceEquals(null, other)) return false;
-            if (ReferenceEquals(this, other)) return true;
-            return Topic == other.Topic && Partition == other.Partition && Timestamp == other.Timestamp && Equals(Message, other.Message);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            if (ReferenceEquals(null, obj)) return false;
-            if (ReferenceEquals(this, obj)) return true;
-            if (obj.GetType() != this.GetType()) return false;
-            return Equals((ProducerRecord<K, V>) obj);
-        }
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                var hashCode = (Topic != null ? Topic.GetHashCode() : 0);
-                hashCode = (hashCode * 397) ^ Partition.GetHashCode();
-                hashCode = (hashCode * 397) ^ Timestamp.GetHashCode();
-                hashCode = (hashCode * 397) ^ (Message != null ? Message.GetHashCode() : 0);
-                return hashCode;
-            }
-        }
     }
 }
