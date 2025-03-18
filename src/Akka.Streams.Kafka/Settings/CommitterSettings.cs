@@ -120,6 +120,6 @@ namespace Akka.Streams.Kafka.Settings
         /// <summary>
         /// Sets the strategy for when we commit.
         /// </summary>
-        public CommitterSettings WithWhen(ICommitWhen when) => this with { When = when };
+        public CommitterSettings WithCommitWhen(ICommitWhen when) => this with { When = when };
     }
 }

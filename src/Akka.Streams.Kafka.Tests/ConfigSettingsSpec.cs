@@ -186,7 +186,7 @@ akka.kafka.committer {
                 .WithMaxBatch(200)
                 .WithMaxInterval(TimeSpan.FromSeconds(2))
                 .WithParallelism(8)
-                .WithWhen(CommitWhen.OffsetFirstObserved.Instance);
+                .WithCommitWhen(CommitWhen.OffsetFirstObserved.Instance);
                 
             modifiedSettings.MaxBatch.Should().Be(200);
             modifiedSettings.MaxInterval.Should().Be(TimeSpan.FromSeconds(2));
