@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Pattern;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
@@ -202,6 +203,43 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         // special config to have more than one batch failure 
         var settings = DefaultCommitterSettings.WithMaxBatch(3).WithMaxInterval(TimeSpan.FromHours(10))
             .WithParallelism(100);
+        
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+
+        await sinkProbe.RequestAsync(100);
+        
+        var msgs = Enumerable.Range(1, 10).Select(_ => offsetFactory.MakeOffset(new Exception())).ToList();
+        
+        foreach (var msg in msgs)
+        {
+            await sourceProbe.SendNextAsync(msg);
+        }
+
+        var testException = new IllegalStateException("BOOM!");
+        await sourceProbe.SendErrorAsync(testException);
+
+        var receivedError = await PullTillFailureAsync(sinkProbe, maxEvents: 4);
+    }
+
+    private async Task<Exception?> PullTillFailureAsync(TestSubscriber.Probe<ICommittableOffsetBatch> sinkProbe, int maxEvents)
+    {
+        while (true)
+        {
+            var nextError = sinkProbe.ExpectNextOrErrorAsync();
+            if (maxEvents < 0) Assert.Fail("Max number of events have been read without failure");
+
+            var m = await nextError;
+            switch (m)
+            {
+                case Exception ex:
+                    Log.Debug("Received error: {0}", nextError);
+                    return ex;
+                default:
+                    Log.Debug("Received batch: {0}", m);
+                    maxEvents -= 1;
+                    continue;
+            }
+        }
     }
 
     private (TestPublisher.Probe<ICommittable> publisher, IControl control,
