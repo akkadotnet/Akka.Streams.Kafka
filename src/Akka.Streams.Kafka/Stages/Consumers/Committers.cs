@@ -62,7 +62,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         {
             var committer = committableOffset.Committer;
             return committer.CommitSingle(committableOffset.Offset.GroupTopicPartition.TopicPartition,
-                new OffsetAndMetadata(committableOffset.Offset.Offset + 1, committableOffset.Metadata));
+                new OffsetAndMetadata(committableOffset.Offset.Offset, committableOffset.Metadata));
         }
 
         public static Task Commit(CommittableOffsetBatch batch)

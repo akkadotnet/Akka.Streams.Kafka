@@ -71,6 +71,25 @@ public class CommittingSpec : KafkaIntegrationTests
         // than 26, and that is not wrong
         
         // some concurrent publishing with the second half of Numbers
-        await ProduceStrings(topic1, Numbers.Skip(100), ProducerSettings);
+        await ProduceStrings(new TopicPartition(topic1, new Partition(0)), Numbers.Skip(100), ProducerSettings);
+
+        var expectedResumed = Numbers.Skip(committedElements.Current).ToList();
+        await probe2.RequestAsync(Numbers.Length);
+        await probe2.ExpectNextNAsync(expectedResumed);
+        
+        await probe2.CancelAsync();
+        
+        // another consumer from a different group should get all the messages
+        var probe3 = KafkaConsumer
+            .CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Topics(topic1))
+            .Select(c => c.Record.Message.Value)
+            .RunWith(this.SinkProbe<string>(), Sys);
+        
+        await probe3.AsyncBuilder()
+            .Request(Numbers.Length)
+            .ExpectNextN(Numbers)
+            .ExecuteAsync();
+        
+        await probe3.CancelAsync();
     }
 }
