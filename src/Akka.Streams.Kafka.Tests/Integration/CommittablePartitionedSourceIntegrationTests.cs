@@ -67,7 +67,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
                         {
                             try
                             {
+#pragma warning disable CS0618 // Type or member is obsolete
                                 await message.CommitableOffset.Commit();
+#pragma warning restore CS0618 // Type or member is obsolete
                             }
                             catch (Exception ex)
                             {

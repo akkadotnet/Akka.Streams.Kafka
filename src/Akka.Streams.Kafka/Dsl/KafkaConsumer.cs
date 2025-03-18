@@ -138,8 +138,10 @@ namespace Akka.Streams.Kafka.Dsl
         {
             return CommittableSource(settings, subscription).SelectAsync(1, async message =>
             {
-               await message.CommitableOffset.Commit();
-               return message.Record;
+#pragma warning disable CS0618 // Type or member is obsolete
+                await message.CommitableOffset.Commit(); // TODO: need access to an internal interface or base class method here
+#pragma warning restore CS0618 // Type or member is obsolete
+                return message.Record;
             });
         }
 

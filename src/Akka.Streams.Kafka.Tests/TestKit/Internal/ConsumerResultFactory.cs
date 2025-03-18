@@ -1,11 +1,14 @@
-﻿using System.Collections.Immutable;
+﻿using System;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
+using Akka.Actor;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Stages.Consumers;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Tests.TestKit.Internal
 {
-    public static class ConsumerResultFactory
+    internal static class ConsumerResultFactory
     {
         public static MockCommitter FakeCommiter { get; } = new MockCommitter();
 
@@ -22,11 +25,18 @@ namespace Akka.Streams.Kafka.Tests.TestKit.Internal
         internal static CommittableOffset CommittableOffset(GroupTopicPartitionOffset partitionOffset, string metadata)
             => new CommittableOffset(FakeCommiter, partitionOffset, metadata);
         
-        public class MockCommitter : IInternalCommitter
+        internal class MockCommitter : KafkaAsyncConsumerCommitter
         {
-            public Task Commit(ImmutableList<GroupTopicPartitionOffset> offsets) => Task.CompletedTask;
+            public MockCommitter() : base(() => ActorRefs.Nobody, TimeSpan.Zero)
+            {
+            }
 
-            public Task Commit(ICommittableOffsetBatch batch) => Task.CompletedTask;
+            public override Task CommitSingle(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) => Task.CompletedTask;
+            
+            public override Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
+                => Task.CompletedTask;
+            
+            public override void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata, bool emergency){}
         }
     }
 }

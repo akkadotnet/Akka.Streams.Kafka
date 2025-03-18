@@ -24,7 +24,7 @@ namespace Akka.Streams.Kafka.Messages
     /// <summary>
     /// Used by <see cref="TransactionalMessageBuilder{K,V}"/>
     /// </summary>
-    internal sealed class PartitionOffsetCommittedMarker : GroupTopicPartitionOffset
+    internal sealed record PartitionOffsetCommittedMarker : GroupTopicPartitionOffset
     {
         /// <summary>
         /// Committed marker

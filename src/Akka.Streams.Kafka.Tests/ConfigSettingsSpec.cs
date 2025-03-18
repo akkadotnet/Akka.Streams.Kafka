@@ -145,5 +145,53 @@ akka.kafka.producer.kafka-clients {{
             consumerSettings.ConnectionCheckerSettings.CheckInterval.Should().Be(TimeSpan.FromSeconds(15));
             consumerSettings.ConnectionCheckerSettings.Factor.Should().Be(2.0);
         }
+        
+        [Fact]
+        public void CommitterSettings_must_loadDefaultValues()
+        {
+            // Get the default committer settings from reference.conf
+            var conf = KafkaExtensions.DefaultSettings.GetConfig("akka.kafka.committer");
+            var settings = CommitterSettings.Create(conf);
+            
+            // Verify default values match those in reference.conf
+            settings.MaxBatch.Should().Be(1000);
+            settings.MaxInterval.Should().Be(TimeSpan.FromSeconds(10));
+            settings.Parallelism.Should().Be(1);
+            settings.When.Should().BeOfType<CommitWhen.OffsetFirstObserved>();
+        }
+        
+        [Fact]
+        public void CommitterSettings_must_overrideDefaultValues()
+        {
+            // Create custom HOCON configuration with overridden values
+            var conf = ConfigurationFactory.ParseString(@"
+akka.kafka.committer {
+    max-batch = 500
+    max-interval = 5s
+    parallelism = 4
+    when = ""next-offset-observed""
+}
+            ").WithFallback(KafkaExtensions.DefaultSettings).GetConfig("akka.kafka.committer");
+            
+            var settings = CommitterSettings.Create(conf);
+            
+            // Verify overridden values
+            settings.MaxBatch.Should().Be(500);
+            settings.MaxInterval.Should().Be(TimeSpan.FromSeconds(5));
+            settings.Parallelism.Should().Be(4);
+            settings.When.Should().BeOfType<CommitWhen.NextOffsetObserved>();
+            
+            // Test the fluent API for modifying settings
+            var modifiedSettings = settings
+                .WithMaxBatch(200)
+                .WithMaxInterval(TimeSpan.FromSeconds(2))
+                .WithParallelism(8)
+                .WithCommitWhen(CommitWhen.OffsetFirstObserved.Instance);
+                
+            modifiedSettings.MaxBatch.Should().Be(200);
+            modifiedSettings.MaxInterval.Should().Be(TimeSpan.FromSeconds(2));
+            modifiedSettings.Parallelism.Should().Be(8);
+            modifiedSettings.When.Should().BeOfType<CommitWhen.OffsetFirstObserved>();
+        }
     }
 }

@@ -73,7 +73,9 @@ namespace Akka.Streams.Kafka.Tests.Integration
             var (task, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
                 .SelectAsync(10, async elem =>
                 {
+#pragma warning disable CS0618 // Type or member is obsolete
                     await elem.CommitableOffset.Commit();
+#pragma warning restore CS0618 // Type or member is obsolete
                     committedElements.Enqueue(elem.Record.Message.Value);
                     return Done.Instance;
                 })

@@ -215,7 +215,9 @@ namespace Akka.Streams.Kafka.Tests
                 })
                 .SelectAsync(1, async elem =>
                 {
+#pragma warning disable CS0618 // Type or member is obsolete
                     await elem.CommitableOffset.Commit();
+#pragma warning restore CS0618 // Type or member is obsolete
                     return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)
@@ -242,7 +244,9 @@ namespace Akka.Streams.Kafka.Tests
             probe = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topicPartition, Offset.Unset)))
                 .SelectAsync(1, async elem =>
                 {
+#pragma warning disable CS0618 // Type or member is obsolete
                     await elem.CommitableOffset.Commit();
+#pragma warning restore CS0618 // Type or member is obsolete
                     return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)

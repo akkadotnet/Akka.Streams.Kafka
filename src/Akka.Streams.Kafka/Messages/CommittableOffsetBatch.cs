@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
+using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Stages.Consumers;
 
 namespace Akka.Streams.Kafka.Messages
@@ -17,7 +18,7 @@ namespace Akka.Streams.Kafka.Messages
         /// CommittableOffsetBatch
         /// </summary>
         public CommittableOffsetBatch(IImmutableDictionary<GroupTopicPartition, OffsetAndMetadata> offsetsAndMetadata, 
-                                      IImmutableDictionary<string, IInternalCommitter> committers, 
+                                      IImmutableDictionary<GroupTopicPartition, KafkaAsyncConsumerCommitter> committers, 
                                       long batchSize)
         {
             OffsetsAndMetadata = offsetsAndMetadata;
@@ -30,11 +31,13 @@ namespace Akka.Streams.Kafka.Messages
         
         /// <inheritdoc />
         public IImmutableSet<GroupTopicPartitionOffset> Offsets => OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset)).ToImmutableHashSet();
-        
+
+        public bool IsEmpty => BatchSize == 0;
+
         /// <summary>
         /// Committers
         /// </summary>
-        public IImmutableDictionary<string, IInternalCommitter> Committers { get; }
+        public IImmutableDictionary<GroupTopicPartition, KafkaAsyncConsumerCommitter> Committers { get; }
         
         /// <summary>
         /// Offsets and metadata
@@ -45,13 +48,14 @@ namespace Akka.Streams.Kafka.Messages
         /// Create empty offset batch
         /// </summary>
         public static ICommittableOffsetBatch Empty => new CommittableOffsetBatch(ImmutableDictionary<GroupTopicPartition, OffsetAndMetadata>.Empty, 
-                                                                                  ImmutableDictionary<string, IInternalCommitter>.Empty, 
+                                                                                  ImmutableDictionary<GroupTopicPartition, KafkaAsyncConsumerCommitter>.Empty, 
                                                                                   0);
         
         /// <summary>
         /// Create an offset batch out of a first offsets.
         /// </summary>
         public static ICommittableOffsetBatch Create(ICommittableOffset offset) => Empty.Updated(offset);
+        
         /// <summary>
         /// Create an offset batch out of a list of offsets.
         /// </summary>
@@ -59,17 +63,12 @@ namespace Akka.Streams.Kafka.Messages
         {
             return offsets.Aggregate(Empty, (batch, offset) => batch.Updated(offset));
         }
-
-        /// <inheritdoc />
-        public async Task Commit()
+        
+        public Task Commit()
         {
-            if (Offsets.IsEmpty() || Committers.IsEmpty())
-                return;
-
-            await Committers.First().Value.Commit(this);
+            return KafkaAsyncConsumerCommitter.Commit(this);
         }
-
-        /// <inheritdoc />
+        
         public ICommittableOffsetBatch Updated(ICommittable offset)
         {
             switch (offset)
@@ -86,66 +85,82 @@ namespace Akka.Streams.Kafka.Messages
         /// <summary>
         /// Adds offsets from given committable batch to existing ones
         /// </summary>
-        private ICommittableOffsetBatch UpdateWithBatch(ICommittableOffsetBatch committableOffsetBatch)
+        private CommittableOffsetBatch UpdateWithBatch(ICommittableOffsetBatch committableOffsetBatch)
         {
-            if (!(committableOffsetBatch is CommittableOffsetBatch committableOffsetBatchImpl))
-                throw new ArgumentException($"Unexpected CommittableOffsetBatch, got {committableOffsetBatch.GetType().Name}, expected {nameof(CommittableOffsetBatch)}");
-
-            var newOffsetsAndMetdata = OffsetsAndMetadata.SetItems(committableOffsetBatchImpl.OffsetsAndMetadata);
-            var newCommitters = committableOffsetBatchImpl.Committers.Aggregate(Committers, (committers, pair) =>
+            switch (committableOffsetBatch)
             {
-                var groupId = pair.Key;
-                var committer = pair.Value;
-                if (committers.TryGetValue(groupId, out var groupCommitter))
+                case CommittableOffsetBatch newBatch:
                 {
-                    if (!groupCommitter.Equals(committer))
-                    {
-                        throw new ArgumentException($"CommittableOffsetBatch {committableOffsetBatch} committer for groupId {groupId} " +
-                                                    $"must be same as the other with this groupId.");
-                    }
-
-                    return committers;
+                    var newOffsetsAndMetadata = OffsetsAndMetadata.SetItems(newBatch.OffsetsAndMetadata);
+                    
+                    // the last KafkaAsyncConsumerCommitter for each GroupTopicPartition wins
+                    var newCommitters = Committers.SetItems(newBatch.Committers);
+                    return new CommittableOffsetBatch(newOffsetsAndMetadata, newCommitters, BatchSize + newBatch.BatchSize);
                 }
-                else
-                {
-                    return committers.Add(groupId, committer);
-                }
-            }).ToImmutableDictionary(pair => pair.Key, pair => pair.Value);
-            
-            return new CommittableOffsetBatch(newOffsetsAndMetdata, newCommitters, BatchSize + committableOffsetBatchImpl.BatchSize);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(committableOffsetBatch),
+                        $"Unknown committable offset batch, got {committableOffsetBatch.GetType().Name}, expected {nameof(CommittableOffsetBatch)}");
+            }
         }
 
         /// <summary>
         /// Adds committable offset to existing ones
         /// </summary>
-        private ICommittableOffsetBatch UpdateWithOffset(ICommittableOffset committableOffset)
+        private CommittableOffsetBatch UpdateWithOffset(ICommittableOffset newOffset)
         {
-            var partitionOffset = committableOffset.Offset;
-            var metadata = (committableOffset is ICommittableOffsetMetadata withMetadata) ? withMetadata.Metadata : string.Empty;
+            var partitionOffset = newOffset.Offset;
+            var key = partitionOffset.GroupTopicPartition;
+            var metadata = (newOffset is ICommittableOffsetMetadata withMetadata) ? withMetadata.Metadata : string.Empty;
 
-            var newOffsets = OffsetsAndMetadata.SetItem(partitionOffset.GroupTopicPartition, new OffsetAndMetadata(partitionOffset.Offset, metadata));
-            var committer = committableOffset is CommittableOffset c 
-                ? c.Committer 
-                : throw new ArgumentException($"Unknown committable offset, got {committableOffset.GetType().Name}, expected {nameof(committableOffset)}");
-            
-            
-            IImmutableDictionary<string, IInternalCommitter> newCommitters;
-            if (Committers.TryGetValue(partitionOffset.GroupId, out var groupCommitter))
-            {
-                if (!groupCommitter.Equals(committer))
-                {
-                    throw new ArgumentException($"CommittableOffset {committableOffset} committer for groupId {partitionOffset.GroupId} " +
-                                                $"must be same as the other with this groupId.");
-                }
+            var newOffsets = OffsetsAndMetadata.SetItem(key, new OffsetAndMetadata(partitionOffset.Offset, metadata));
 
-                newCommitters = Committers;
-            }
-            else
+            var newCommitter = newOffset switch
             {
-                newCommitters = Committers.SetItem(partitionOffset.GroupId, committer);
-            }
+                CommittableOffset c => c.Committer,
+                _ => throw new ArgumentOutOfRangeException(nameof(newOffset),
+                    $"Unknown committable offset, got {newOffset.GetType().Name}, expected {nameof(CommittableOffset)}")
+            };
+            
+            // the last KafkaAsyncConsumerCommitter for this GroupTopicPartition wins
+            var newCommitters = Committers.SetItem(key, newCommitter);
             
             return new CommittableOffsetBatch(newOffsets, newCommitters, BatchSize + 1);
         }
+        
+        internal KafkaAsyncConsumerCommitter CommitterFor(GroupTopicPartition groupTopicPartition)
+        {
+            if (Committers.TryGetValue(groupTopicPartition, out var committer))
+            {
+                return committer;
+            }
+            throw new ArgumentException($"Unknown committer for groupId {groupTopicPartition}");
+        }
+
+        internal CommittableOffsetBatch Filter(Predicate<GroupTopicPartition> p)
+        {
+            var newOffsets = OffsetsAndMetadata.Where(o => p(o.Key))
+                .ToImmutableDictionary(o => o.Key, o => o.Value);
+            var newCommiters =
+                Offsets.ToImmutableDictionary(c => c.GroupTopicPartition, v => CommitterFor(v.GroupTopicPartition));
+            return new CommittableOffsetBatch(newOffsets, newCommiters, BatchSize);
+        }
+        
+        public CommittableOffsetBatch TellCommit()
+        {
+            return TellCommitWithPriority(false);
+        }
+        
+        public CommittableOffsetBatch TellCommitEmergency()
+        {
+            return TellCommitWithPriority(true);
+        }
+        
+        private CommittableOffsetBatch TellCommitWithPriority(bool emergency)
+        {
+            KafkaAsyncConsumerCommitter.TellCommit(this, emergency);
+            return this;
+        }
+
+        public override string ToString() => $"CommittableOffsetBatch(BatchSize={BatchSize}, {string.Join(",", Offsets)})";
     }
 }

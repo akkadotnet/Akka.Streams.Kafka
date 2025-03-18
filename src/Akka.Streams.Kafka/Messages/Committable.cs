@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 using System.Threading.Tasks;
 
@@ -13,28 +14,36 @@ namespace Akka.Streams.Kafka.Messages
         /// <summary>
         /// Commits an offset that is included in a <see cref="CommittableMessage{K,V}"/> 
         /// </summary>
+        [Obsolete("Do not use directly. Use Committer.Flow or Committer.Sink instead.")]
         Task Commit();
+        
         /// <summary>
         /// Get a number of processed messages this committable contains
         /// </summary>
         long BatchSize { get; }
+        
+        /// <summary>
+        /// Add/overwrite an offset position from another committable.
+        /// </summary>
+        ICommittableOffsetBatch Updated(ICommittable offset);
     }
 
     /// <summary>
     /// For improved efficiency it is good to aggregate several <see cref="ICommittableOffset"/>,
-    /// using this class, befoe <see cref="ICommittable.Commit"/> them.
+    /// using this class, before <see cref="ICommittable.Commit"/> them.
     /// Start with 
     /// </summary>
     public interface ICommittableOffsetBatch : ICommittable
     {
         /// <summary>
-        /// Add/overwrite an offset position from another committable.
-        /// </summary>
-        ICommittableOffsetBatch Updated(ICommittable offset);
-        /// <summary>
         /// Get current offset positions
         /// </summary>
         IImmutableSet<GroupTopicPartitionOffset> Offsets { get; }
+        
+        /// <summary>
+        /// Returns <c>true</c> if the batch contains no commits.
+        /// </summary>
+        bool IsEmpty { get; }
     }
 
     /// <summary>
@@ -59,7 +68,7 @@ namespace Akka.Streams.Kafka.Messages
     public interface ICommittableOffsetMetadata : ICommittableOffset
     {
         /// <summary>
-        /// Cosumed record metadata
+        /// Consumed record metadata
         /// </summary>
         string Metadata { get; }
     }
