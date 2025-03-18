@@ -5,6 +5,7 @@ using Akka.Annotations;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
+using Akka.Util.Internal;
 using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 
@@ -17,13 +18,13 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
     [InternalApi]
     public static class KafkaConsumerActorMetadata
     {
-        private static volatile int _number = 1;
+        private static readonly AtomicCounter Number = new(0); 
 
         /// <summary>
         /// Gets next actor number in thread-safe way
         /// </summary>
         /// <returns></returns>
-        public static int NextNumber() => Interlocked.Increment(ref _number);
+        public static int NextNumber() => Number.GetAndIncrement();
 
         public static Props GetProps<K, V>(ConsumerSettings<K, V> settings, Decider decider) =>
             GetProps(null, settings, decider, null);
@@ -74,16 +75,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 : ISubscriptionRequest;
 
             /// <summary>
+            /// Marker interface for shutdown messages to the KafkaConsumerActor
+            /// </summary>
+            public interface IStopLike : INoSerializationVerificationNeeded;
+
+            /// <summary>
             /// Stops the consumer actor
             /// </summary>
-            public class Stop
+            public sealed class Stop : IStopLike
             {
-                public static readonly Stop Instance = new Stop();
+                public static readonly Stop Instance = new();
 
                 private Stop()
                 {
                 }
             }
+
+            internal sealed record StopFromStage(string StageId) : IStopLike;
 
             public sealed record RegisterSubStage(IImmutableSet<TopicPartition> TopicPartitions)
                 : INoSerializationVerificationNeeded;
