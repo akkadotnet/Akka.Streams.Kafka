@@ -10,6 +10,9 @@ namespace Akka.Streams.Kafka.Internal
     {
         public static ImmutableDictionary<string, string> ParseKafkaClientsProperties(this Config config)
         {
+            var keys = CollectKeys(config.Root, [], config.Root.GetObject().Items.Keys.ToList());
+            return keys.ToDictionary(k => k, v => config.GetString(v)).ToImmutableDictionary();
+
             HashSet<string> CollectKeys(HoconValue c, HashSet<string> processedKeys, List<string> unprocessedKeys)
             {
                 while (true)
@@ -29,9 +32,6 @@ namespace Akka.Streams.Kafka.Internal
                     processedKeys.Add(currentKey);
                 }
             }
-
-            var keys = CollectKeys(config.Root, new HashSet<string>(), config.Root.GetObject().Items.Keys.ToList());
-            return keys.ToDictionary(k => k, v => config.GetString(v)).ToImmutableDictionary();
         }
     }
 }
