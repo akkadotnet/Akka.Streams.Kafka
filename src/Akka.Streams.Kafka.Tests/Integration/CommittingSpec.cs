@@ -57,5 +57,19 @@ public class CommittingSpec : KafkaIntegrationTests
         await probe1.RequestAsync(25);
         var found = (await probe1.ExpectNextNAsync(25).ToListAsync());
         messages.Take(25).Should().BeEquivalentTo(found);
+
+        await probe1.CancelAsync();
+        await control.IsShutdown;
+
+        var probe2 = KafkaConsumer
+            .CommittableSource(consumerSettings, Subscriptions.Topics(topic1))
+            .Select(c => c.Record.Message.Value)
+            .RunWith(this.SinkProbe<string>(), Sys);
+        
+        // Note that due to buffers and SelectAsync(10) the committed offset is more
+        // than 26, and that is not wrong
+        
+        // some concurrent publishing with the second half of Numbers
+        await ProduceStrings(topic1, Numbers.Skip(100), ProducerSettings);
     }
 }
