@@ -16,11 +16,11 @@ namespace Akka.Streams.Kafka.Tests.Integration;
 
 public class CommittingSpec : KafkaIntegrationTests
 {
-    public CommittingSpec(ITestOutputHelper output, KafkaFixture fixture) 
+    public CommittingSpec(ITestOutputHelper output, KafkaFixture fixture)
         : base(nameof(CommittingSpec), output, fixture)
     {
     }
-    
+
     private static readonly string[] Numbers = Enumerable.Range(1, 200).Select(c => c.ToString()).ToArray();
     private const int Partition1 = 1;
 
@@ -44,7 +44,7 @@ public class CommittingSpec : KafkaIntegrationTests
                 await ((CommittableOffset)e.CommitableOffset).Commit();
                 var offsetAsInt = (int)e.CommitableOffset.Offset.Offset.Value;
                 var curValue = committedElements.Current;
-                
+
                 // CAS to ensure that we only commit the highest offset
                 // N.B. if this racy, replace with messaging an actor
                 committedElements.CompareAndSet(curValue, Math.Max(curValue, offsetAsInt));
@@ -66,30 +66,106 @@ public class CommittingSpec : KafkaIntegrationTests
             .CommittableSource(consumerSettings, Subscriptions.Topics(topic1))
             .Select(c => c.Record.Message.Value)
             .RunWith(this.SinkProbe<string>(), Sys);
-        
+
         // Note that due to buffers and SelectAsync(10) the committed offset is more
         // than 26, and that is not wrong
-        
+
         // some concurrent publishing with the second half of Numbers
         await ProduceStrings(new TopicPartition(topic1, new Partition(0)), Numbers.Skip(100), ProducerSettings);
 
         var expectedResumed = Numbers.Skip(committedElements.Current).ToList();
         await probe2.RequestAsync(Numbers.Length);
         await probe2.ExpectNextNAsync(expectedResumed);
-        
+
         await probe2.CancelAsync();
-        
+
         // another consumer from a different group should get all the messages
         var probe3 = KafkaConsumer
             .CommittableSource(consumerSettings.WithGroupId(group2), Subscriptions.Topics(topic1))
             .Select(c => c.Record.Message.Value)
             .RunWith(this.SinkProbe<string>(), Sys);
-        
+
         await probe3.AsyncBuilder()
             .Request(Numbers.Length)
             .ExpectNextN(Numbers)
             .ExecuteAsync();
-        
+
         await probe3.CancelAsync();
+    }
+
+    [Fact]
+    public async Task CommittingMustWorkEvenIfThePartitionIsBalancedAwayAndNotReassignedYet()
+    {
+        var count = 10;
+        var topic1 = CreateTopic(1);
+        var group1 = CreateGroup(1);
+        var consumerSettings = CreateConsumerSettings<string>(group1);
+
+        var partition0 = new TopicPartition(topic1, new Partition(0));
+        var partition1 = new TopicPartition(topic1, new Partition(1));
+
+        await GivenInitializedTopicAsync(topic1, 2);
+
+        await Source.From(Numbers.Take(10))
+            .Select(n =>
+            {
+                return ProducerMessage.Multi([
+                    new ProducerRecord<Null, string>(partition0, n + "-p0"),
+                    new ProducerRecord<Null, string>(partition1, n + "-p1")
+                ]);
+            })
+            .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(ProducerSettings))
+            .RunWith(Sink.Ignore<IResults<Null, string, NotUsed>>(), Sys);
+
+        // Subscribe to the topic (without demand)
+        var rebalanceActor1 = CreateTestProbe();
+        var subscription1 = Subscriptions.Topics(topic1).WithRebalanceListener(rebalanceActor1.Ref);
+        var (control1, probe1) = KafkaConsumer.CommittableSource(consumerSettings, subscription1)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
+            .Run(Sys);
+
+        // Await initial partition assignment
+        var tp1 = await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
+        tp1.Partitions.Should().BeEquivalentTo([partition0, partition1]);
+        tp1.Subscription.Should().Be(subscription1);
+
+        // read all messages from both partitions
+        var committables1 = await probe1.AsyncBuilder()
+            .Request(count * 2).ExpectNextNAsync(count * 2).ToListAsync();
+
+        // Subscribe to topic (without demand)
+        var rebalanceActor2 = CreateTestProbe();
+        var subscription2 = Subscriptions.Topics(topic1).WithRebalanceListener(rebalanceActor2.Ref);
+        var (control2, probe2) = KafkaConsumer.CommittableSource(consumerSettings, subscription2)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
+            .Run(Sys);
+
+        // Await an assignment to the new rebalance listener
+        var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>();
+
+        // Await revoke of all partitions in old rebalance listener
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>();
+
+        // commit BEFORE the reassign finishes with an assignment
+#pragma warning disable CS0618 // Type or member is obsolete
+        var consumer1Read = Task.WhenAll(committables1.Select(async c =>
+        {
+            await c.CommitableOffset.Commit();
+            return c.Record.Message.Value;
+        }));
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        // the rebalance finishes
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
+
+        var finalResults = await consumer1Read;
+        finalResults.Should().BeEquivalentTo(Numbers.Take(count).Select(c => c + "-p0")
+            .Concat(Numbers.Take(count).Select(c => c + "-p1")));
+        
+        probe1.Cancel();
+        probe2.Cancel();
+        
+        await control1.IsShutdown;
+        await control2.IsShutdown;
     }
 }
