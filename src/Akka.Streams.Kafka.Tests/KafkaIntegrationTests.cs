@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -82,7 +83,14 @@ namespace Akka.Streams.Kafka.Tests
                 .WithGroupId(group);
         }
         
-        protected async Task ProduceStrings<TKey>(string topic, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
+        protected Task ProduceStrings<TKey>(string topic, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
+        {
+            var stringElements = range.Select(c => c.ToString());
+            return ProduceStrings(topic, stringElements, producerSettings);
+        }
+
+        protected async Task ProduceStrings<TKey>(string topic, IEnumerable<string> range,
+            ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
