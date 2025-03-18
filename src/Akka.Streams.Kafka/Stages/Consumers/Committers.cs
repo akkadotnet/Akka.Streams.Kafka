@@ -81,7 +81,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
             });
         }
 
-        private static IEnumerable<T> ForBatch<T>(CommittableOffsetBatch batch,
+        private static IReadOnlyList<T> ForBatch<T>(CommittableOffsetBatch batch,
             Func<KafkaAsyncConsumerCommitter, TopicPartition, OffsetAndMetadata, T> sendMsg)
         {
             var results = batch.OffsetsAndMetadata.Select(c =>
@@ -90,7 +90,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                 // sends one message per partition; they are aggregated together in the KafkaConsumerActor
                 var committer = batch.CommitterFor(groupTopicPartition);
                 return sendMsg(committer, groupTopicPartition.TopicPartition, offsetAndMetadata);
-            });
+            }).ToList(); // ToList to force evaluation - otherwise some offsets won't be sent
 
             return results;
         }
