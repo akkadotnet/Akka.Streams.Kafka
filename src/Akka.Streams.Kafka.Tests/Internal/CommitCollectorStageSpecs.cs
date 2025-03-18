@@ -253,10 +253,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         lastBatch.Offsets.Last().Offset.Should()
             .Be(msg2.Offset.Offset, "expected only second message to be committed");
         offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
-        
+
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
-    
+
     [Fact(DisplayName =
         "CommitCollectorStage using NextObservedOffset should only commit when next offset is observed in a CommittableOffsetBatch")]
     public async Task CommitCollectorUsingNextObservedOffsetShouldOnlyCommitWhenNextOffsetIsObservedInBatch()
@@ -264,7 +264,8 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
         var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
         // create batches of size 1
-        var (batch1, batch2, batch3) = (offsetFactory.MakeBatch(), offsetFactory.MakeBatch(), offsetFactory.MakeBatch());
+        var (batch1, batch2, batch3) =
+            (offsetFactory.MakeBatch(), offsetFactory.MakeBatch(), offsetFactory.MakeBatch());
 
         await sinkProbe.RequestAsync(100);
 
@@ -283,39 +284,76 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         lastBatch.Offsets.Last().Offset.Should()
             .Be(batch2.Offsets.First().Offset, "expected only second message to be committed");
         offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
-        
+
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
+    }
+
+    [Fact(DisplayName =
+        "CommitCollectorStage using NextObservedOffset should only commit when next offset is observed in a CommittableOffset preceded by a CommittableOffsetBatch")]
+    public async Task
+        CommitCollectorUsingNextObservedOffsetShouldOnlyCommitWhenNextOffsetIsOffsetPrecededObservedInBatch()
+    {
+        var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        // create batches of size 1
+        var (batch1, msg2, batch3) = (offsetFactory.MakeBatch(), offsetFactory.MakeOffset(), offsetFactory.MakeBatch());
+
+        await sinkProbe.RequestAsync(100);
+
+        // first message should not be committed but be 'batched-up' again
+        await sourceProbe.SendNextAsync(batch1);
+        await sourceProbe.SendNextAsync(msg2);
+        await sourceProbe.SendNextAsync(batch3);
+
+        var batches = await sinkProbe.ExpectNextNAsync(2).ToListAsync();
+        await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
+
+        // batches are committed using SelectAsyncUnordered, so order is not guaranteed
+        var lastBatch = batches.MaxBy(c => c.Offsets.Last().Offset.Value);
+
+        Assert.NotNull(lastBatch);
+        lastBatch.Offsets.Last().Offset.Should()
+            .Be(msg2.Offset.Offset, "expected only second message to be committed");
+        offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
+
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
     
     [Fact(DisplayName =
-            "CommitCollectorStage using NextObservedOffset should only commit when next offset is observed in a CommittableOffset preceeded by a CommittableOffsetBatch")]
-        public async Task CommitCollectorUsingNextObservedOffsetShouldOnlyCommitWhenNextOffsetIsOffsetPreceededObservedInBatch()
-        {
-            var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
-            var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
-            // create batches of size 1
-            var (batch1, msg2, batch3) = (offsetFactory.MakeBatch(), offsetFactory.MakeOffset(), offsetFactory.MakeBatch());
-    
-            await sinkProbe.RequestAsync(100);
-    
-            // first message should not be committed but be 'batched-up' again
-            await sourceProbe.SendNextAsync(batch1);
-            await sourceProbe.SendNextAsync(msg2);
-            await sourceProbe.SendNextAsync(batch3);
-    
-            var batches = await sinkProbe.ExpectNextNAsync(2).ToListAsync();
-            await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
-    
-            // batches are committed using SelectAsyncUnordered, so order is not guaranteed
-            var lastBatch = batches.MaxBy(c => c.Offsets.Last().Offset.Value);
-    
-            Assert.NotNull(lastBatch);
-            lastBatch.Offsets.Last().Offset.Should()
-                .Be(msg2.Offset.Offset, "expected only second message to be committed");
-            offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
-            
-            await control.Shutdown().WaitAsync(RemainingOrDefault);
-        }
+        "CommitCollectorStage using NextObservedOffset should only commit when next offset is observed for correct partitions")]
+    public async Task
+        CommitCollectorUsingNextObservedOffsetShouldOnlyCommitWhenNextOffsetIsObservedForCorrectPartitions()
+    {
+        var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
+        var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        // create batches of size 1
+        var (msg1, msg2, msg3, msg4, msg5) 
+            = (offsetFactory.MakeOffset(partitionNum:1), offsetFactory.MakeOffset(partitionNum:2),
+                offsetFactory.MakeOffset(partitionNum:1), offsetFactory.MakeOffset(partitionNum:2),
+                offsetFactory.MakeOffset(partitionNum:1));
+        
+        var allMessages = new[] {msg1, msg2, msg3, msg4, msg5};
+
+        await sinkProbe.RequestAsync(100);
+
+        await Task.WhenAll(allMessages.Select(c => sourceProbe.SendNextAsync(c)));
+
+        var batches = await sinkProbe.ExpectNextNAsync(3).ToListAsync();
+        await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
+
+        // batches are committed using SelectAsyncUnordered, so order is not guaranteed
+        // Get the last 2 batches
+        var lastBatches = batches.OrderByDescending(c => c.Offsets.Last().Offset.Value)
+            .Take(2).ToList();
+        var lastBatch = lastBatches[0];
+        var secondLastBatch = lastBatches[1];
+
+        lastBatch.Offsets.Should().Contain(msg3.Offset, "expected the second offset of partition 1");
+        secondLastBatch.Offsets.Should().Contain(msg2.Offset, "expected the first offset of partition 2");
+        offsetFactory.Committer.Commits.Count.Should().Be(3, "expected only three commits");
+
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
+    }
 
     private async Task<Exception?> PullTillFailureAsync(TestSubscriber.Probe<ICommittableOffsetBatch> sinkProbe,
         int maxEvents)
