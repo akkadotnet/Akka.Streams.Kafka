@@ -3,7 +3,7 @@ using Akka.Configuration;
 
 namespace Akka.Streams.Kafka.Settings
 {
-    public class ConnectionCheckerSettings
+    public sealed record ConnectionCheckerSettings
     {
         public const string ConfigPath = "connection-checker";
         public static readonly string FullConfigPath = $"{ConsumerSettings.ConfigPath}.{ConfigPath}";
@@ -14,9 +14,9 @@ namespace Akka.Streams.Kafka.Settings
         public static ConnectionCheckerSettings Create(int maxRetries, TimeSpan checkInterval, double factor)
             => new ConnectionCheckerSettings(true, maxRetries, checkInterval, factor);
 
-        public static ConnectionCheckerSettings Create(Config config)
+        public static ConnectionCheckerSettings Create(Config? config = null)
         {
-            if (config == default)
+            if (config == null)
                 return Disabled;
 
             return config.GetBoolean("enabled", false)
@@ -28,10 +28,10 @@ namespace Akka.Streams.Kafka.Settings
                 : Disabled;
         }
 
-        public bool Enabled { get; }
-        public int MaxRetries { get; }
-        public TimeSpan CheckInterval { get; }
-        public double Factor { get; }
+        public bool Enabled { get; init; }
+        public int MaxRetries { get; init; }
+        public TimeSpan CheckInterval { get; init; }
+        public double Factor { get; init; }
 
         internal ConnectionCheckerSettings(
             bool enabled, 
@@ -52,6 +52,7 @@ namespace Akka.Streams.Kafka.Settings
             Factor = factor;
         }
 
+        [Obsolete("Use record copy methods")]
         private ConnectionCheckerSettings Copy(
             bool? enabled = null,
             int? maxRetries = null,
@@ -64,16 +65,15 @@ namespace Akka.Streams.Kafka.Settings
                 factor: factor ?? Factor);
 
         public ConnectionCheckerSettings WithEnabled(bool enabled)
-            => Copy(enabled: enabled);
+            => this with { Enabled = enabled };
 
         public ConnectionCheckerSettings WithMaxRetries(int maxRetries)
-            => Copy(maxRetries: maxRetries);
-
+            => this with { MaxRetries = maxRetries };
         public ConnectionCheckerSettings WithFactor(double factor)
-            => Copy(factor: factor);
+            => this with { Factor = factor };
 
         public ConnectionCheckerSettings WithCheckInterval(TimeSpan checkInterval)
-            => Copy(checkInterval: checkInterval);
+            => this with { CheckInterval = checkInterval };
 
         public override string ToString() => $"Akka.Streams.Kafka.ConnectionCheckerSettings(Enabled={Enabled},MaxRetries={MaxRetries},CheckInterval={CheckInterval},Factor={Factor})";
     }
