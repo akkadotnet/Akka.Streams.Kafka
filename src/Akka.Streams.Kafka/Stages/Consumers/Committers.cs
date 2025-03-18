@@ -62,7 +62,6 @@ namespace Akka.Streams.Kafka.Stages.Consumers
         {
             var committer = committableOffset.Committer;
             return committer.CommitSingle(committableOffset.Offset.GroupTopicPartition.TopicPartition,
-                // Scala code has an Offset + 1 here but I don't think that's right
                 new OffsetAndMetadata(committableOffset.Offset.Offset + 1, committableOffset.Metadata));
         }
 
