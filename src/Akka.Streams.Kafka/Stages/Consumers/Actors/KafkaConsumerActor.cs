@@ -81,7 +81,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
         /// </summary>
         private IImmutableList<TopicPartitionOffset> _commitMaps =
             ImmutableList<TopicPartitionOffset>.Empty;
-        
+
         /// <summary>
         /// Keep commit senders that need a reply once stashed commits are made
         /// </summary>
@@ -241,9 +241,9 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     {
                         EmergencyPoll();
                     }
-                    
+
                     return true;
-                
+
                 case KafkaConsumerActorMetadata.Internal.CommitSingle commitSingle:
                     // prepending as later received offsets are most likely higher
                     _commitMaps = ImmutableList<TopicPartitionOffset>.Empty
@@ -260,7 +260,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 case KafkaConsumerActorMetadata.Internal.RegisterSubStage subStage:
                     _stageActorsMap = _stageActorsMap.SetItem(subStage.TopicPartitions, Sender);
                     return true;
-                
+
                 case Internal.Poll<K, V> poll:
                     ReceivePoll(poll);
                     return true;
@@ -588,7 +588,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
         private void CommitAggregatedOffsets()
         {
-            if(_commitMaps.Count == 0) return;
+            if (_commitMaps.Count == 0) return;
             var aggregatedOffsets = AggregateOffsets(_commitMaps);
             // commits can occur after the partition has been revoked from the consumer, so ensure that we only attempt to
             // commit partitions that are currently assigned to the consumer. For high volume topics, this can lead to small
@@ -603,10 +603,11 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
             Commit(assignedOffsetsToCommit, replyTo);
         }
 
-        public static IReadOnlyDictionary<TopicPartition,Offset> AggregateOffsets(IReadOnlyCollection<TopicPartitionOffset> offsets)
+        public static IReadOnlyDictionary<TopicPartition, Offset> AggregateOffsets(
+            IReadOnlyCollection<TopicPartitionOffset> offsets)
         {
             var aggregate = new Dictionary<TopicPartition, Offset>();
-            foreach(var offset in offsets)
+            foreach (var offset in offsets)
             {
                 if (aggregate.TryGetValue(offset.TopicPartition, out var existingOffset))
                 {
@@ -621,7 +622,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             return aggregate;
         }
-        
+
         private void CommitAndPoll()
         {
             var refreshOffsets = _commitRefreshing.RefreshOffsets;
@@ -630,6 +631,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 _log.Debug("Refreshing committed offsets: {0}", refreshOffsets.JoinToString(", "));
                 Commit(refreshOffsets, ImmutableHashSet<IActorRef>.Empty);
             }
+
             Poll();
         }
 
@@ -841,29 +843,23 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     s.Tell(Done.Instance);
                 }
             }
-            catch (TopicPartitionOffsetException offsetException)
+            catch (KafkaException offsetException)
             {
                 watch.Stop();
-                if (offsetException.Error.Code == ErrorCode.RebalanceInProgress)
+                switch (offsetException)
                 {
-                    // retry commit
-                    RetryCommits(watch.Elapsed, offsetException);
-                }
-                else
-                {
-                    HandleFatal(watch.Elapsed, offsetException);
-                }
-            }
-            catch (KafkaException kafkaException)
-            {
-                if (kafkaException.Error.Code == ErrorCode.RebalanceInProgress)
-                {
-                    // retry commit
-                    RetryCommits(watch.Elapsed, kafkaException);
-                }
-                else
-                {
-                    HandleFatal(watch.Elapsed, kafkaException);
+                    case TopicPartitionOffsetException tpoException when tpoException.Results.Any(c => c.Error.IsFatal):
+                        HandleFatal(watch.Elapsed, tpoException);
+                        break;
+                    case TopicPartitionOffsetException nonFatalTpoException: // these commits can be retried
+                        RetryCommits(watch.Elapsed, nonFatalTpoException);
+                        break;
+                    case KafkaRetriableException retriableException:
+                        RetryCommits(watch.Elapsed, retriableException);
+                        break;
+                    default:
+                        HandleFatal(watch.Elapsed, offsetException);
+                        break;
                 }
             }
             catch (Exception ex)
@@ -871,7 +867,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 watch.Stop();
                 HandleFatal(watch.Elapsed, ex);
             }
-            finally{
+            finally
+            {
                 _commitsInProgress -= 1;
             }
 
@@ -879,7 +876,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             void RetryCommits(TimeSpan duration, Exception e)
             {
-                _log.Warning(e, "Kafka commit is to be retried after {0} ms, commitsInProgress={1}", duration.TotalMilliseconds,
+                _log.Warning(e, "Kafka commit is to be retried after {0} ms, commitsInProgress={1}",
+                    duration.TotalMilliseconds,
                     string.Join(", ", _commitsInProgress));
                 _commitMaps = commitMap.ToImmutableList().AddRange(_commitMaps);
                 _commitSenders = _commitSenders.Union(replyTo);
@@ -888,7 +886,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
 
             void HandleFatal(TimeSpan duration, Exception ex)
             {
-                _log.Error(ex, "Kafka commit failed after={0} ms, commitsInProgress={1}", duration.TotalMilliseconds,  
+                _log.Error(ex, "Kafka commit failed after={0} ms, commitsInProgress={1}", duration.TotalMilliseconds,
                     _commitsInProgress);
                 var failure = new Status.Failure(ex);
                 foreach (var actor in replyTo)
@@ -896,9 +894,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                     actor.Tell(failure);
                 }
             }
-                
         }
-        
+
         private void PausePartitions(IImmutableList<TopicPartition> partitions)
         {
             if (partitions.Count == 0)
