@@ -26,12 +26,12 @@ namespace Akka.Streams.Kafka.Tests
         public KafkaFixture Fixture { get; }
         protected IMaterializer Materializer { get; }
 
-        public KafkaIntegrationTests(string? actorSystemName, ITestOutputHelper output, KafkaFixture fixture) 
+        public KafkaIntegrationTests(string? actorSystemName, ITestOutputHelper output, KafkaFixture fixture)
             : base(Default(), actorSystemName, output)
         {
             Fixture = fixture;
             Materializer = Sys.Materializer();
-            
+
             Sys.Log.Info("Starting test: " + GetCurrentTestName(output));
         }
 
@@ -44,17 +44,17 @@ namespace Akka.Streams.Kafka.Tests
                 var test = (ITest)testMember.GetValue(output)!;
                 return test.DisplayName;
             }
-            
+
             return "Unknown test";
         }
-        
+
         private string Uuid { get; } = Guid.NewGuid().ToString();
-        
+
         protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
         protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
         protected ProducerSettings<Null, string> ProducerSettings => BuildProducerSettings<Null, string>();
-        
+
         protected ProducerSettings<TKey, TValue> BuildProducerSettings<TKey, TValue>()
         {
             return ProducerSettings<TKey, TValue>.Create(Sys, null, null).WithBootstrapServers(Fixture.KafkaServer);
@@ -64,7 +64,7 @@ namespace Akka.Streams.Kafka.Tests
         {
             get => CommitterSettings.Create(Sys);
         }
-        
+
         protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group)
         {
             return ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
@@ -82,8 +82,9 @@ namespace Akka.Streams.Kafka.Tests
                 .WithProperty("auto.offset.reset", "earliest")
                 .WithGroupId(group);
         }
-        
-        protected Task ProduceStrings<TKey>(string topic, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
+
+        protected Task ProduceStrings<TKey>(string topic, IEnumerable<int> range,
+            ProducerSettings<TKey, string> producerSettings)
         {
             var stringElements = range.Select(c => c.ToString());
             return ProduceStrings(topic, stringElements, producerSettings);
@@ -94,23 +95,32 @@ namespace Akka.Streams.Kafka.Tests
         {
             await Source
                 .From(range)
-                .Select(elem => new ProducerRecord<TKey, string>(topic, elem.ToString()))
+                .Select(elem => new ProducerRecord<TKey, string>(topic, elem))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
-        
-        protected async Task ProduceStrings<TKey>(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
+
+        protected async Task ProduceStrings<TKey>(Func<int, TopicPartition> partitionSelector, IEnumerable<int> range,
+            ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
                 .Select(elem => new ProducerRecord<TKey, string>(partitionSelector(elem), elem.ToString()))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
-        
-        protected async Task ProduceStrings<TKey>(TopicPartition topicPartition, IEnumerable<int> range, ProducerSettings<TKey, string> producerSettings)
+
+        protected async Task ProduceStrings<TKey>(TopicPartition topicPartition, IEnumerable<int> range,
+            ProducerSettings<TKey, string> producerSettings)
+        {
+            var strings = range.Select(c => c.ToString());
+            await ProduceStrings(topicPartition, strings, producerSettings);
+        }
+
+        protected async Task ProduceStrings<TKey>(TopicPartition topicPartition, IEnumerable<string> range,
+            ProducerSettings<TKey, string> producerSettings)
         {
             await Source
                 .From(range)
-                .Select(elem => new ProducerRecord<TKey, string>(topicPartition, elem.ToString()))
+                .Select(elem => new ProducerRecord<TKey, string>(topicPartition, elem))
                 .RunWith(KafkaProducer.PlainSink(producerSettings), Materializer);
         }
 
@@ -121,19 +131,20 @@ namespace Akka.Streams.Kafka.Tests
         protected void AssertTaskCompletesWithin(TimeSpan timeout, Task task, bool assertIsSuccessful = true)
         {
             AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
-            
+
             if (assertIsSuccessful)
                 task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
         }
-        
+
         /// <summary>
         /// Asserts that task will finish successfully until specified timeout.
         /// Throws task exception if task failes
         /// </summary>
-        protected TResult AssertTaskCompletesWithin<TResult>(TimeSpan timeout, Task<TResult> task, bool assertIsSuccessful = true)
+        protected TResult AssertTaskCompletesWithin<TResult>(TimeSpan timeout, Task<TResult> task,
+            bool assertIsSuccessful = true)
         {
             AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
-            
+
             if (assertIsSuccessful)
                 task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
 
@@ -150,21 +161,23 @@ namespace Akka.Streams.Kafka.Tests
             {
                 await client.CreateTopicsAsync([
                     new TopicSpecification
-                {
-                    Name = topic,
-                    NumPartitions = partitions,
-                    ReplicationFactor = KafkaFixture.KafkaReplicationFactor
-                }
+                    {
+                        Name = topic,
+                        NumPartitions = partitions,
+                        ReplicationFactor = KafkaFixture.KafkaReplicationFactor
+                    }
                 ]);
             }
         }
-        
-        protected Task GivenInitializedTopicAsync(TopicPartition topicPartition, int partitions = KafkaFixture.KafkaPartitions)
+
+        protected Task GivenInitializedTopicAsync(TopicPartition topicPartition,
+            int partitions = KafkaFixture.KafkaPartitions)
         {
             return GivenInitializedTopicAsync(topicPartition.Topic, partitions);
         }
-        
-        protected (IControl, TestSubscriber.Probe<TValue>) CreateExternalPlainSourceProbe<TValue>(IActorRef consumer, IManualSubscription sub)
+
+        protected (IControl, TestSubscriber.Probe<TValue>) CreateExternalPlainSourceProbe<TValue>(IActorRef consumer,
+            IManualSubscription sub)
         {
             return KafkaConsumer
                 .PlainExternalSource<Null, TValue>(consumer, sub, true)
@@ -181,9 +194,10 @@ namespace Akka.Streams.Kafka.Tests
             if (TestsConfiguration.UseFileLogging)
             {
                 config = config.WithFallback(
-                    ConfigurationFactory.ParseString("akka.loggers = [\"Akka.Streams.Kafka.Tests.Logging.SimpleFileLoggerActor, Akka.Streams.Kafka.Tests\"]"));
+                    ConfigurationFactory.ParseString(
+                        "akka.loggers = [\"Akka.Streams.Kafka.Tests.Logging.SimpleFileLoggerActor, Akka.Streams.Kafka.Tests\"]"));
             }
-            
+
             return config.WithFallback(KafkaExtensions.DefaultSettings);
         }
     }

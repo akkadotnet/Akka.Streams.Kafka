@@ -7,6 +7,7 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
+using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -31,7 +32,7 @@ public class CommittingSpec : KafkaIntegrationTests
         var group1 = CreateGroup(1);
         var group2 = CreateGroup(2);
 
-        await ProduceStrings(topic1, messages, ProducerSettings);
+        await ProduceStrings(new TopicPartition(topic1, new Partition(0)), messages, ProducerSettings);
 
         var committedElements = new AtomicCounter(0);
         var consumerSettings = CreateConsumerSettings<string>(group1);
