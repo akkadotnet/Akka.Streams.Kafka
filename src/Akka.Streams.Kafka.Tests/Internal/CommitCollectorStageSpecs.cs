@@ -208,7 +208,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         await sinkProbe.RequestAsync(100);
         
-        var msgs = Enumerable.Range(1, 10).Select(_ => offsetFactory.MakeOffset(new Exception())).ToList();
+        var msgs = Enumerable.Range(1, 10).Select(_ => offsetFactory.MakeOffset()).ToList();
         
         foreach (var msg in msgs)
         {
@@ -219,6 +219,12 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         await sourceProbe.SendErrorAsync(testException);
 
         var receivedError = await PullTillFailureAsync(sinkProbe, maxEvents: 4);
+        receivedError.Should().Be(testException);
+        
+        var commits = offsetFactory.Committer.Commits;
+        commits[^1].Offset.Value.Should().Be(10, "last offset commit should be exactly the one preceeding the failure");
+        
+        await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
 
     private async Task<Exception?> PullTillFailureAsync(TestSubscriber.Probe<ICommittableOffsetBatch> sinkProbe, int maxEvents)
@@ -345,7 +351,7 @@ public class TestBatchCommitter
         {
             // CommittableOffsetBatchImpl.offsetsAndMetadata points the next committed message.
             // So to get committed message offset we need to subtract 1
-            var commitOffset = offsetAndMetadata.Offset - 1;
+            var commitOffset = offsetAndMetadata.Offset ;
             var commit = new TopicPartitionOffset(topicPartition, commitOffset);
             _committer.Commits = _committer.Commits.Add(commit);
             return _committer.CompleteCommit();
