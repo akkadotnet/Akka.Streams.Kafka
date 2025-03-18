@@ -218,6 +218,7 @@ namespace Akka.Streams.Kafka.Tests
 #pragma warning disable CS0618 // Type or member is obsolete
                     await elem.CommitableOffset.Commit();
 #pragma warning restore CS0618 // Type or member is obsolete
+                    Sys.Log.Info("Committed: {0}", elem.Record.Message.Value);
                     return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)
@@ -247,6 +248,7 @@ namespace Akka.Streams.Kafka.Tests
 #pragma warning disable CS0618 // Type or member is obsolete
                     await elem.CommitableOffset.Commit();
 #pragma warning restore CS0618 // Type or member is obsolete
+                    Sys.Log.Info("Committed: {0}", elem.Record.Message.Value);
                     return elem.Record.Message.Value;
                 })
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Right)
@@ -260,7 +262,7 @@ namespace Akka.Streams.Kafka.Tests
             probe.Cancel();
 
             // end result should be gapless
-            messages.Select(s => int.Parse(s)).Should().BeEquivalentTo(Enumerable.Range(1, 11));
+            messages.Select(int.Parse).Should().BeEquivalentTo(Enumerable.Range(1, 11));
         }        
         
         [Fact]
