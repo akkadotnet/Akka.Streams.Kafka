@@ -73,7 +73,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
 
         public override void PostStop()
         {
-            ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref);
+            ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.StopFromStage(LogSource.ToString()!), SourceActor.Ref);
 
             base.PostStop();
         }
@@ -113,7 +113,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
         protected virtual void StopConsumerActor()
         {
             Materializer.ScheduleOnce(_settings.StopTimeout,
-                () => { ConsumerActor.Tell(KafkaConsumerActorMetadata.Internal.Stop.Instance, SourceActor.Ref); });
+                () => { ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.StopFromStage(LogSource.ToString()!), SourceActor.Ref); });
         }
 
         private class FlushMessagesOfRevokedPartitionsHandler : IPartitionEventHandler
