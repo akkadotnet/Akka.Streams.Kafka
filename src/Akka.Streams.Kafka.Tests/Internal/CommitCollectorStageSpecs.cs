@@ -35,7 +35,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     }
 
     public CommitterSettings DefaultCommitterSettings { get; }
-    public TimeSpan MessageAbsenceTimeout => TimeSpan.FromSeconds(2);
+    public static TimeSpan MessageAbsenceTimeout => TimeSpan.FromSeconds(2);
 
     [Fact]
     public async Task CommitCollectorStage_when_BatchIsFull_batch_commit_without_errors()
@@ -119,14 +119,14 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
 
         var msg1 = offsetFactory.MakeOffset();
-        sourceProbe.SendNext(msg1);
+        await sourceProbe.SendNextAsync(msg1);
 
-        var committedBatch = await sinkProbe.RequestNextAsync(TimeSpan.FromMilliseconds(80));
+        var committedBatch = await sinkProbe.RequestNextAsync();
 
         var msg2 = offsetFactory.MakeOffset();
-        sourceProbe.SendNext(msg2);
+        await sourceProbe.SendNextAsync(msg2);
         var msg3 = offsetFactory.MakeOffset();
-        sourceProbe.SendNext(msg3);
+        await sourceProbe.SendNextAsync(msg3);
 
         // triggered by size
         var committedBatch2 = await sinkProbe.RequestNextAsync();
