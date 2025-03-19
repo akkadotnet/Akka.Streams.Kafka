@@ -1,4 +1,4 @@
-#### 1.5.39 March 14th 2025 ####
+#### 1.5.39 March 19th 2025 ####
 
 Akka.Streams.Kafka 1.5.39 represents a major improvement in stability and performance for Kafka stream processing, particularly for applications using manual partition assignment and rebalancing scenarios. This release includes critical fixes for partition management and introduces new performance tuning capabilities that give users more control over their Kafka consumer behavior.
 
