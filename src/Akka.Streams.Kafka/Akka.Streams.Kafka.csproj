@@ -1,32 +1,32 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
-    <Description>Apache Kafka adapter for Akka.NET Streams</Description>
-    <TargetFrameworks>$(NetStandardLibVersion);$(NetLibVersion)</TargetFrameworks>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageIcon>icon.png</PackageIcon>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="reference.conf" />   
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Akka.Streams" />
-    <PackageReference Include="Confluent.Kafka" />
-    <PackageReference Include="Polyfill">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-    
-  <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="\" />
-    <None Include="../../docs/images/icon.png" Pack="true" PackagePath="\" />
-  </ItemGroup>
+    <PropertyGroup>
+        <AssemblyTitle>Akka.Streams.Kafka</AssemblyTitle>
+        <Description>Apache Kafka adapter for Akka.NET Streams</Description>
+        <TargetFrameworks>$(NetStandardLibVersion);$(NetLibVersion)</TargetFrameworks>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="Akka.Streams.Kafka.Benchmark" />
+        <EmbeddedResource Include="reference.conf"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Akka.Streams"/>
+        <PackageReference Include="Confluent.Kafka"/>
+        <PackageReference Include="Polyfill">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="\"/>
+        <None Include="../../docs/images/icon.png" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Akka.Streams.Kafka.Benchmark"/>
     </ItemGroup>
 </Project>

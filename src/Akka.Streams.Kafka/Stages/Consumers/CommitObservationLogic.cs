@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="CommitObservationLogic.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -23,16 +29,17 @@ internal sealed class CommitObservationLogic
     }
 
     public CommitterSettings Settings { get; }
-    
+
     /// <summary>
     /// Batches offsets until a commit is triggered
     /// </summary>
     public ICommittableOffsetBatch OffsetBatch { get; set; } = CommittableOffsetBatch.Empty;
-    
+
     /// <summary>
     /// Deferred offsets when <see cref="CommitterSettings.When"/>
     /// </summary>
-    public ImmutableDictionary<GroupTopicPartition, ICommittable> DeferredOffsets { get; private set; } = ImmutableDictionary<GroupTopicPartition, ICommittable>.Empty;
+    public ImmutableDictionary<GroupTopicPartition, ICommittable> DeferredOffsets { get; private set; } =
+        ImmutableDictionary<GroupTopicPartition, ICommittable>.Empty;
 
     /// <summary>
     /// Update the offset batch when applicable given the <see cref="ICommitWhen"/> settings.
@@ -59,21 +66,25 @@ internal sealed class CommitObservationLogic
                 {
                     foreach (var (gtp, offsetAndMetadata) in batch.OffsetsAndMetadata)
                     {
-                        UpdateBatchForPartition(gtp, 
+                        UpdateBatchForPartition(gtp,
                             batch.Filter(c => c.Equals(gtp)),
                             offsetAndMetadata.Offset);
                     }
+
                     break;
                 }
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(committable), "Unknown committable type, expected CommittableOffset or CommittableOffsetBatch, got " + committable.GetType().FullName);
+                    throw new ArgumentOutOfRangeException(nameof(committable),
+                        "Unknown committable type, expected CommittableOffset or CommittableOffsetBatch, got " +
+                        committable.GetType().FullName);
             }
         }
 
         return OffsetBatch.BatchSize >= Settings.MaxBatch;
     }
 
-    private void UpdateBatchForPartition(GroupTopicPartition groupTopicPartition, ICommittable committable, Offset offset)
+    private void UpdateBatchForPartition(GroupTopicPartition groupTopicPartition, ICommittable committable,
+        Offset offset)
     {
         if (DeferredOffsets.TryGetValue(groupTopicPartition, out var deferredOffsets))
         {
@@ -84,8 +95,9 @@ internal sealed class CommitObservationLogic
                     DeferredOffsets = DeferredOffsets.SetItem(groupTopicPartition, committable);
                     OffsetBatch = OffsetBatch.Updated(dOffset);
                     break;
-                case CommittableOffsetBatch dOffsetBatch when dOffsetBatch.OffsetsAndMetadata.ContainsKey(groupTopicPartition)
-                    && dOffsetBatch.OffsetsAndMetadata[groupTopicPartition].Offset < offset:
+                case CommittableOffsetBatch dOffsetBatch
+                    when dOffsetBatch.OffsetsAndMetadata.ContainsKey(groupTopicPartition)
+                         && dOffsetBatch.OffsetsAndMetadata[groupTopicPartition].Offset < offset:
                     DeferredOffsets = DeferredOffsets.SetItem(groupTopicPartition, committable);
                     OffsetBatch = OffsetBatch.Updated(dOffsetBatch);
                     break;
@@ -96,7 +108,7 @@ internal sealed class CommitObservationLogic
             DeferredOffsets = DeferredOffsets.SetItem(groupTopicPartition, committable);
         }
     }
-    
+
     /// <summary>
     /// Clear any deferred offsets.
     /// </summary>

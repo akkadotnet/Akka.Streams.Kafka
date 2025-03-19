@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="ControlSpec.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Threading.Tasks;
 using Akka.Streams.Kafka.Helpers;
@@ -19,7 +25,7 @@ public class ControlSpec
             _shutdownTask = shutdownTask ?? Task.CompletedTask;
         }
 
-        public AtomicBoolean ShutdownCalled { get; }= new(false);
+        public AtomicBoolean ShutdownCalled { get; } = new(false);
 
         public Task Stop() => _stopTask;
 
@@ -29,7 +35,10 @@ public class ControlSpec
             return _shutdownTask;
         }
 
-        public Task IsShutdown => throw new NotImplementedException();
+        public Task IsShutdown
+        {
+            get { throw new NotImplementedException(); }
+        }
 
         public Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion) =>
             this.DrainAndShutdownDefaultAsync(streamCompletion);
@@ -39,30 +48,32 @@ public class ControlSpec
     public async Task Control_should_drain_to_stream_result()
     {
         var control = new ControlImpl();
-        
+
         var drainingControl = DrainingControl.Create(control, Task.FromResult("expected"));
         var result = await drainingControl.DrainAndShutdown();
         Assert.Equal("expected", result);
         Assert.True(control.ShutdownCalled.Value);
     }
-    
+
     [Fact]
     public async Task Control_should_drain_to_stream_failure()
     {
         var control = new ControlImpl();
-        
-        var drainingControl = DrainingControl.Create(control, Task.FromException<string>(new ApplicationException("expected")));
+
+        var drainingControl =
+            DrainingControl.Create(control, Task.FromException<string>(new ApplicationException("expected")));
         var e = await Assert.ThrowsAsync<ApplicationException>(() => drainingControl.DrainAndShutdown());
         Assert.Equal("expected", e.Message);
         Assert.True(control.ShutdownCalled.Value);
     }
-    
+
     [Fact]
     public async Task Control_should_drain_to_stream_failure_even_if_shutdown_fails()
     {
-        var control = new ControlImpl(shutdownTask:Task.FromException(new ApplicationException("not this")));
-        
-        var drainingControl = DrainingControl.Create(control, Task.FromException<string>(new ApplicationException("expected")));
+        var control = new ControlImpl(shutdownTask: Task.FromException(new ApplicationException("not this")));
+
+        var drainingControl =
+            DrainingControl.Create(control, Task.FromException<string>(new ApplicationException("expected")));
         var e = await Assert.ThrowsAsync<ApplicationException>(() => drainingControl.DrainAndShutdown());
         Assert.Equal("expected", e.Message);
         Assert.True(control.ShutdownCalled.Value);
@@ -71,8 +82,8 @@ public class ControlSpec
     [Fact]
     public async Task Control_should_drain_to_shutdown_failure_when_stream_succeeds()
     {
-        var control = new ControlImpl(shutdownTask:Task.FromException(new ApplicationException("expected")));
-        
+        var control = new ControlImpl(shutdownTask: Task.FromException(new ApplicationException("expected")));
+
         var drainingControl = DrainingControl.Create(control, Task.FromResult("expected"));
         var e = await Assert.ThrowsAsync<ApplicationException>(() => drainingControl.DrainAndShutdown());
         Assert.Equal("expected", e.Message);

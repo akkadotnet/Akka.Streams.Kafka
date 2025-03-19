@@ -1,47 +1,53 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="KafkaConsumerSupervisor.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using Akka;
 using Akka.Actor;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util;
 using Akka.Util.Internal;
 
-namespace Kafka.Partitioned.Consumer.Actors
+namespace Kafka.Partitioned.Consumer.Actors;
+
+public class KafkaConsumerSupervisor<TKey, TValue> : ReceiveActor
 {
-    public class KafkaConsumerSupervisor<TKey, TValue>: ReceiveActor
+    private static readonly AtomicCounter WorkerId = new();
+
+    public static Props Props(ConsumerSettings<TKey, TValue> settings, ISubscription subscription, int partitions)
+        => Akka.Actor.Props.Create(() => new KafkaConsumerSupervisor<TKey, TValue>(settings, subscription, partitions));
+
+    private readonly ConsumerSettings<TKey, TValue> _settings;
+    private readonly ISubscription _subscription;
+    private readonly int _partitions;
+
+    public KafkaConsumerSupervisor(ConsumerSettings<TKey, TValue> settings, ISubscription subscription, int partitions)
     {
-        private static readonly AtomicCounter WorkerId = new AtomicCounter();
-        public static Props Props(ConsumerSettings<TKey, TValue> settings, ISubscription subscription, int partitions)
-            => Akka.Actor.Props.Create(() => new KafkaConsumerSupervisor<TKey, TValue>(settings, subscription, partitions));
-    
-        private readonly ConsumerSettings<TKey, TValue> _settings;
-        private readonly ISubscription _subscription;
-        private readonly int _partitions;
+        _settings = settings;
+        _subscription = subscription;
+        _partitions = partitions;
+    }
 
-        public KafkaConsumerSupervisor(ConsumerSettings<TKey, TValue> settings, ISubscription subscription, int partitions)
+    protected override SupervisorStrategy SupervisorStrategy()
+        => new OneForOneStrategy(ex =>
         {
-            _settings = settings;
-            _subscription = subscription;
-            _partitions = partitions;
-        }
-
-        protected override SupervisorStrategy SupervisorStrategy()
-            => new OneForOneStrategy(ex =>
+            return ex switch
             {
-                return ex switch
-                {
-                    Exception { Message: "BOOM!" } => Directive.Restart,
-                    _ => Directive.Escalate
-                };
-            });
+                Exception { Message: "BOOM!" } => Directive.Restart,
+                _ => Directive.Escalate
+            };
+        });
 
-        protected override void PreStart()
+    protected override void PreStart()
+    {
+        base.PreStart();
+        for (var i = 0; i < _partitions; i++)
         {
-            base.PreStart();
-            for (var i = 0; i < _partitions; i++)
-            {
-                var id = WorkerId.IncrementAndGet();
-                Context.ActorOf(ConsumerWorkerActor<TKey, TValue>.Props(_settings, _subscription), $"worker-{id}");
-            }
+            var id = WorkerId.IncrementAndGet();
+            Context.ActorOf(ConsumerWorkerActor<TKey, TValue>.Props(_settings, _subscription), $"worker-{id}");
         }
-    }    
+    }
 }

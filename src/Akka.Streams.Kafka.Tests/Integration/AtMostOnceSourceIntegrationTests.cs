@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="AtMostOnceSourceIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,62 +16,62 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests.Integration
+namespace Akka.Streams.Kafka.Tests.Integration;
+
+public class AtMostOnceSourceIntegrationTests : KafkaIntegrationTests
 {
-    public class AtMostOnceSourceIntegrationTests : KafkaIntegrationTests
+    public AtMostOnceSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
+        : base(nameof(AtMostOnceSourceIntegrationTests), output, fixture)
     {
-        public AtMostOnceSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(AtMostOnceSourceIntegrationTests), output, fixture)
-        {
-        }
+    }
 
-        [Fact]
-        public async Task AtMostOnceSource_Should_stop_consuming_actor_when_used_with_Take()
-        {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
+    [Fact]
+    public async Task AtMostOnceSource_Should_stop_consuming_actor_when_used_with_Take()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
 
-            await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
-            
-            var (control, task) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group), Subscriptions.Assignment(new TopicPartition(topic, 0)))
-                .Select(m => m.Message.Value)
-                .Take(5)
-                .ToMaterialized(Sink.Seq<string>(), Keep.Both)
-                .Run(Materializer);
-            
-            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
-            
-            (await task).Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
-        }
+        await ProduceStrings(new TopicPartition(topic, 0), Enumerable.Range(1, 10), ProducerSettings);
 
-        [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]
-        public async Task AtMostOnceSource_Should_work()
-        {
-            var topic = CreateTopic(1);
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
-            var totalMessages = 10;
-            var lastMessage = new TaskCompletionSource<Done>();
-            
-            await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
+        var (control, task) = KafkaConsumer.AtMostOnceSource(CreateConsumerSettings<string>(group),
+                Subscriptions.Assignment(new TopicPartition(topic, 0)))
+            .Select(m => m.Message.Value)
+            .Take(5)
+            .ToMaterialized(Sink.Seq<string>(), Keep.Both)
+            .Run(Materializer);
 
-            var (task, probe) = KafkaConsumer.AtMostOnceSource(settings, Subscriptions.Topics(topic))
-                .SelectAsync(1, m =>
-                {
-                    if (m.Message.Value == totalMessages.ToString())
-                        lastMessage.SetResult(Done.Instance);
+        AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
 
-                    return Task.FromResult(Done.Instance);
-                })
-                .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
-                .Run(Materializer);
+        (await task).Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
+    }
 
-            probe.Request(10);
+    [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]
+    public async Task AtMostOnceSource_Should_work()
+    {
+        var topic = CreateTopic(1);
+        var settings = CreateConsumerSettings<string>(CreateGroup(1));
+        var totalMessages = 10;
+        var lastMessage = new TaskCompletionSource<Done>();
 
-            await lastMessage.Task;
-           
-            probe.Cancel();
-            
-            probe.ExpectNextN(10);
-        }
+        await ProduceStrings(topic, Enumerable.Range(1, 10), ProducerSettings);
+
+        var (task, probe) = KafkaConsumer.AtMostOnceSource(settings, Subscriptions.Topics(topic))
+            .SelectAsync(1, m =>
+            {
+                if (m.Message.Value == totalMessages.ToString())
+                    lastMessage.SetResult(Done.Instance);
+
+                return Task.FromResult(Done.Instance);
+            })
+            .ToMaterialized(this.SinkProbe<Done>(), Keep.Both)
+            .Run(Materializer);
+
+        probe.Request(10);
+
+        await lastMessage.Task;
+
+        probe.Cancel();
+
+        probe.ExpectNextN(10);
     }
 }

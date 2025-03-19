@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="RebalanceIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -111,7 +117,7 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
 
         await probe1.CancelAsync();
         await probe2.CancelAsync();
-        
+
         await control1.IsShutdown.WaitAsync(RemainingOrDefault);
         await control2.IsShutdown.WaitAsync(RemainingOrDefault);
     }
@@ -197,12 +203,12 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             .Where(c => c.Item1.Partition.Value == 1)
             .SelectMany(c => c.Item2.ExpectNextN(count))
             .ToList();
-        
+
         Assert.Equal(count, winningMessages.Count);
-        
+
         await probe1.CancelAsync();
         await probe2.CancelAsync();
-        
+
         await control1.IsShutdown.WaitAsync(RemainingOrDefault);
         await control2.IsShutdown.WaitAsync(RemainingOrDefault);
 

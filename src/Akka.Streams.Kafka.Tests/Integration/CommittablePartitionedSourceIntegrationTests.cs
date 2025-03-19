@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="CommittablePartitionedSourceIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,96 +18,96 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests.Integration
+namespace Akka.Streams.Kafka.Tests.Integration;
+
+public class CommittablePartitionedSourceIntegrationTests : KafkaIntegrationTests
 {
-    public class CommittablePartitionedSourceIntegrationTests : KafkaIntegrationTests
+    public CommittablePartitionedSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
+        : base(nameof(CommittablePartitionedSourceIntegrationTests), output, fixture)
     {
-        public CommittablePartitionedSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(CommittablePartitionedSourceIntegrationTests), output, fixture)
-        {
-        }
+    }
 
-        [Fact]
-        public async Task CommittablePartitionedSource_Should_handle_exceptions_in_stream_without_commit_failures()
-        {
-            var partitionsCount = 3;
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
-            var totalMessages = 100;
-            var exceptionTriggered = new AtomicBoolean(false);
-            var allTopicPartitions = Enumerable.Range(0, partitionsCount).Select(i => new TopicPartition(topic, i)).ToList();
+    [Fact]
+    public async Task CommittablePartitionedSource_Should_handle_exceptions_in_stream_without_commit_failures()
+    {
+        var partitionsCount = 3;
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        var totalMessages = 100;
+        var exceptionTriggered = new AtomicBoolean(false);
+        var allTopicPartitions =
+            Enumerable.Range(0, partitionsCount).Select(i => new TopicPartition(topic, i)).ToList();
 
-            var consumerSettings = CreateConsumerSettings<string>(group).WithStopTimeout(TimeSpan.FromSeconds(2));
+        var consumerSettings = CreateConsumerSettings<string>(group).WithStopTimeout(TimeSpan.FromSeconds(2));
 
-            var createdSubSources = new ConcurrentSet<TopicPartition>();
-            var commitFailures = new ConcurrentSet<(TopicPartition, Exception)>();
-            
-            await ProduceStrings(i => new TopicPartition(topic, i % partitionsCount), Enumerable.Range(1, totalMessages), ProducerSettings);
-            
-            var control = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
-                .GroupBy(partitionsCount, tuple => tuple.Item1)
-                .SelectAsync(6, async tuple =>
-                {
-                    var (topicPartition, source) = tuple;
-                    createdSubSources.TryAdd(topicPartition);
-                    var result = await source
-                        .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Message.Value)
-                        .SelectAsync(3, async message =>
+        var createdSubSources = new ConcurrentSet<TopicPartition>();
+        var commitFailures = new ConcurrentSet<(TopicPartition, Exception)>();
+
+        await ProduceStrings(i => new TopicPartition(topic, i % partitionsCount), Enumerable.Range(1, totalMessages),
+            ProducerSettings);
+
+        var control = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+            .GroupBy(partitionsCount, tuple => tuple.Item1)
+            .SelectAsync(6, async tuple =>
+            {
+                var (topicPartition, source) = tuple;
+                createdSubSources.TryAdd(topicPartition);
+                var result = await source
+                    .Log($"Subsource for partition #{topicPartition.Partition.Value}", m => m.Record.Message.Value)
+                    .SelectAsync(3, async message =>
+                    {
+                        // fail on first partition; otherwise delay slightly and emit
+                        if (topicPartition.Partition.Value == 0)
                         {
-                            // fail on first partition; otherwise delay slightly and emit
-                            if (topicPartition.Partition.Value == 0)
-                            {
-                                Log.Debug($"Failing {topicPartition} source");
-                                exceptionTriggered.GetAndSet(true);
-                                throw new Exception("FAIL");
-                            }
-                            else
-                            {
-                                await Task.Delay(50);
-                            }
-
-                            return message;
-                        })
-                        .Log($"Subsource {topicPartition} pre commit")
-                        .SelectAsync(1, async message =>
+                            Log.Debug($"Failing {topicPartition} source");
+                            exceptionTriggered.GetAndSet(true);
+                            throw new Exception("FAIL");
+                        }
+                        else
                         {
-                            try
-                            {
+                            await Task.Delay(50);
+                        }
+
+                        return message;
+                    })
+                    .Log($"Subsource {topicPartition} pre commit")
+                    .SelectAsync(1, async message =>
+                    {
+                        try
+                        {
 #pragma warning disable CS0618 // Type or member is obsolete
-                                await message.CommitableOffset.Commit();
+                            await message.CommitableOffset.Commit();
 #pragma warning restore CS0618 // Type or member is obsolete
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error("Commit failure: " + ex);
-                                commitFailures.TryAdd((topicPartition, ex));
-                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error("Commit failure: " + ex);
+                            commitFailures.TryAdd((topicPartition, ex));
+                        }
 
-                            return message;
-                        })
-                        .Scan(0, (c, _) => c + 1)
-                        .RunWith(Sink.Last<int>(), Materializer);
-                        
-                    Log.Info($"sub-source for {topicPartition} completed: Received {result} messages in total.");
-                    return result;
-                })
-                .MergeSubstreams()
-                .As<Source<int, IControl>>()
-                .Scan(0, (c, n) => c + n)
-                .ToMaterialized(Sink.Last<int>(), Keep.Both)
-                .MapMaterializedValue(tuple => DrainingControl<int>.Create(tuple.Item1, tuple.Item2))
-                .Run(Materializer);
-            
-            AwaitCondition(() => exceptionTriggered.Value, TimeSpan.FromSeconds(10));
+                        return message;
+                    })
+                    .Scan(0, (c, _) => c + 1)
+                    .RunWith(Sink.Last<int>(), Materializer);
 
-            var shutdown = control.DrainAndShutdown();
-            await AwaitConditionAsync(() => shutdown.IsCompleted);
-            createdSubSources.Should().Contain(allTopicPartitions);
-            shutdown.Exception!.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
+                Log.Info($"sub-source for {topicPartition} completed: Received {result} messages in total.");
+                return result;
+            })
+            .MergeSubstreams()
+            .As<Source<int, IControl>>()
+            .Scan(0, (c, n) => c + n)
+            .ToMaterialized(Sink.Last<int>(), Keep.Both)
+            .MapMaterializedValue(tuple => DrainingControl<int>.Create(tuple.Item1, tuple.Item2))
+            .Run(Materializer);
 
-            // commits will fail if we shut down the consumer too early
-            commitFailures.Should().BeEmpty();
+        AwaitCondition(() => exceptionTriggered.Value, TimeSpan.FromSeconds(10));
 
-        }
+        var shutdown = control.DrainAndShutdown();
+        await AwaitConditionAsync(() => shutdown.IsCompleted);
+        createdSubSources.Should().Contain(allTopicPartitions);
+        shutdown.Exception!.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
+
+        // commits will fail if we shut down the consumer too early
+        commitFailures.Should().BeEmpty();
     }
 }

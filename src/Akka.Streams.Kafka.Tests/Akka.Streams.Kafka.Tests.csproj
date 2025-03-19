@@ -1,27 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>$(NetCoreTestVersion)</TargetFramework>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>$(NetCoreTestVersion)</TargetFramework>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Akka.Streams.TestKit" />
-    <PackageReference Include="Akka.TestKit.Xunit2" />
-    <PackageReference Include="coverlet.collector">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Docker.DotNet" />
-    <PackageReference Include="FakeItEasy" />
-    <PackageReference Include="FluentAssertions" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="Testcontainers.Kafka" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Akka.Streams.TestKit"/>
+        <PackageReference Include="Akka.TestKit.Xunit2"/>
+        <PackageReference Include="coverlet.collector">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Docker.DotNet"/>
+        <PackageReference Include="FakeItEasy"/>
+        <PackageReference Include="FluentAssertions"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="Testcontainers.Kafka"/>
+        <PackageReference Include="xunit"/>
+        <PackageReference Include="xunit.runner.visualstudio"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj"/>
+    </ItemGroup>
 
 </Project>

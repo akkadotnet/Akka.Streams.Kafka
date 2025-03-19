@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="ConsumerSpec.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -20,277 +26,269 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
+using K = string;
+using V = string;
 
-using K = System.String;
-using V = System.String;
-namespace Akka.Streams.Kafka.Tests.Internal
+namespace Akka.Streams.Kafka.Tests.Internal;
+
+using Record = ConsumeResult<K, V>;
+
+public class ConsumerSpec : Akka.TestKit.Xunit2.TestKit
 {
-    using Record = ConsumeResult<K, V>;
+    private static CommittableMessage<K, V> CreateMessage(int seed)
+        => CreateMessage(seed, "topic");
 
-    public class ConsumerSpec: Akka.TestKit.Xunit2.TestKit
+    private static CommittableMessage<K, V> CreateMessage(
+        int seed,
+        string topic,
+        string groupId = "group1",
+        string metadata = "")
     {
-        private static CommittableMessage<K, V> CreateMessage(int seed)
-            => CreateMessage(seed, "topic");
-    
-        private static CommittableMessage<K, V> CreateMessage(
-            int seed,
-            string topic,
-            string groupId = "group1",
-            string metadata = "")
+        var offset = new GroupTopicPartitionOffset(new GroupTopicPartition(groupId, topic, 1), seed);
+        var record = new Record
         {
-            var offset = new GroupTopicPartitionOffset(new GroupTopicPartition(groupId, topic, 1), seed);
-            var record = new Record
+            Topic = offset.Topic,
+            Partition = offset.Partition,
+            Offset = offset.Offset,
+            Message = new Message<string, string>
             {
-                Topic = offset.Topic,
-                Partition = offset.Partition,
-                Offset = offset.Offset,
-                Message = new Message<string, string>
-                {
-                    Key = seed.ToString(),
-                    Value = seed.ToString()
-                }
-            };
-            return new CommittableMessage<string, string>(
-                record,
-                new CommittableOffset(ConsumerResultFactory.FakeCommiter, offset, metadata));
-        }
+                Key = seed.ToString(),
+                Value = seed.ToString()
+            }
+        };
+        return new CommittableMessage<string, string>(
+            record,
+            new CommittableOffset(ConsumerResultFactory.FakeCommiter, offset, metadata));
+    }
 
-        private static Record ToRecord(CommittableMessage<K, V> msg)
-            => msg.Record;
+    private static Record ToRecord(CommittableMessage<K, V> msg)
+        => msg.Record;
 
-        private static readonly Config Config =
-            ConfigurationFactory.ParseString(@"
+    private static readonly Config Config =
+        ConfigurationFactory.ParseString(@"
 akka.loglevel = DEBUG
 akka.stream.materializer.debug.fuzzing-mode = on")
-                .WithFallback(KafkaExtensions.DefaultSettings);
-    
-        public ConsumerSpec(ITestOutputHelper output) 
-            : base(Config, nameof(ConsumerSpec), output)
-        { }
+            .WithFallback(KafkaExtensions.DefaultSettings);
 
-        private readonly ImmutableList<CommittableMessage<K, V>> Messages =
-            Enumerable.Range(1, 1000).Select(CreateMessage).ToImmutableList();
+    public ConsumerSpec(ITestOutputHelper output)
+        : base(Config, nameof(ConsumerSpec), output)
+    {
+    }
 
-        private async Task CheckMessagesReceivingAsync(List<List<CommittableMessage<K, V>>> msgss)
+    private readonly ImmutableList<CommittableMessage<K, V>> Messages =
+        Enumerable.Range(1, 1000).Select(CreateMessage).ToImmutableList();
+
+    private async Task CheckMessagesReceivingAsync(List<List<CommittableMessage<K, V>>> msgss)
+    {
+        var mock = new MockConsumer<K, V>();
+        var (control, probe) = CreateCommitableSource(mock)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
+            .Run(Sys.Materializer());
+
+        probe.Request(msgss.Select(t => t.Count).Sum());
+        foreach (var chunk in msgss)
         {
-            var mock = new MockConsumer<K, V>();
-            var (control, probe) = CreateCommitableSource(mock)
-                .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
-                .Run(Sys.Materializer());
-
-            probe.Request(msgss.Select(t => t.Count).Sum());
-            foreach (var chunk in msgss)
-            {
-                mock.Enqueue(chunk.Select(l => l.Record).ToList());
-            }
-
-            var messages = msgss.SelectMany(m => m).Select(m => m);
-            foreach (var message in messages)
-            {
-                var received = probe.ExpectNext();
-                received.Record.Message.Key.Should().Be(message.Record.Message.Key);
-                received.Record.Message.Value.Should().Be(message.Record.Message.Value);
-            }
-            await control.Shutdown().WithTimeoutAsync(RemainingOrDefault);
+            mock.Enqueue(chunk.Select(l => l.Record).ToList());
         }
 
-        private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
-            MockConsumer<K, V> mock, string groupId = "group1", string[]? topics = null)
+        var messages = msgss.SelectMany(m => m).Select(m => m);
+        foreach (var message in messages)
         {
-            topics ??= new[] {"topic"};
-            var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
-                .WithGroupId(groupId)
-                .WithCloseTimeout(MockConsumer.CloseTimeout)
-                .WithStopTimeout(MockConsumer.CloseTimeout)
-                .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
-                .WithConsumerFactory(_ => mock.Mock);
-            mock.Settings = settings;
-             
-            return KafkaConsumer.CommittableSource(
-                settings,
-                Subscriptions.Topics(topics));
+            var received = probe.ExpectNext();
+            received.Record.Message.Key.Should().Be(message.Record.Message.Key);
+            received.Record.Message.Value.Should().Be(message.Record.Message.Value);
         }
 
-        private Source<CommittableMessage<K, V>, IControl> CreateSourceWithMetadata(
-            MockConsumer<K, V> mock,
-            Func<ConsumeResult<K, V>, string> metadataFromRecord,
-            string groupId = "group1",
-            string[]? topics = null)
+        await control.Shutdown().WithTimeoutAsync(RemainingOrDefault);
+    }
+
+    private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
+        MockConsumer<K, V> mock, string groupId = "group1", string[]? topics = null)
+    {
+        topics ??= new[] { "topic" };
+        var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
+            .WithGroupId(groupId)
+            .WithCloseTimeout(MockConsumer.CloseTimeout)
+            .WithStopTimeout(MockConsumer.CloseTimeout)
+            .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
+            .WithConsumerFactory(_ => mock.Mock);
+        mock.Settings = settings;
+
+        return KafkaConsumer.CommittableSource(
+            settings,
+            Subscriptions.Topics(topics));
+    }
+
+    private Source<CommittableMessage<K, V>, IControl> CreateSourceWithMetadata(
+        MockConsumer<K, V> mock,
+        Func<ConsumeResult<K, V>, string> metadataFromRecord,
+        string groupId = "group1",
+        string[]? topics = null)
+    {
+        topics ??= new[] { "topic" };
+        var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
+            .WithGroupId(groupId)
+            .WithCloseTimeout(MockConsumer.CloseTimeout)
+            .WithStopTimeout(MockConsumer.CloseTimeout)
+            .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
+            .WithConsumerFactory(_ => mock.Mock);
+        mock.Settings = settings;
+
+        return KafkaConsumer.CommitWithMetadataSource(
+            settings,
+            Subscriptions.Topics(topics),
+            metadataFromRecord);
+    }
+
+    [Fact(DisplayName = "CommittableSource should fail stream when poll() fails with unhandled exception")]
+    public void ShouldFailWhenPollFails()
+    {
+        var mock = new FailingMockConsumer<K, V>(new Exception("Fatal Kafka error"), 1);
+        var probe = CreateCommitableSource(mock)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Right)
+            .Run(Sys.Materializer());
+
+        probe.Request(1).ExpectError();
+    }
+
+    [Fact(DisplayName = "CommittableSource should complete stage when stream control.stop called")]
+    public async Task ShouldCompleteWhenStoppedAsync()
+    {
+        var mock = new MockConsumer<K, V>();
+        var (control, probe) = CreateCommitableSource(mock)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
+            .Run(Sys.Materializer());
+
+        probe.Request(100);
+
+        await control.Shutdown().WithTimeoutAsync(TimeSpan.FromSeconds(10));
+        probe.ExpectComplete();
+        mock.VerifyClosed();
+    }
+
+    [Fact(DisplayName = "CommittableSource should complete stage when processing flow canceled")]
+    public async Task ShouldCompleteWhenCanceledAsync()
+    {
+        var mock = new MockConsumer<K, V>();
+        var (control, probe) = CreateCommitableSource(mock)
+            .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
+            .Run(Sys.Materializer());
+
+        probe.Request(100);
+        mock.VerifyNotClosed();
+        probe.Cancel();
+        await control.IsShutdown.WithTimeoutAsync(RemainingOrDefault);
+        mock.VerifyClosed();
+    }
+
+    [Fact(DisplayName = "CommittableSource should emit messages received as one big chunk")]
+    public async Task ShouldEmitBigChunkAsync() =>
+        await CheckMessagesReceivingAsync(
+            new List<List<CommittableMessage<string, string>>> { Messages.ToList() });
+
+    [Fact(DisplayName = "CommittableSource should emit messages received as medium chunk")]
+    public async Task ShouldEmitMediumChunkAsync() => await CheckMessagesReceivingAsync(Messages.Grouped(97));
+
+    [Fact(DisplayName = "CommittableSource should emit messages received as chunked singles")]
+    public async Task ShouldEmitSinglesAsync()
+    {
+        var splits = new List<List<CommittableMessage<string, string>>>();
+        foreach (var message in Messages)
         {
-            topics ??= new[] {"topic"};
-            var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
-                .WithGroupId(groupId)
-                .WithCloseTimeout(MockConsumer.CloseTimeout)
-                .WithStopTimeout(MockConsumer.CloseTimeout)
-                .WithCommitTimeout(TimeSpan.FromMilliseconds(500))
-                .WithConsumerFactory(_ => mock.Mock);
-            mock.Settings = settings;
-            
-            return KafkaConsumer.CommitWithMetadataSource(
-                settings,
-                Subscriptions.Topics(topics),
-                metadataFromRecord);
+            splits.Add(new List<CommittableMessage<string, string>> { message });
         }
 
-        [Fact(DisplayName = "CommittableSource should fail stream when poll() fails with unhandled exception")]
-        public void ShouldFailWhenPollFails()
-        {
-            var mock = new FailingMockConsumer<K, V>(new Exception("Fatal Kafka error"), 1);
-            var probe = CreateCommitableSource(mock)
-                .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Right)
-                .Run(Sys.Materializer());
+        await CheckMessagesReceivingAsync(splits);
+    }
 
-            probe.Request(1).ExpectError();
-        }
+    [Fact(DisplayName = "CommittableSource should emit messages received empties")]
+    public async Task ShouldEmitEmptiesAsync() =>
+        await CheckMessagesReceivingAsync(Messages.Grouped(97)
+            .Select(x => new List<CommittableMessage<string, string>>()).ToList());
 
-        [Fact(DisplayName = "CommittableSource should complete stage when stream control.stop called")]
-        public async Task ShouldCompleteWhenStoppedAsync()
-        {
-            var mock = new MockConsumer<K, V>();
-            var (control, probe) = CreateCommitableSource(mock)
-                .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
-                .Run(Sys.Materializer());
+    [Fact(DisplayName =
+        "CommittableSource should complete out and keep underlying client open when control.stop called")]
+    public void ShouldKeepClientOpenOnStop() =>
+        this.AssertAllStagesStopped(() => { }, Sys.Materializer());
+}
 
-            probe.Request(100);
-
-            await control.Shutdown().WithTimeoutAsync(TimeSpan.FromSeconds(10));
-            probe.ExpectComplete();
-            mock.VerifyClosed();
-        }
-
-        [Fact(DisplayName = "CommittableSource should complete stage when processing flow canceled")]
-        public async Task ShouldCompleteWhenCanceledAsync()
+internal static class Extensions
+{
+    public static async Task WithTimeoutAsync(this Task task, TimeSpan timeout)
+    {
+        using (var cts = new CancellationTokenSource())
         {
-            var mock = new MockConsumer<K, V>();
-            var (control, probe) = CreateCommitableSource(mock)
-                .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
-                .Run(Sys.Materializer());
-
-            probe.Request(100);
-            mock.VerifyNotClosed();
-            probe.Cancel();
-            await control.IsShutdown.WithTimeoutAsync(RemainingOrDefault);
-            mock.VerifyClosed();
-        }
-
-        [Fact(DisplayName = "CommittableSource should emit messages received as one big chunk")]
-        public async Task ShouldEmitBigChunkAsync()
-        {
-            await CheckMessagesReceivingAsync(
-                new List<List<CommittableMessage<string, string>>> { Messages.ToList() } );
-        }
-        
-        [Fact(DisplayName = "CommittableSource should emit messages received as medium chunk")]
-        public async Task ShouldEmitMediumChunkAsync()
-        {
-            await CheckMessagesReceivingAsync(Messages.Grouped(97));
-        }
-        
-        [Fact(DisplayName = "CommittableSource should emit messages received as chunked singles")]
-        public async Task ShouldEmitSinglesAsync()
-        {
-            var splits = new List<List<CommittableMessage<string, string>>>();
-            foreach (var message in Messages)
-            {
-                splits.Add(new List<CommittableMessage<string, string>>{message});
-            }
-            await CheckMessagesReceivingAsync(splits);
-        }
-        
-        [Fact(DisplayName = "CommittableSource should emit messages received empties")]
-        public async Task ShouldEmitEmptiesAsync()
-        {
-            await CheckMessagesReceivingAsync(Messages.Grouped(97)
-                .Select(x => new List<CommittableMessage<string, string>>()).ToList());
-        }
-
-        [Fact(DisplayName =
-            "CommittableSource should complete out and keep underlying client open when control.stop called")]
-        public void ShouldKeepClientOpenOnStop()
-        {
-            this.AssertAllStagesStopped(() =>
-            {
-                
-            }, Sys.Materializer());
+            var timeoutTask = Task.Delay(timeout, cts.Token);
+            var completed = await Task.WhenAny(task, timeoutTask);
+            if (completed == timeoutTask)
+                throw new OperationCanceledException("Operation timed out");
+            else
+                cts.Cancel();
         }
     }
 
-    internal static class Extensions
+    public static List<List<T>> Grouped<T>(this IEnumerable<T> messages, int size)
     {
-        public static async Task WithTimeoutAsync(this Task task, TimeSpan timeout)
+        var groups = new List<List<T>>();
+        var list = new List<T>();
+        var index = 0;
+        foreach (var message in messages)
         {
-            using (var cts = new CancellationTokenSource())
+            list.Add(message);
+            if (index != 0 && index % size == 0)
             {
-                var timeoutTask = Task.Delay(timeout, cts.Token);
-                var completed = await Task.WhenAny(task, timeoutTask);
-                if (completed == timeoutTask)
-                    throw new OperationCanceledException("Operation timed out");
-                else
-                    cts.Cancel();
-            }
-        }
-        
-        public static List<List<T>> Grouped<T>(this IEnumerable<T> messages, int size)
-        {
-            var groups = new List<List<T>>();
-            var list = new List<T>();
-            var index = 0;
-            foreach (var message in messages)
-            {
-                list.Add(message);
-                if(index != 0 && index % size == 0)
-                {
-                    groups.Add(list);
-                    list = new List<T>();
-                }
-
-                index++;
-            }
-            if(list.Count > 0)
                 groups.Add(list);
-            return groups;
+                list = new List<T>();
+            }
+
+            index++;
         }
 
-        public static void AssertAllStagesStopped(this Akka.TestKit.Xunit2.TestKit spec, Action block, IMaterializer materializer)
+        if (list.Count > 0)
+            groups.Add(list);
+        return groups;
+    }
+
+    public static void AssertAllStagesStopped(this Akka.TestKit.Xunit2.TestKit spec, Action block,
+        IMaterializer materializer) =>
+        AssertAllStagesStopped(spec, () =>
         {
-            AssertAllStagesStopped(spec, () =>
-            {
-                block();
-                return NotUsed.Instance;
-            }, materializer);
-        }
-        
-        public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit2.TestKit spec, Func<T> block, IMaterializer materializer)
+            block();
+            return NotUsed.Instance;
+        }, materializer);
+
+    public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit2.TestKit spec, Func<T> block,
+        IMaterializer materializer)
+    {
+        if (!(materializer is ActorMaterializerImpl impl))
+            return block();
+
+        var probe = spec.CreateTestProbe(impl.System);
+        probe.Send(impl.Supervisor, StreamSupervisor.StopChildren.Instance);
+        probe.ExpectMsg<StreamSupervisor.StoppedChildren>();
+        var result = block();
+
+        probe.Within(TimeSpan.FromSeconds(5), () =>
         {
-            if (!(materializer is ActorMaterializerImpl impl))
-                return block();
-
-            var probe = spec.CreateTestProbe(impl.System);
-            probe.Send(impl.Supervisor, StreamSupervisor.StopChildren.Instance);
-            probe.ExpectMsg<StreamSupervisor.StoppedChildren>();
-            var result = block();
-
-            probe.Within(TimeSpan.FromSeconds(5), () =>
+            IImmutableSet<IActorRef> children = ImmutableHashSet<IActorRef>.Empty;
+            try
             {
-                IImmutableSet<IActorRef> children = ImmutableHashSet<IActorRef>.Empty;
-                try
+                probe.AwaitAssert(() =>
                 {
-                    probe.AwaitAssert(() =>
-                    {
-                        impl.Supervisor.Tell(StreamSupervisor.GetChildren.Instance, probe.Ref);
-                        children = probe.ExpectMsg<StreamSupervisor.Children>().Refs;
-                        if (children.Count != 0)
-                            throw new Exception($"expected no StreamSupervisor children, but got {children.Aggregate("", (s, @ref) => s + @ref + ", ")}");
-                    });
-                }
-                catch 
-                {
-                    children.ForEach(c=>c.Tell(StreamSupervisor.PrintDebugDump.Instance));
-                    throw;
-                }
-            });
+                    impl.Supervisor.Tell(StreamSupervisor.GetChildren.Instance, probe.Ref);
+                    children = probe.ExpectMsg<StreamSupervisor.Children>().Refs;
+                    if (children.Count != 0)
+                        throw new Exception(
+                            $"expected no StreamSupervisor children, but got {children.Aggregate("", (s, @ref) => s + @ref + ", ")}");
+                });
+            }
+            catch
+            {
+                children.ForEach(c => c.Tell(StreamSupervisor.PrintDebugDump.Instance));
+                throw;
+            }
+        });
 
-            return result;
-        }
+        return result;
     }
 }

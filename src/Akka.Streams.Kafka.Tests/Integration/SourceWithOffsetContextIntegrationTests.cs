@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="SourceWithOffsetContextIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,43 +17,43 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests.Integration
+namespace Akka.Streams.Kafka.Tests.Integration;
+
+public class SourceWithOffsetContextIntegrationTests : KafkaIntegrationTests
 {
-    public class SourceWithOffsetContextIntegrationTests : KafkaIntegrationTests
+    public SourceWithOffsetContextIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
+        : base(nameof(SourceWithOffsetContextIntegrationTests), output, fixture)
     {
-        public SourceWithOffsetContextIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(SourceWithOffsetContextIntegrationTests), output, fixture)
-        {
-        }
+    }
 
-        [Fact]
-        public async Task SourceWithOffsetContext_at_least_once_consuming_should_work()
-        {
-            var topic = CreateTopic(1);
-            var settings = CreateConsumerSettings<string>(CreateGroup(1));
-            var elementCount = 10;
-            var batchSize = 2;
-            var messages = Enumerable.Range(1, elementCount).ToList();
+    [Fact]
+    public async Task SourceWithOffsetContext_at_least_once_consuming_should_work()
+    {
+        var topic = CreateTopic(1);
+        var settings = CreateConsumerSettings<string>(CreateGroup(1));
+        var elementCount = 10;
+        var batchSize = 2;
+        var messages = Enumerable.Range(1, elementCount).ToList();
 
-            await ProduceStrings(topic, messages, ProducerSettings);
+        await ProduceStrings(topic, messages, ProducerSettings);
 
-            var committerSettings = CommitterSettings.WithMaxBatch(batchSize);
-            
-            var (control, probe) = KafkaConsumer.SourceWithOffsetContext(settings, Subscriptions.Topics(topic))
-                .SelectAsync(10, message => Task.FromResult(Done.Instance))
-                .Via(Committer.FlowWithOffsetContext<Done>(committerSettings))
-                .AsSource()
-                .ToMaterialized(this.SinkProbe<(NotUsed, ICommittableOffsetBatch)>(), Keep.Both)
-                .Run(Materializer);
+        var committerSettings = CommitterSettings.WithMaxBatch(batchSize);
 
-            probe.Request(10);
-            var committedBatches = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(elementCount / batchSize));
+        var (control, probe) = KafkaConsumer.SourceWithOffsetContext(settings, Subscriptions.Topics(topic))
+            .SelectAsync(10, message => Task.FromResult(Done.Instance))
+            .Via(Committer.FlowWithOffsetContext<Done>(committerSettings))
+            .AsSource()
+            .ToMaterialized(this.SinkProbe<(NotUsed, ICommittableOffsetBatch)>(), Keep.Both)
+            .Run(Materializer);
 
-            probe.Cancel();
-            
-            AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+        probe.Request(10);
+        var committedBatches =
+            probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(elementCount / batchSize));
 
-            committedBatches.Select(r => r.Item2).Sum(batch => batch.BatchSize).Should().Be(10);
-        }
+        probe.Cancel();
+
+        AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
+
+        committedBatches.Select(r => r.Item2).Sum(batch => batch.BatchSize).Should().Be(10);
     }
 }

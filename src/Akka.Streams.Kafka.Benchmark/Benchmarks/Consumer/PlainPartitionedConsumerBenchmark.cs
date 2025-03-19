@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="PlainPartitionedConsumerBenchmark.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -17,7 +23,7 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
 
     protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
     {
-        var mergeHubSource = MergeHub.Source<ConsumeResult<Null, string>>(perProducerBufferSize:10);
+        var mergeHubSource = MergeHub.Source<ConsumeResult<Null, string>>(10);
         var (sink, trueSource) = mergeHubSource.PreMaterialize(ActorSystem);
 
         var consumerSettings = CreateConsumerSettings<Null, string>()
@@ -34,11 +40,7 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
 
         partitionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
-        return trueSource.Select(c =>
-        {
-            
-            return c;
-        }).MapMaterializedValue(_ => control);
+        return trueSource.Select(c => { return c; }).MapMaterializedValue(_ => control);
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
