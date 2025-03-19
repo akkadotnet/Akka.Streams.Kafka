@@ -156,7 +156,7 @@ akka.kafka.producer.kafka-clients {{
             // Verify default values match those in reference.conf
             settings.MaxBatch.Should().Be(1000);
             settings.MaxInterval.Should().Be(TimeSpan.FromSeconds(10));
-            settings.Parallelism.Should().Be(1);
+            settings.Parallelism.Should().Be(100);
             settings.When.Should().BeOfType<CommitWhen.OffsetFirstObserved>();
         }
         
