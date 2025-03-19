@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -12,13 +13,13 @@ using Confluent.Kafka;
 namespace Akka.Streams.Kafka.Benchmark.Benchmarks
 {
     [Config(typeof(MacroBenchmarkConfig))]
-    public class CommittableSourceBenchmark : KafkaConsumerBenchmark<Offset>
+    public class CommittableSourceBenchmark : KafkaConsumerBenchmark<int>
     {
         [Params(500)] public int PollBatchSize { get; set; }
 
         [Params(1000)] public int CommitBatchSize { get; set; }
 
-        protected override Source<Offset, IControl> CreateSource()
+        protected override Source<int, IControl> CreateSource()
         {
             var consumerSettings = CreateConsumerSettings<Null, string>()
                 .WithMaxPollRecords(PollBatchSize);
@@ -29,8 +30,8 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
                 .Select(ICommittable (message) => message.CommitableOffset)
                 .Via(Committer.BatchFlow(committerSettings))
                 // have to add this to make sure the `Take` stage gets what it needs
-                .SelectMany(c => c.Offsets)
-                .Select(c => c.Offset);
+                .SelectMany(c => new int[c.Offsets.Count])
+                .Select(c => c);
         }
         
         [Benchmark(OperationsPerInvoke = TestMessageCount)]
