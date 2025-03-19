@@ -135,6 +135,7 @@ namespace Akka.Streams.Kafka.Settings
         /// </summary>
         public TimeSpan PositionTimeout { get; init; }
         
+        [Obsolete("No longer used for anything")]
         public int BufferSize { get; init; }
         
         
@@ -237,7 +238,6 @@ namespace Akka.Streams.Kafka.Settings
             CommitTimeWarning = commitTimeWarning;
             CommitTimeout = commitTimeout;
             CommitRefreshInterval = commitRefreshInterval;
-            BufferSize = bufferSize;
             DispatcherId = dispatcherId ?? throw new ArgumentNullException(nameof(dispatcherId));
             Properties = properties ?? throw new ArgumentNullException(nameof(properties));
             WaitClosePartition = waitClosePartition;
