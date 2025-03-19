@@ -258,4 +258,39 @@ public class CommittingSpec : KafkaIntegrationTests
         await control1.IsShutdown;
         await control2.IsShutdown;
     }
+
+    [Fact]
+    public async Task CommittingMustWorkWithoutDemand()
+    {
+        var topic = CreateTopic(2);
+        var group1 = CreateGroup(1);
+        
+        // important to use more messages than the internal buffer sizes
+        // to trigger the intended scenario
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
+        
+        var consumerSettings = CreateConsumerSettings<string>(group1);
+        var (control, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(topic))
+            .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
+            .Run(Sys);
+        
+        // request 1, only
+        await probe1.RequestAsync(1);
+        
+        var committableOffset = (await probe1.ExpectNextAsync()).CommitableOffset;
+        
+        // enqueue some more
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Skip(100), ProducerSettings);
+        
+        await probe1.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(200));
+        
+        // then commit, which triggers a new poll while we haven't drained the previous buffer
+        await ((CommittableOffset)committableOffset).Commit();
+        
+        await probe1.RequestAsync(1);
+        await ((CommittableOffset)(await probe1.ExpectNextAsync()).CommitableOffset).Commit();
+
+        await probe1.CancelAsync();
+        await control.IsShutdown;
+    }
 }
