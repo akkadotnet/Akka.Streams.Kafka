@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="PlainConsumerBenchmark.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -8,28 +14,26 @@ using Akka.Streams.Kafka.Settings;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Benchmark
+namespace Akka.Streams.Kafka.Benchmark;
+
+[Config(typeof(MacroBenchmarkConfig))]
+public class PlainSourceBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
 {
-    [Config(typeof(MacroBenchmarkConfig))]
-    public class PlainSourceBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
+    [Params(500)] public int PollBatchSize { get; set; }
+
+    protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
     {
-        [Params(500)]
-        public int PollBatchSize { get; set; }
-        
-        protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
-        {
-            var consumerSettings = CreateConsumerSettings<Null, string>()
-                .WithMaxPollRecords(PollBatchSize);
-            return KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(TopicName));
-        }
-        
-        [Benchmark(OperationsPerInvoke = TestMessageCount)]
-        [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
-            BenchmarkCategories.PlainConsumerBenchmark)]
-        public Task ConsumeMessageAsync()
-        {
-            StartDemand();
-            return CompletionTask!;
-        }
+        var consumerSettings = CreateConsumerSettings<Null, string>()
+            .WithMaxPollRecords(PollBatchSize);
+        return KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(TopicName));
     }
-} 
+
+    [Benchmark(OperationsPerInvoke = TestMessageCount)]
+    [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+        BenchmarkCategories.PlainConsumerBenchmark)]
+    public Task ConsumeMessageAsync()
+    {
+        StartDemand();
+        return CompletionTask!;
+    }
+}

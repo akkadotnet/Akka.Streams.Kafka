@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="ConsumerControlFactory.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
@@ -11,10 +17,8 @@ namespace Akka.Streams.Kafka.Tests.TestKit;
 /// </summary>
 public static class ConsumerControlFactory
 {
-    public static Source<TIn, IControl> AttachControl<TIn, TMat>(Source<TIn, TMat> source)
-    {
-        return source.ViaMaterialized(ControlFlow<TIn>(), Keep.Right);
-    }
+    public static Source<TIn, IControl> AttachControl<TIn, TMat>(Source<TIn, TMat> source) =>
+        source.ViaMaterialized(ControlFlow<TIn>(), Keep.Right);
 
     public static Flow<TIn, TIn, IControl> ControlFlow<TIn>() => Flow.Create<TIn>()
         .ViaMaterialized(KillSwitches.Single<TIn>(), Keep.Right)
@@ -27,7 +31,7 @@ public class FakeControl : IControl
 {
     public TaskCompletionSource<Done> ShutdownPromise { get; } = new();
     public IKillSwitch KillSwitch { get; }
-    
+
     public FakeControl(IKillSwitch killSwitch)
     {
         KillSwitch = killSwitch;
@@ -42,7 +46,10 @@ public class FakeControl : IControl
 
     public Task Shutdown() => Stop();
 
-    public Task IsShutdown => ShutdownPromise.Task;
+    public Task IsShutdown
+    {
+        get { return ShutdownPromise.Task; }
+    }
 
     public async Task<TResult> DrainAndShutdown<TResult>(Task<TResult> streamCompletion)
     {

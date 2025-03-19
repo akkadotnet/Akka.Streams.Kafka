@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="LogEveryNthElement.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using Akka.Streams.Stage;
 
@@ -6,14 +12,14 @@ namespace Akka.Streams.Kafka.Benchmark.Infrastructure;
 public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
 {
     private readonly int _n;
-    private readonly Func<int,string> _logMessageFn;
+    private readonly Func<int, string> _logMessageFn;
     private readonly LogLevel _logLevel;
 
-    public LogEveryNthElement(int n, Func<int,string> logMessageFn, LogLevel minLogLevel = LogLevel.InfoLevel)
+    public LogEveryNthElement(int n, Func<int, string> logMessageFn, LogLevel minLogLevel = LogLevel.InfoLevel)
     {
         if (n <= 0)
             throw new ArgumentException("N must be a positive integer", nameof(n));
-        
+
         _n = n;
         _logMessageFn = logMessageFn;
         _logLevel = minLogLevel;
@@ -25,7 +31,7 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
 
     public override FlowShape<T, T> Shape { get; }
 
-    protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes) 
+    protected override GraphStageLogic CreateLogic(Attributes inheritedAttributes)
         => new Logic(this);
 
     private sealed class Logic : GraphStageLogic
@@ -36,11 +42,11 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
         {
             ResetCountdown();
 
-            SetHandler(stage.Inlet, onPush: () =>
+            SetHandler(stage.Inlet, () =>
             {
                 var element = Grab(stage.Inlet);
                 _countdownToNextLog++;
-                
+
                 if (_countdownToNextLog % stage._n == 0)
                 {
                     Log.Log(stage._logLevel, stage._logMessageFn(_countdownToNextLog));
@@ -49,12 +55,9 @@ public class LogEveryNthElement<T> : GraphStage<FlowShape<T, T>>
                 Push(stage.Outlet, element);
             });
 
-            SetHandler(stage.Outlet, onPull: () =>
-            {
-                Pull(stage.Inlet);
-            });
+            SetHandler(stage.Outlet, () => { Pull(stage.Inlet); });
         }
 
-        private void ResetCountdown() => _countdownToNextLog =  0;
+        private void ResetCountdown() => _countdownToNextLog = 0;
     }
 }

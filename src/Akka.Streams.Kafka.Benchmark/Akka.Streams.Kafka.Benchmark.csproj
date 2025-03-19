@@ -7,11 +7,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="BenchmarkDotNet" />
-        <PackageReference Include="Confluent.Kafka" />
+        <PackageReference Include="BenchmarkDotNet"/>
+        <PackageReference Include="Confluent.Kafka"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
+        <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj"/>
     </ItemGroup>
 </Project>

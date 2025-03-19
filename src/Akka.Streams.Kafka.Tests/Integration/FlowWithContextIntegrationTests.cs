@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="FlowWithContextIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Immutable;
 using System.Linq;
@@ -15,94 +21,107 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests.Integration
+namespace Akka.Streams.Kafka.Tests.Integration;
+
+public class FlowWithContextIntegrationTests : KafkaIntegrationTests
 {
-    public class FlowWithContextIntegrationTests : KafkaIntegrationTests
+    public FlowWithContextIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
+        : base(nameof(FlowWithContextIntegrationTests), output, fixture)
     {
-        public FlowWithContextIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(FlowWithContextIntegrationTests), output, fixture)
+    }
+
+    [Fact]
+    public async Task ProducerFlowWithContext_should_work_with_source_with_context()
+    {
+        bool Duplicate(string value)
         {
+            return value == "1";
         }
 
-        [Fact]
-        public async Task ProducerFlowWithContext_should_work_with_source_with_context()
+        bool Ignore(string value)
         {
-            bool Duplicate(string value) => value == "1";
-            bool Ignore(string value) => value == "2";
+            return value == "2";
+        }
 
-            var consumerSettings = CreateConsumerSettings<string, string>(CreateGroup(1));
-            var topic1 = CreateTopic(1);
-            var topic2 = CreateTopic(2);
-            var topic3 = CreateTopic(3);
-            var topic4 = CreateTopic(4);
-            var producerSettings = BuildProducerSettings<string, string>();
-            var committerSettings = CommitterSettings;
-            var totalMessages = 10;
-            var totalConsumed = 0;
-            
-            await ProduceStrings(topic1, Enumerable.Range(1, totalMessages), producerSettings);
-            
-            var (control2, result) = KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
-                .Scan(0, (c, _) => c + 1)
-                .Select(consumed =>
-                {
-                    totalConsumed = consumed;
-                    return consumed;
-                })
-                .ToMaterialized(Sink.Last<int>(), Keep.Both)
-                .Run(Materializer);
+        var consumerSettings = CreateConsumerSettings<string, string>(CreateGroup(1));
+        var topic1 = CreateTopic(1);
+        var topic2 = CreateTopic(2);
+        var topic3 = CreateTopic(3);
+        var topic4 = CreateTopic(4);
+        var producerSettings = BuildProducerSettings<string, string>();
+        var committerSettings = CommitterSettings;
+        var totalMessages = 10;
+        var totalConsumed = 0;
 
-            var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics(topic1))
-                .Select(record =>
-                {
-                    IEnvelope<string, string, NotUsed> output;
-                    if (Duplicate(record.Message.Value))
-                    {
-                        output = ProducerMessage.Multi(new[]
-                        {
-                            new ProducerRecord<string, string>(topic2, record.Message.Key, record.Message.Value),
-                            new ProducerRecord<string, string>(topic3, record.Message.Key, record.Message.Value)
-                        }.ToImmutableSet());
-                    }
-                    else if (Ignore(record.Message.Value))
-                    {
-                        output = ProducerMessage.PassThrough<string, string>();
-                    }
-                    else
-                    {
-                        output = ProducerMessage.Single(new ProducerRecord<string, string>(topic4, record.Message.Key, record.Message.Value));
-                    }
+        await ProduceStrings(topic1, Enumerable.Range(1, totalMessages), producerSettings);
 
-                    Log.Debug($"Giving message of type {output.GetType().Name}");
-                    return output;
-                })
-                .Via(KafkaProducer.FlowWithContext<string, string, ICommittableOffset>(producerSettings))
-                .AsSource()
-                .Log("Produced messages", r => $"Committing {r.Item2.Offset.Topic}:{r.Item2.Offset.Partition}[{r.Item2.Offset.Offset}]")
-                .ToMaterialized(Committer.SinkWithOffsetContext<IResults<string, string, ICommittableOffset>>(committerSettings), Keep.Both)
-                .MapMaterializedValue(tuple => DrainingControl<NotUsed>.Create(tuple.Item1, tuple.Item2))
-                .Run(Materializer);
-
-            // One by one, wait while all `totalMessages` will be consumed
-            for (var i = 1; i < totalMessages; ++i)
+        var (control2, result) = KafkaConsumer
+            .PlainSource(consumerSettings, Subscriptions.Topics(topic2, topic3, topic4))
+            .Scan(0, (c, _) => c + 1)
+            .Select(consumed =>
             {
-                var consumedExpect = i;
-                Log.Info($"Waiting for {consumedExpect} to be consumed...");
-                try
+                totalConsumed = consumed;
+                return consumed;
+            })
+            .ToMaterialized(Sink.Last<int>(), Keep.Both)
+            .Run(Materializer);
+
+        var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics(topic1))
+            .Select(record =>
+            {
+                IEnvelope<string, string, NotUsed> output;
+                if (Duplicate(record.Message.Value))
                 {
-                    // TODO: really need to add some more API overloads for AwaitConditionAsync
-                    await AwaitConditionAsync(() => Task.FromResult(totalConsumed >= consumedExpect), TimeSpan.FromSeconds(30));
+                    output = ProducerMessage.Multi(new[]
+                    {
+                        new ProducerRecord<string, string>(topic2, record.Message.Key, record.Message.Value),
+                        new ProducerRecord<string, string>(topic3, record.Message.Key, record.Message.Value)
+                    }.ToImmutableSet());
                 }
-                finally
+                else if (Ignore(record.Message.Value))
                 {
-                    Log.Info($"Finished waiting for {consumedExpect} messages. Total: {totalConsumed}");
+                    output = ProducerMessage.PassThrough<string, string>();
                 }
-                Log.Info($"Confirmed that {consumedExpect} messages are consumed");
+                else
+                {
+                    output = ProducerMessage.Single(
+                        new ProducerRecord<string, string>(topic4, record.Message.Key, record.Message.Value));
+                }
+
+                Log.Debug($"Giving message of type {output.GetType().Name}");
+                return output;
+            })
+            .Via(KafkaProducer.FlowWithContext<string, string, ICommittableOffset>(producerSettings))
+            .AsSource()
+            .Log("Produced messages",
+                r => $"Committing {r.Item2.Offset.Topic}:{r.Item2.Offset.Partition}[{r.Item2.Offset.Offset}]")
+            .ToMaterialized(
+                Committer.SinkWithOffsetContext<IResults<string, string, ICommittableOffset>>(committerSettings),
+                Keep.Both)
+            .MapMaterializedValue(tuple => DrainingControl<NotUsed>.Create(tuple.Item1, tuple.Item2))
+            .Run(Materializer);
+
+        // One by one, wait while all `totalMessages` will be consumed
+        for (var i = 1; i < totalMessages; ++i)
+        {
+            var consumedExpect = i;
+            Log.Info($"Waiting for {consumedExpect} to be consumed...");
+            try
+            {
+                // TODO: really need to add some more API overloads for AwaitConditionAsync
+                await AwaitConditionAsync(() => Task.FromResult(totalConsumed >= consumedExpect),
+                    TimeSpan.FromSeconds(30));
+            }
+            finally
+            {
+                Log.Info($"Finished waiting for {consumedExpect} messages. Total: {totalConsumed}");
             }
 
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
-            AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
+            Log.Info($"Confirmed that {consumedExpect} messages are consumed");
         }
+
+        AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
+        AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
+        AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
     }
 }

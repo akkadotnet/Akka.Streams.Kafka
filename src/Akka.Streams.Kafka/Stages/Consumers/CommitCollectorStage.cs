@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="CommitCollectorStage.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Stage;
@@ -51,6 +57,7 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
                 ((CommittableOffsetBatch)ObservationLogic.OffsetBatch).TellCommitEmergency();
                 ObservationLogic.OffsetBatch = CommittableOffsetBatch.Empty;
             }
+
             FailStage(ex);
         }
 
@@ -58,10 +65,12 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
         {
             if (ActiveBatchInProgress)
             {
-                Log.Debug("PushDownStream triggered by {0}, outstanding batch {1}", CommitTrigger.UpstreamFinish.Instance,
+                Log.Debug("PushDownStream triggered by {0}, outstanding batch {1}",
+                    CommitTrigger.UpstreamFinish.Instance,
                     ObservationLogic.OffsetBatch);
                 Emit(Stage.Out, ObservationLogic.OffsetBatch);
             }
+
             CompleteStage();
         }
 
@@ -77,7 +86,6 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
                 {
                     PushDownStream(CommitTrigger.BatchSize.Instance);
                 }
-                
             }
             else
             {
@@ -102,11 +110,20 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
         public CommitCollectorStage Stage { get; }
         public Attributes InheritedAttributes { get; }
 
-        public CommitterSettings Settings => Stage._settings;
+        public CommitterSettings Settings
+        {
+            get { return Stage._settings; }
+        }
 
-        public bool ActiveBatchInProgress => !ObservationLogic.OffsetBatch.IsEmpty;
+        public bool ActiveBatchInProgress
+        {
+            get { return !ObservationLogic.OffsetBatch.IsEmpty; }
+        }
 
-        protected override object LogSource => typeof(CommitCollectorStageLogic);
+        protected override object LogSource
+        {
+            get { return typeof(CommitCollectorStageLogic); }
+        }
 
         private bool _pushOnNextPull = false;
 
@@ -159,9 +176,6 @@ internal sealed class CommitCollectorStage : GraphStage<FlowShape<ICommittable, 
             ScheduleCommit();
         }
 
-        private void ScheduleCommit()
-        {
-            ScheduleOnce(CommitNow, Settings.MaxInterval);
-        }
+        private void ScheduleCommit() => ScheduleOnce(CommitNow, Settings.MaxInterval);
     }
 }

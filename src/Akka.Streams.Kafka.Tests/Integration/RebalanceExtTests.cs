@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="RebalanceExtTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
@@ -211,8 +217,7 @@ public class RebalanceExtTests : KafkaIntegrationTests
 
     [Fact(DisplayName =
         "Fetched records must not be lost when two consumers consume from one topic and two partitions and one consumer aborts mid-stream")]
-    public async Task FetchedRecordsMustNotBeLostUponAbort()
-    {
+    public async Task FetchedRecordsMustNotBeLostUponAbort() =>
         await WithinAsync(TimeSpan.FromSeconds(30), async () =>
         {
             var topicCount = 1;
@@ -268,7 +273,8 @@ public class RebalanceExtTests : KafkaIntegrationTests
 
             var consumer1Partitions = await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
             var consumer2Partitions = await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>();
-            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:", string.Join(", ", consumer1Partitions.Partitions),
+            Log.Info("consumer1Partitions: {0} -> consumer2Partitions:",
+                string.Join(", ", consumer1Partitions.Partitions),
                 string.Join(", ", consumer2Partitions.Partitions));
 
             // figure out how the Assignor assigned the partitions
@@ -372,9 +378,8 @@ public class RebalanceExtTests : KafkaIntegrationTests
             {
                 Log.Error("duplicateMessages: {0}", string.Join(", ", duplicateMessages.Select(c => c.Key)));
             }
-            
+
             // need to assert that we did not lose messages - duplicates we can't do as much about
             Assert.Equal(publishedMessageCount, consumedMessages.Count);
         });
-    }
 }

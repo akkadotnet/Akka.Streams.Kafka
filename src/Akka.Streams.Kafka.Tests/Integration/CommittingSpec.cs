@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="CommittingSpec.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
@@ -17,7 +23,6 @@ namespace Akka.Streams.Kafka.Tests.Integration;
 
 public class CommittingSpec : KafkaIntegrationTests
 {
-    
     public CommittingSpec(ITestOutputHelper output, KafkaFixture fixture)
         : base(nameof(CommittingSpec), output, fixture)
     {
@@ -59,7 +64,7 @@ public class CommittingSpec : KafkaIntegrationTests
             .Run(Sys);
 
         await probe1.RequestAsync(25);
-        var found = (await probe1.ExpectNextNAsync(25).ToListAsync());
+        var found = await probe1.ExpectNextNAsync(25).ToListAsync();
         messages.Take(25).Should().BeEquivalentTo(found);
 
         await probe1.CancelAsync();
@@ -167,10 +172,10 @@ public class CommittingSpec : KafkaIntegrationTests
         var finalResults = await consumer1Read;
         finalResults.Should().BeEquivalentTo(Numbers.Take(count).Select(c => c + "-p0")
             .Concat(Numbers.Take(count).Select(c => c + "-p1")));
-        
+
         probe1.Cancel();
         probe2.Cancel();
-        
+
         await control1.IsShutdown;
         await control2.IsShutdown;
     }
@@ -187,7 +192,7 @@ public class CommittingSpec : KafkaIntegrationTests
         var partition1 = new TopicPartition(topic1, new Partition(1));
 
         await GivenInitializedTopicAsync(topic1, 2);
-        
+
         await Source.From(Numbers.Take(10))
             .Select(n =>
             {
@@ -198,7 +203,7 @@ public class CommittingSpec : KafkaIntegrationTests
             })
             .Via(KafkaProducer.FlexiFlow<Null, string, NotUsed>(ProducerSettings))
             .RunWith(Sink.Ignore<IResults<Null, string, NotUsed>>(), Sys);
-        
+
         // Subscribe to the topic (without demand)
         var rebalanceActor1 = CreateTestProbe();
         var subscription1 = Subscriptions.Topics(topic1).WithRebalanceListener(rebalanceActor1.Ref);
@@ -221,7 +226,7 @@ public class CommittingSpec : KafkaIntegrationTests
         var (control2, probe2) = KafkaConsumer.CommittableSource(consumerSettings, subscription2)
             .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
             .Run(Sys);
-        
+
         // Rebalance fully completes
         var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>();
         await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>();
@@ -235,10 +240,10 @@ public class CommittingSpec : KafkaIntegrationTests
             await ((CommittableOffset)c.CommitableOffset).Commit();
             return c.Record.Message.Value;
         }));
-        
+
         var committables2 = await probe2.AsyncBuilder()
-            .Request(count).ExpectNextNAsync(count ).ToListAsync();
-        
+            .Request(count).ExpectNextNAsync(count).ToListAsync();
+
         // messages that belonged to the revoked partition show up in the new consumer,
         // even though they were committed after the rebalance
         var recordSuffix = partitionRevokedFromConsumer1.Partition.Value switch
@@ -250,12 +255,12 @@ public class CommittingSpec : KafkaIntegrationTests
 
         var consumer2Read = committables2.Select(c => c.Record.Message.Value);
         var expectedResults = Numbers.Take(count).Select(c => c + "-" + recordSuffix);
-        
+
         consumer2Read.Should().BeEquivalentTo(expectedResults);
 
         await probe1.CancelAsync();
         await probe2.CancelAsync();
-        
+
         await control1.IsShutdown;
         await control2.IsShutdown;
     }
@@ -265,29 +270,29 @@ public class CommittingSpec : KafkaIntegrationTests
     {
         var topic = CreateTopic(2);
         var group1 = CreateGroup(1);
-        
+
         // important to use more messages than the internal buffer sizes
         // to trigger the intended scenario
         await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
-        
+
         var consumerSettings = CreateConsumerSettings<string>(group1);
         var (control, probe1) = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(topic))
             .ToMaterialized(this.SinkProbe<CommittableMessage<Null, string>>(), Keep.Both)
             .Run(Sys);
-        
+
         // request 1, only
         await probe1.RequestAsync(1);
-        
+
         var committableOffset = (await probe1.ExpectNextAsync()).CommitableOffset;
-        
+
         // enqueue some more
         await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Skip(100), ProducerSettings);
-        
+
         await probe1.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(200));
-        
+
         // then commit, which triggers a new poll while we haven't drained the previous buffer
         await ((CommittableOffset)committableOffset).Commit();
-        
+
         await probe1.RequestAsync(1);
         await ((CommittableOffset)(await probe1.ExpectNextAsync()).CommitableOffset).Commit();
 

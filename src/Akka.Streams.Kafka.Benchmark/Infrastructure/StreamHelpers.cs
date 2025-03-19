@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="StreamHelpers.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 
@@ -11,13 +17,11 @@ public static class StreamHelpers
     /// 2. The upstream completes
     /// 3. An error occurs
     /// </summary>
-    public static Sink<T, Task<Done>> CreateCountingSink<T>(int stopAt)
-    {
-        return Flow.Create<T>()
+    public static Sink<T, Task<Done>> CreateCountingSink<T>(int stopAt) =>
+        Flow.Create<T>()
             .Take(stopAt)
             .WatchTermination((_, task) => task)
             .To(Sink.Ignore<T>());
-    }
 
     /// <summary>
     /// Log our process every <see cref="percentageFrequency"/>% through the <see cref="maxMessageCount"/>
@@ -27,7 +31,7 @@ public static class StreamHelpers
         var nThMessage = (int)(maxMessageCount * percentageFrequency);
 
         return Flow.Create<T>()
-            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{(i/(double)maxMessageCount)*100}%"));
+            .Via(new LogEveryNthElement<T>(nThMessage, i => $"{i / (double)maxMessageCount * 100}%"));
     }
 
     /// <summary>
@@ -36,15 +40,13 @@ public static class StreamHelpers
     /// to our benchmarks, but it will also make sure that most of the interesting stuff happens during
     /// the benchmark itself.
     /// </summary>
-    public static Flow<T, T, NotUsed> CreateDemandControlFlow<T>(Task startSignal)
-    {
-        return Flow.Create<T>()
+    public static Flow<T, T, NotUsed> CreateDemandControlFlow<T>(Task startSignal) =>
+        Flow.Create<T>()
             .SelectAsync(1, async elem =>
             {
                 if (!startSignal.IsCompleted)
                     await startSignal;
-                
+
                 return elem;
             });
-    }
 }

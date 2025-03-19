@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="PlainPartitionedManualOffsetSourceIntegrationTests.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Immutable;
 using System.Linq;
@@ -14,109 +20,110 @@ using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Akka.Streams.Kafka.Tests.Integration
+namespace Akka.Streams.Kafka.Tests.Integration;
+
+public class PlainPartitionedManualOffsetSourceIntegrationTests : KafkaIntegrationTests
 {
-    public class PlainPartitionedManualOffsetSourceIntegrationTests : KafkaIntegrationTests
+    public PlainPartitionedManualOffsetSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture)
+        : base(nameof(PlainPartitionedManualOffsetSourceIntegrationTests), output, fixture)
     {
-        public PlainPartitionedManualOffsetSourceIntegrationTests(ITestOutputHelper output, KafkaFixture fixture) 
-            : base(nameof(PlainPartitionedManualOffsetSourceIntegrationTests), output, fixture)
-        {
-        }
+    }
 
-        [Fact]
-        public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_from_beginning_of_the_topic()
-        {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
-            var totalMessages = 100;
-            var consumerSettings = CreateConsumerSettings<string>(group);
+    [Fact]
+    public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_from_beginning_of_the_topic()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        var totalMessages = 100;
+        var consumerSettings = CreateConsumerSettings<string>(group);
 
-            var allMessages = Enumerable.Range(1, totalMessages).ToList();
+        var allMessages = Enumerable.Range(1, totalMessages).ToList();
 
-            await ProduceStrings(topic, allMessages, ProducerSettings);
-            
-            var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
-                consumerSettings, 
-                Subscriptions.Topics(topic), 
-                getOffsetsOnAssign: _ => Task.FromResult(ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>),
-                onRevoke: _ => { }
-                ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Message.Value)
-                .RunWith(this.SinkProbe<string>(), Materializer);
+        await ProduceStrings(topic, allMessages, ProducerSettings);
 
-            probe.Request(totalMessages);
-            probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
-            probe.Cancel();
-        }
-        
-        [Fact]
-        public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_with_offset()
-        {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
-            var consumerSettings = CreateConsumerSettings<string>(group);
+        var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
+                consumerSettings,
+                Subscriptions.Topics(topic),
+                _ => Task.FromResult(
+                    ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>),
+                _ => { }
+            ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
+            .Select(m => m.Message.Value)
+            .RunWith(this.SinkProbe<string>(), Materializer);
 
-            await ProduceStrings(topic, Enumerable.Range(0, 100), ProducerSettings);
-            
-            var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
-                    consumerSettings, 
-                    Subscriptions.Topics(topic), 
-                    getOffsetsOnAssign: topicPartitions =>
-                    {
-                        // Skip first message from first partition
-                        var firstPartition = topicPartitions.OrderBy(tp => tp.Partition.Value).First();
-                        var offset = ImmutableHashSet<TopicPartitionOffset>.Empty.Add(new TopicPartitionOffset(firstPartition, 1));
-                        return Task.FromResult<IImmutableSet<TopicPartitionOffset>>(offset);
-                    },
-                    onRevoke: _ => { }
-                ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Message.Value)
-                .RunWith(this.SinkProbe<string>(), Materializer);
+        probe.Request(totalMessages);
+        probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(totalMessages));
+        probe.Cancel();
+    }
 
-            probe.Request(99);
-            var messages = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(99));
-            messages.ToHashSet().Count.Should().Be(99); // All consumed messages should be different (only one value is missing)
-            
-            probe.Cancel();
-        }
-        
-        [Fact]
-        public async Task PlainPartitionedManualOffsetSource_Should_call_the_OnRevoke_hook()
-        {
-            var topic = CreateTopic(1);
-            var group = CreateGroup(1);
-            var consumerSettings = CreateConsumerSettings<string>(group);
+    [Fact]
+    public async Task PlainPartitionedManualOffsetSource_Should_begin_consuming_with_offset()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        var consumerSettings = CreateConsumerSettings<string>(group);
 
-            var partitionsAssigned = false;
-            var revoked = Option<IImmutableSet<TopicPartition>>.None;
-            
-            // Create topic to allow consumer assignment
-            await ProduceStrings(topic, new []{ 0 }, ProducerSettings);
-            
-            var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, Subscriptions.Topics(topic),
+        await ProduceStrings(topic, Enumerable.Range(0, 100), ProducerSettings);
+
+        var probe = KafkaConsumer.PlainPartitionedManualOffsetSource(
+                consumerSettings,
+                Subscriptions.Topics(topic),
+                topicPartitions =>
+                {
+                    // Skip first message from first partition
+                    var firstPartition = topicPartitions.OrderBy(tp => tp.Partition.Value).First();
+                    var offset =
+                        ImmutableHashSet<TopicPartitionOffset>.Empty.Add(new TopicPartitionOffset(firstPartition, 1));
+                    return Task.FromResult<IImmutableSet<TopicPartitionOffset>>(offset);
+                },
+                _ => { }
+            ).MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
+            .Select(m => m.Message.Value)
+            .RunWith(this.SinkProbe<string>(), Materializer);
+
+        probe.Request(99);
+        var messages = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(99));
+        messages.ToHashSet().Count.Should()
+            .Be(99); // All consumed messages should be different (only one value is missing)
+
+        probe.Cancel();
+    }
+
+    [Fact]
+    public async Task PlainPartitionedManualOffsetSource_Should_call_the_OnRevoke_hook()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        var consumerSettings = CreateConsumerSettings<string>(group);
+
+        var partitionsAssigned = false;
+        var revoked = Option<IImmutableSet<TopicPartition>>.None;
+
+        // Create topic to allow consumer assignment
+        await ProduceStrings(topic, new[] { 0 }, ProducerSettings);
+
+        var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, Subscriptions.Topics(topic),
                 assignedPartitions =>
                 {
                     partitionsAssigned = true;
-                    return Task.FromResult(ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>);
+                    return Task.FromResult(
+                        ImmutableHashSet<TopicPartitionOffset>.Empty as IImmutableSet<TopicPartitionOffset>);
                 },
-                revokedPartitions =>
-                {
-                    revoked = Option<IImmutableSet<TopicPartition>>.Create(revokedPartitions);
-                })
-                .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
-                .Select(m => m.Message.Value);
-            
-            var (control1, firstConsumer) = source.ToMaterialized(this.SinkProbe<string>(), Keep.Both).Run(Materializer);
-            
-            AwaitCondition(() => partitionsAssigned, TimeSpan.FromSeconds(10), "First consumer should get asked for offsets");
+                revokedPartitions => { revoked = Option<IImmutableSet<TopicPartition>>.Create(revokedPartitions); })
+            .MergeMany(3, tuple => tuple.Item2.MapMaterializedValue(notUsed => new NoopControl()))
+            .Select(m => m.Message.Value);
 
-            var secondConsumer = source.RunWith(this.SinkProbe<string>(), Materializer);
-            
-            AwaitCondition(() => revoked.Value?.Count > 0, TimeSpan.FromSeconds(10));
+        var (control1, firstConsumer) = source.ToMaterialized(this.SinkProbe<string>(), Keep.Both).Run(Materializer);
 
-            firstConsumer.Cancel();
-            secondConsumer.Cancel();
-            AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
-        }
+        AwaitCondition(() => partitionsAssigned, TimeSpan.FromSeconds(10),
+            "First consumer should get asked for offsets");
+
+        var secondConsumer = source.RunWith(this.SinkProbe<string>(), Materializer);
+
+        AwaitCondition(() => revoked.Value?.Count > 0, TimeSpan.FromSeconds(10));
+
+        firstConsumer.Cancel();
+        secondConsumer.Cancel();
+        AwaitCondition(() => control1.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
     }
 }

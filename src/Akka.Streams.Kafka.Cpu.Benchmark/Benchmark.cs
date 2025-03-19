@@ -1,37 +1,40 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="Benchmark.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams.Kafka.Settings;
 
-namespace Akka.Streams.Kafka.Cpu.Benchmark
-{
-    public static class Benchmark
-    {
-        public static ActorSystem ConsumerSystem { get; private set; } = null!;
-        public static string KafkaTopic { get; }
-        public static string KafkaGroup { get; }
-        public static readonly DockerSupport Docker;
-        
-        static Benchmark()
-        {
-            Docker = new DockerSupport();
-            
-            var uuid = Guid.NewGuid().ToString();
-            KafkaTopic = $"topic-1-{uuid}";
-            KafkaGroup = $"group-1-{uuid}";
-        }
-        
-        public static async Task SetupKafkaAsync()
-        {
-            await Docker.SetupContainersAsync();
-        }
+namespace Akka.Streams.Kafka.Cpu.Benchmark;
 
-        public static Task SetupAkkaAsync()
-        {
-            Console.WriteLine("Starting Akka ActorSystems");
-            
-            var config = ConfigurationFactory.ParseString(@"
+public static class Benchmark
+{
+    public static ActorSystem ConsumerSystem { get; private set; } = null!;
+    public static string KafkaTopic { get; }
+    public static string KafkaGroup { get; }
+    public static readonly DockerSupport Docker;
+
+    static Benchmark()
+    {
+        Docker = new DockerSupport();
+
+        var uuid = Guid.NewGuid().ToString();
+        KafkaTopic = $"topic-1-{uuid}";
+        KafkaGroup = $"group-1-{uuid}";
+    }
+
+    public static async Task SetupKafkaAsync() => await Docker.SetupContainersAsync();
+
+    public static Task SetupAkkaAsync()
+    {
+        Console.WriteLine("Starting Akka ActorSystems");
+
+        var config = ConfigurationFactory.ParseString(@"
 akka {
     log-config-on-start = off
     stdout-loglevel = INFO
@@ -46,29 +49,24 @@ akka {
         }
     }
 }")
-                .WithFallback(KafkaExtensions.DefaultSettings);
-            
-            ConsumerSystem = ActorSystem.Create("akka-kafka-consumer", config);
-            Console.WriteLine("ActorSystems started");
-            return Task.CompletedTask;
-        }
+            .WithFallback(KafkaExtensions.DefaultSettings);
 
-        public static async Task TearDownAkkaAsync()
-        {
-            try
-            {
-                await ConsumerSystem.Terminate();
-            }
-            catch
-            {
-                // no-op
-            }
-        }
-        
-        public static async Task TearDownKafkaAsync()
-        {
-            await Docker.TearDownDockerAsync();
-        }
-
+        ConsumerSystem = ActorSystem.Create("akka-kafka-consumer", config);
+        Console.WriteLine("ActorSystems started");
+        return Task.CompletedTask;
     }
+
+    public static async Task TearDownAkkaAsync()
+    {
+        try
+        {
+            await ConsumerSystem.Terminate();
+        }
+        catch
+        {
+            // no-op
+        }
+    }
+
+    public static async Task TearDownKafkaAsync() => await Docker.TearDownDockerAsync();
 }

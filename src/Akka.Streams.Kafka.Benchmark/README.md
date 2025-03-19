@@ -30,16 +30,19 @@ This directory contains benchmarks for measuring the performance of Akka.Streams
 ## Benchmark Categories
 
 ### Consumer Benchmarks
+
 - `PlainConsumerBenchmark`: Measures throughput of plain Kafka consumer
 - `CommittableConsumerBenchmark`: Measures throughput with commit tracking
 - `BatchCommitBenchmark`: Measures throughput with batch commits
 
 ### Producer Benchmarks
+
 - `PlainProducerBenchmark`: Measures throughput of plain Kafka producer
 
 ## Configuration
 
 The benchmarks use the following Kafka configuration:
+
 - Bootstrap Servers: localhost:29092
 - Topic Partitions: 3
 - Replication Factor: 1

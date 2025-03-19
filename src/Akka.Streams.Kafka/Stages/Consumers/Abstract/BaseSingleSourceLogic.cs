@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="BaseSingleSourceLogic.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,263 +19,258 @@ using Confluent.Kafka;
 using Decider = Akka.Streams.Supervision.Decider;
 using Directive = Akka.Streams.Supervision.Directive;
 
-namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
+namespace Akka.Streams.Kafka.Stages.Consumers.Abstract;
+
+/// <summary>
+/// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic{K,V,TMessage}"/>
+/// </summary>
+/// <typeparam name="K">Key type</typeparam>
+/// <typeparam name="V">Value type</typeparam>
+/// <typeparam name="TMessage">Message type</typeparam>
+internal abstract class BaseSingleSourceLogic<K, V, TMessage> : GraphStageLogic
 {
-    /// <summary>
-    /// Shared GraphStageLogic for <see cref="SingleSourceStageLogic{K,V,TMessage}"/> and <see cref="ExternalSingleSourceLogic{K,V,TMessage}"/>
-    /// </summary>
-    /// <typeparam name="K">Key type</typeparam>
-    /// <typeparam name="V">Value type</typeparam>
-    /// <typeparam name="TMessage">Message type</typeparam>
-    internal abstract class BaseSingleSourceLogic<K, V, TMessage> : GraphStageLogic
+    private readonly SourceShape<TMessage> _shape;
+    private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
+    private int _requestId = 0;
+    private bool _requested = false;
+    protected ISubscription Subscription { get; }
+    protected Decider Decider { get; }
+
+    public Action<IImmutableSet<TopicPartitionOffset>> FilterRevokedPartitionAsyncCallback
     {
-        private readonly SourceShape<TMessage> _shape;
-        private readonly IMessageBuilder<K, V, TMessage> _messageBuilder;
-        private int _requestId = 0;
-        private bool _requested = false;
-        protected ISubscription Subscription { get; }
-        protected Decider Decider { get; }
+        get { return GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(FilterRevokedPartitions); }
+    }
 
-        public Action<IImmutableSet<TopicPartitionOffset>> FilterRevokedPartitionAsyncCallback =>
-            GetAsyncCallback<IImmutableSet<TopicPartitionOffset>>(FilterRevokedPartitions);
-
-        private void FilterRevokedPartitions(IImmutableSet<TopicPartitionOffset> partitions)
+    private void FilterRevokedPartitions(IImmutableSet<TopicPartitionOffset> partitions)
+    {
+        if (partitions.Count > 0)
         {
-            if (partitions.Count > 0)
-            {
-                Log.Debug("Filtering out messages from revoked partitions [{0}]", string.Join(", ", partitions));
-                var tps = partitions.Select(tpo => tpo.TopicPartition).ToImmutableHashSet();
+            Log.Debug("Filtering out messages from revoked partitions [{0}]", string.Join(", ", partitions));
+            var tps = partitions.Select(tpo => tpo.TopicPartition).ToImmutableHashSet();
 
-                // TODO: maybe it makes sense to look at offsets too
+            // TODO: maybe it makes sense to look at offsets too
 
-                // Thread-safe - happens inside an async callback
-                _buffer = new Queue<ConsumeResult<K, V>>(_buffer.Where(m => !tps.Contains(m.TopicPartition)));
-            }
-        }
-
-        private Queue<ConsumeResult<K, V>> _buffer = new();
-
-        protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } =
-            ImmutableHashSet.Create<TopicPartition>();
-
-        protected StageActor SourceActor { get; private set; } = null!;
-        internal IActorRef ConsumerActor { get; private set; } = null!;
-
-        /// <summary>
-        /// Implements <see cref="IControl"/> to provide control over executed source
-        /// </summary>
-        public virtual PromiseControl<TMessage> Control { get; }
-
-        protected BaseSingleSourceLogic(
-            SourceShape<TMessage> shape,
-            Attributes attributes,
-            Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
-            bool autoCreateTopics, ISubscription subscription)
-            : base(shape)
-        {
-            _shape = shape;
-            Subscription = subscription;
-            _messageBuilder = messageBuilderFactory(this);
-            Control = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback,
-                PerformShutdown);
-
-            // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
-            var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
-            Decider = supervisionStrategy.Decider;
-
-            SetHandler(shape.Outlet, onPull: Pump, onDownstreamFinish: _ => PerformShutdown());
-        }
-
-        public override void PreStart()
-        {
-            base.PreStart();
-
-            SourceActor = GetStageActor(MessageHandling);
-            Log.Info("Starting. StageActor: {0}", SourceActor.Ref);
-            ConsumerActor = CreateConsumerActor();
-            SourceActor.Watch(ConsumerActor);
-
-            ConfigureSubscription();
-        }
-
-        public override void PostStop()
-        {
-            Control.OnShutdown();
-
-            base.PostStop();
-        }
-
-        /// <summary>
-        /// Creates consumer actor
-        /// </summary>
-        protected abstract IActorRef CreateConsumerActor();
-
-        /// <summary>
-        /// This should configure consumer subscription on stage start
-        /// </summary>
-        protected abstract void ConfigureSubscription();
-
-        protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
-            Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
-        {
-            switch (Subscription)
-            {
-                case TopicSubscription topicSubscription:
-                    ConsumerActor.Tell(
-                        new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
-                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
-                        SourceActor.Ref);
-                    break;
-                case TopicSubscriptionPattern topicSubscriptionPattern:
-                    ConsumerActor.Tell(
-                        new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
-                            AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
-                        SourceActor.Ref);
-                    break;
-                case IManualSubscription manualSubscription:
-                    ConfigureManualSubscription(manualSubscription);
-                    break;
-                default:
-                    throw new NotSupportedException();
-            }
-
-            return;
-
-            IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
-            {
-                return new PartitionEventHandlers.Chain(
-                    subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance),
-                    new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
-                        partitionsRevokedCb));
-            }
-        }
-
-        /// <summary>
-        /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
-        /// </summary>
-        protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler)
-        {
-            return handler;
-        }
-
-        /// <summary>
-        /// Configures manual subscription
-        /// </summary>
-        /// <param name="subscription"></param>
-        protected void ConfigureManualSubscription(IManualSubscription subscription)
-        {
-            switch (subscription)
-            {
-                case Assignment assignment:
-                    ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Assign(assignment.TopicPartitions),
-                        SourceActor.Ref);
-                    TopicPartitions = TopicPartitions.Union(assignment.TopicPartitions);
-                    break;
-                case AssignmentWithOffset assignmentWithOffset:
-                    ConsumerActor.Tell(
-                        new KafkaConsumerActorMetadata.Internal.AssignWithOffset(assignmentWithOffset.TopicPartitions),
-                        SourceActor.Ref);
-                    TopicPartitions =
-                        TopicPartitions.Union(assignmentWithOffset.TopicPartitions.Select(tp => tp.TopicPartition));
-                    break;
-            }
-        }
-
-        protected virtual void MessageHandling((IActorRef, object) args)
-        {
-            var (sender, message) = args;
-            switch (message)
-            {
-                case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
-                    if (Log.IsDebugEnabled)
-                        Log.Debug("Received {0} messages from {1}", msg.MessagesList.Count, sender);
-
-                    // might be more than one in flight when we assign/revoke tps
-                    if (msg.RequestId == _requestId)
-                        _requested = false;
-
-                    foreach (var consumerMessage in msg.MessagesList)
-                        _buffer.Enqueue(consumerMessage);
-
-                    Pump();
-                    break;
-
-                case Status.Failure failure:
-                    var exception = failure.Cause;
-                    var cause = exception.GetCause();
-                    switch (Decider(exception))
-                    {
-                        case Directive.Stop:
-                            if (Log.IsErrorEnabled)
-                                Log.Error(exception,
-                                    "Source stage failed with exception: [{0}]. Supervision directive: [{1}]", cause,
-                                    nameof(Directive.Stop));
-                            FailStage(failure.Cause);
-                            break;
-                        case Directive.Resume:
-                            if (Log.IsInfoEnabled)
-                                Log.Info(exception,
-                                    "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
-                                    nameof(Directive.Resume));
-                            break;
-                        case Directive.Restart:
-                            if (Log.IsInfoEnabled)
-                                Log.Info(exception,
-                                    "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
-                                    nameof(Directive.Restart));
-                            // Empty the buffer to make sure that messages does not get duplicated
-                            _buffer.Clear();
-
-                            // ConsumerActor are designed to suicide itself on Directive.Stop or Directive.Restart
-                            // to prevent any offset runaway. We will need to restart it.
-                            SourceActor.Unwatch(ConsumerActor);
-                            ConsumerActor = CreateConsumerActor();
-                            SourceActor.Watch(ConsumerActor);
-                            ConfigureSubscription();
-                            _requested = false;
-                            Pump();
-                            break;
-                        case var unknown:
-                            throw new IndexOutOfRangeException($"Unknown Supervision.Directive: [{unknown}]");
-                    }
-
-                    break;
-
-                case Terminated:
-                    FailStage(new ConsumerFailed());
-                    break;
-            }
-        }
-
-        private void Pump()
-        {
-            while (IsAvailable(_shape.Outlet) && _buffer.Count > 0)
-            {
-                var message = _buffer.Dequeue();
-                Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
-            }
-
-            if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
-            {
-                RequestMessages();
-            }
-        }
-
-        protected void RequestMessages()
-        {
-            _requested = true;
-            _requestId += 1;
-            if (Log.IsDebugEnabled)
-                Log.Debug("[{0}] Requesting messages, requestId: {1}, partitions: {2}", ConsumerActor.Path.Name,
-                    _requestId, string.Join(", ", TopicPartitions));
-            ConsumerActor.Tell(
-                new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId,
-                    TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
-        }
-
-        protected virtual void PerformShutdown()
-        {
-            Log.Info("Completing");
+            // Thread-safe - happens inside an async callback
+            _buffer = new Queue<ConsumeResult<K, V>>(_buffer.Where(m => !tps.Contains(m.TopicPartition)));
         }
     }
+
+    private Queue<ConsumeResult<K, V>> _buffer = new();
+
+    protected IImmutableSet<TopicPartition> TopicPartitions { get; set; } =
+        ImmutableHashSet.Create<TopicPartition>();
+
+    protected StageActor SourceActor { get; private set; } = null!;
+    internal IActorRef ConsumerActor { get; private set; } = null!;
+
+    /// <summary>
+    /// Implements <see cref="IControl"/> to provide control over executed source
+    /// </summary>
+    public virtual PromiseControl<TMessage> Control { get; }
+
+    protected BaseSingleSourceLogic(
+        SourceShape<TMessage> shape,
+        Attributes attributes,
+        Func<BaseSingleSourceLogic<K, V, TMessage>, IMessageBuilder<K, V, TMessage>> messageBuilderFactory,
+        bool autoCreateTopics, ISubscription subscription)
+        : base(shape)
+    {
+        _shape = shape;
+        Subscription = subscription;
+        _messageBuilder = messageBuilderFactory(this);
+        Control = new PromiseControl<TMessage>(_shape, Complete, SetKeepGoing, GetAsyncCallback,
+            PerformShutdown);
+
+        // TODO: Move this to the GraphStage.InitialAttribute when it is fixed (https://github.com/akkadotnet/akka.net/issues/5388)
+        var supervisionStrategy = attributes.GetAttribute<ActorAttributes.SupervisionStrategy>();
+        Decider = supervisionStrategy.Decider;
+
+        SetHandler(shape.Outlet, Pump, _ => PerformShutdown());
+    }
+
+    public override void PreStart()
+    {
+        base.PreStart();
+
+        SourceActor = GetStageActor(MessageHandling);
+        Log.Info("Starting. StageActor: {0}", SourceActor.Ref);
+        ConsumerActor = CreateConsumerActor();
+        SourceActor.Watch(ConsumerActor);
+
+        ConfigureSubscription();
+    }
+
+    public override void PostStop()
+    {
+        Control.OnShutdown();
+
+        base.PostStop();
+    }
+
+    /// <summary>
+    /// Creates consumer actor
+    /// </summary>
+    protected abstract IActorRef CreateConsumerActor();
+
+    /// <summary>
+    /// This should configure consumer subscription on stage start
+    /// </summary>
+    protected abstract void ConfigureSubscription();
+
+    protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
+        Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
+    {
+        switch (Subscription)
+        {
+            case TopicSubscription topicSubscription:
+                ConsumerActor.Tell(
+                    new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
+                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
+                    SourceActor.Ref);
+                break;
+            case TopicSubscriptionPattern topicSubscriptionPattern:
+                ConsumerActor.Tell(
+                    new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
+                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
+                    SourceActor.Ref);
+                break;
+            case IManualSubscription manualSubscription:
+                ConfigureManualSubscription(manualSubscription);
+                break;
+            default:
+                throw new NotSupportedException();
+        }
+
+        return;
+
+        IPartitionEventHandler CreateRebalanceListener(IAutoSubscription subscription)
+        {
+            return new PartitionEventHandlers.Chain(
+                subscription.PartitionEventsHandler.GetOrElse(PartitionEventHandlers.Empty.Instance),
+                new PartitionEventHandlers.AsyncCallbacks(subscription, SourceActor.Ref, partitionsAssignedCb,
+                    partitionsRevokedCb));
+        }
+    }
+
+    /// <summary>
+    /// Opportunity for subclasses to add their logic to the partition assignment callbacks.
+    /// </summary>
+    protected virtual IPartitionEventHandler AddToPartitionAssignmentHandler(IPartitionEventHandler handler) => handler;
+
+    /// <summary>
+    /// Configures manual subscription
+    /// </summary>
+    /// <param name="subscription"></param>
+    protected void ConfigureManualSubscription(IManualSubscription subscription)
+    {
+        switch (subscription)
+        {
+            case Assignment assignment:
+                ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.Assign(assignment.TopicPartitions),
+                    SourceActor.Ref);
+                TopicPartitions = TopicPartitions.Union(assignment.TopicPartitions);
+                break;
+            case AssignmentWithOffset assignmentWithOffset:
+                ConsumerActor.Tell(
+                    new KafkaConsumerActorMetadata.Internal.AssignWithOffset(assignmentWithOffset.TopicPartitions),
+                    SourceActor.Ref);
+                TopicPartitions =
+                    TopicPartitions.Union(assignmentWithOffset.TopicPartitions.Select(tp => tp.TopicPartition));
+                break;
+        }
+    }
+
+    protected virtual void MessageHandling((IActorRef, object) args)
+    {
+        var (sender, message) = args;
+        switch (message)
+        {
+            case KafkaConsumerActorMetadata.Internal.Messages<K, V> msg:
+                if (Log.IsDebugEnabled)
+                    Log.Debug("Received {0} messages from {1}", msg.MessagesList.Count, sender);
+
+                // might be more than one in flight when we assign/revoke tps
+                if (msg.RequestId == _requestId)
+                    _requested = false;
+
+                foreach (var consumerMessage in msg.MessagesList)
+                    _buffer.Enqueue(consumerMessage);
+
+                Pump();
+                break;
+
+            case Status.Failure failure:
+                var exception = failure.Cause;
+                var cause = exception.GetCause();
+                switch (Decider(exception))
+                {
+                    case Directive.Stop:
+                        if (Log.IsErrorEnabled)
+                            Log.Error(exception,
+                                "Source stage failed with exception: [{0}]. Supervision directive: [{1}]", cause,
+                                nameof(Directive.Stop));
+                        FailStage(failure.Cause);
+                        break;
+                    case Directive.Resume:
+                        if (Log.IsInfoEnabled)
+                            Log.Info(exception,
+                                "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
+                                nameof(Directive.Resume));
+                        break;
+                    case Directive.Restart:
+                        if (Log.IsInfoEnabled)
+                            Log.Info(exception,
+                                "Source stage failure [{0}] handled with Supervision Directive [{1}]", cause,
+                                nameof(Directive.Restart));
+                        // Empty the buffer to make sure that messages does not get duplicated
+                        _buffer.Clear();
+
+                        // ConsumerActor are designed to suicide itself on Directive.Stop or Directive.Restart
+                        // to prevent any offset runaway. We will need to restart it.
+                        SourceActor.Unwatch(ConsumerActor);
+                        ConsumerActor = CreateConsumerActor();
+                        SourceActor.Watch(ConsumerActor);
+                        ConfigureSubscription();
+                        _requested = false;
+                        Pump();
+                        break;
+                    case var unknown:
+                        throw new IndexOutOfRangeException($"Unknown Supervision.Directive: [{unknown}]");
+                }
+
+                break;
+
+            case Terminated:
+                FailStage(new ConsumerFailed());
+                break;
+        }
+    }
+
+    private void Pump()
+    {
+        while (IsAvailable(_shape.Outlet) && _buffer.Count > 0)
+        {
+            var message = _buffer.Dequeue();
+            Push(_shape.Outlet, _messageBuilder.CreateMessage(message));
+        }
+
+        if (IsAvailable(_shape.Outlet) && !_requested && TopicPartitions.Any())
+        {
+            RequestMessages();
+        }
+    }
+
+    protected void RequestMessages()
+    {
+        _requested = true;
+        _requestId += 1;
+        if (Log.IsDebugEnabled)
+            Log.Debug("[{0}] Requesting messages, requestId: {1}, partitions: {2}", ConsumerActor.Path.Name,
+                _requestId, string.Join(", ", TopicPartitions));
+        ConsumerActor.Tell(
+            new KafkaConsumerActorMetadata.Internal.RequestMessages(_requestId,
+                TopicPartitions.ToImmutableHashSet()), SourceActor.Ref);
+    }
+
+    protected virtual void PerformShutdown() => Log.Info("Completing");
 }

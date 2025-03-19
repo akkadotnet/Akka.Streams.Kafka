@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="Program.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System;
 using System.Text;
 using Akka.Actor;
 using Akka.Configuration;
@@ -8,34 +14,36 @@ using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
 using Config = Akka.Configuration.Config;
 
-namespace SimpleConsumer
+namespace SimpleConsumer;
+
+public class Program
 {
-    public class Program
+    public static void Main(string[] args)
     {
-        public static void Main(string[] args)
-        {
-            Config fallbackConfig = ConfigurationFactory.ParseString(@"
+        var fallbackConfig = ConfigurationFactory.ParseString(@"
                     akka.suppress-json-serializer-warning=true
                     akka.loglevel = DEBUG
-                ").WithFallback(ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"));
+                ").WithFallback(
+            ConfigurationFactory.FromResource<ConsumerSettings<object, object>>("Akka.Streams.Kafka.reference.conf"));
 
-            var system = ActorSystem.Create("TestKafka", fallbackConfig);
-            var materializer = system.Materializer();
+        var system = ActorSystem.Create("TestKafka", fallbackConfig);
+        var materializer = system.Materializer();
 
-            var consumerSettings = ConsumerSettings<string, string>.Create(system, null, null)
-                .WithBootstrapServers("localhost:29092")
-                .WithGroupId("group1");
+        var consumerSettings = ConsumerSettings<string, string>.Create(system, null, null)
+            .WithBootstrapServers("localhost:29092")
+            .WithGroupId("group1");
 
-            var subscription = Subscriptions.Topics("akka100");
+        var subscription = Subscriptions.Topics("akka100");
 
-            KafkaConsumer.PlainSource(consumerSettings, subscription)
-                .RunForeach(result =>
+        KafkaConsumer.PlainSource(consumerSettings, subscription)
+            .RunForeach(
+                result =>
                 {
-                    Console.WriteLine($"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Message.Value}");
+                    Console.WriteLine(
+                        $"Consumer: {result.Topic}/{result.Partition} {result.Offset}: {result.Message.Value}");
                 }, materializer);
 
 
-            Console.ReadLine();
-        }
+        Console.ReadLine();
     }
 }
