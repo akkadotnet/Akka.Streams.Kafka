@@ -26,7 +26,7 @@ namespace Akka.Streams.Kafka.Benchmark
         [Params(1, 4, 16)]
         public int PartitionCount { get; set; }
         
-        [Params(10, 100)]
+        [Params(10, 100, 1000)]
         public int BatchSize { get; set; }
         
         [Params(100)]
