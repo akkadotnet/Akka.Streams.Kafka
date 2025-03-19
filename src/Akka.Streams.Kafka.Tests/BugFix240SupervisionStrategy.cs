@@ -219,10 +219,7 @@ namespace Akka.Streams.Kafka.Tests
 
             var offsets = new List<string>();
             await probe.RequestAsync(11);
-            for (var i = 0; i < 6; i++)
-            {
-                offsets.Add(await probe.ExpectNextAsync(TimeSpan.FromSeconds(5))); 
-            }
+            offsets.AddRange(await probe.ExpectNextNAsync(6).ToListAsync()); // we get an extra element here even though the offset is not committed
 
             // stream fails at index 7
             var err = await probe.ExpectEventAsync();
@@ -242,12 +239,8 @@ namespace Akka.Streams.Kafka.Tests
                 .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
                 .Run(Materializer);
             
-            await probe2.RequestAsync(11);
-            for (var i = 0; i < 5; i++)
-            {
-                var e = await probe2.ExpectNextAsync(TimeSpan.FromSeconds(5));
-                offsets.Add(e); 
-            }
+            await probe2.RequestAsync(11); // we get the remaining 6 uncommitted offsets
+            offsets.AddRange(await probe2.ExpectNextNAsync(6).ToListAsync());
             probe.Cancel();
 
             // end result should be gapless
