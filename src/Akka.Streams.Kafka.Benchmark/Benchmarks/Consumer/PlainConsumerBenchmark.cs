@@ -24,6 +24,8 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         }
         
         [Benchmark(OperationsPerInvoke = TestMessageCount)]
+        [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+            BenchmarkCategories.PlainConsumerBenchmark)]
         public Task ConsumeMessageAsync()
         {
             StartDemand();
