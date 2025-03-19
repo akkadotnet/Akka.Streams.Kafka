@@ -14,9 +14,9 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks;
 [Config(typeof(MacroBenchmarkConfig))]
 public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<Offset>
 {
-    [Params(10, 100, 500)] public int PollBatchSize { get; set; }
+    [Params(500)] public int PollBatchSize { get; set; }
 
-    [Params(10)] public int CommitBatchSize { get; set; }
+    [Params(1000)] public int CommitBatchSize { get; set; }
 
 
     protected override Source<Offset, IControl> CreateSource()

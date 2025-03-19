@@ -13,7 +13,7 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks;
 [Config(typeof(MacroBenchmarkConfig))]
 public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
 {
-    [Params(10, 100, 500)] public int PollBatchSize { get; set; }
+    [Params(500)] public int PollBatchSize { get; set; }
 
     protected override Source<ConsumeResult<Null, string>, IControl> CreateSource()
     {
