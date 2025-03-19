@@ -9,17 +9,17 @@ using Akka.Streams.Kafka.Settings;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Benchmark.Benchmarks;
+namespace Akka.Streams.Kafka.Benchmark;
 
 [Config(typeof(MacroBenchmarkConfig))]
-public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<Offset>
+public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>
 {
     [Params(500)] public int PollBatchSize { get; set; }
 
     [Params(1000)] public int CommitBatchSize { get; set; }
 
 
-    protected override Source<Offset, IControl> CreateSource()
+    protected override Source<int, IControl> CreateSource()
     {
         var mergeHubSource = MergeHub.Source<ICommittableOffsetBatch>(perProducerBufferSize: 10);
         var (sink, trueSource) = mergeHubSource.PreMaterialize(ActorSystem);
@@ -43,12 +43,14 @@ public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<Offs
 
         partitionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
-        return trueSource.SelectMany(c => c.Offsets)
-            .Select(c => c.Offset)
+        return trueSource.SelectMany(c => new int[c.Offsets.Count])
+            .Select(c => c)
             .MapMaterializedValue(_ => control);
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
+    [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+        BenchmarkCategories.PartitionedConsumerBenchmark, BenchmarkCategories.CommittableConsumerBenchmark)]
     public Task ConsumeMessageAsync()
     {
         StartDemand();

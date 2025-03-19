@@ -8,7 +8,7 @@ using Akka.Streams.Kafka.Settings;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Benchmark.Benchmarks;
+namespace Akka.Streams.Kafka.Benchmark;
 
 [Config(typeof(MacroBenchmarkConfig))]
 public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
@@ -23,7 +23,7 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
         var consumerSettings = CreateConsumerSettings<Null, string>()
             .WithMaxPollRecords(PollBatchSize);
 
-        var (control, paritionedSrc) = KafkaConsumer
+        var (control, partitionedSrc) = KafkaConsumer
             .PlainPartitionedSource(consumerSettings, Subscriptions.Topics(TopicName))
             .Select(tup =>
             {
@@ -32,7 +32,7 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
             })
             .PreMaterialize(ActorSystem);
 
-        paritionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
+        partitionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
         return trueSource.Select(c =>
         {
@@ -42,6 +42,8 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
+    [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+        BenchmarkCategories.PlainConsumerBenchmark, BenchmarkCategories.PlainConsumerBenchmark)]
     public Task ConsumeMessageAsync()
     {
         StartDemand();
