@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Akka.Actor;
+using Akka.Streams.Kafka.Benchmark.Infrastructure;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Diagnosers;
 using Akka.Streams.Kafka.Messages;
@@ -60,6 +61,7 @@ namespace Akka.Streams.Kafka.Benchmark.Benchmarks
         }
 
         [Benchmark]
+        [BenchmarkCategory(BenchmarkCategories.MicroBenchmark)]
         public ICommittableOffsetBatch UpdateBatchSequentially()
         {
             var batch = _batch;

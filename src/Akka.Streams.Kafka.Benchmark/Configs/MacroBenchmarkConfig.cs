@@ -1,4 +1,5 @@
 using System;
+using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Engines;
 using BenchmarkDotNet.Environments;
@@ -14,6 +15,7 @@ public class MacroBenchmarkConfig : ManualConfig
     {
         AddExporter(MarkdownExporter.GitHub);
         AddColumn(new MessagesPerSecondColumn());
+        AddColumn(new CategoriesColumn());
         AddLogger(ConsoleLogger.Default);
 
         // Safer affinity mask (optional; remove if not needed)
