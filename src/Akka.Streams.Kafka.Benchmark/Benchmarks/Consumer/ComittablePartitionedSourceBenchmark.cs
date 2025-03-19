@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -10,7 +9,7 @@ using Akka.Streams.Kafka.Settings;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Benchmark.Benchmarks;
+namespace Akka.Streams.Kafka.Benchmark;
 
 [Config(typeof(MacroBenchmarkConfig))]
 public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>

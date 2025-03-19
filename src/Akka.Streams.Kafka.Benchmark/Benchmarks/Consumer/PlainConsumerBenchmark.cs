@@ -8,7 +8,7 @@ using Akka.Streams.Kafka.Settings;
 using BenchmarkDotNet.Attributes;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Benchmark.Benchmarks
+namespace Akka.Streams.Kafka.Benchmark
 {
     [Config(typeof(MacroBenchmarkConfig))]
     public class PlainSourceBenchmark : KafkaConsumerBenchmark<ConsumeResult<Null, string>>
