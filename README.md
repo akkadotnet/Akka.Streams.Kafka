@@ -9,9 +9,6 @@ All stages are build with Akka.Streams advantages in mind:
 - Each stage can make use of it's own `IConsumer` or `IProducer` instance, or can share them (can be used for optimization)
 - All Kafka failures can be handled with usual stream error handling strategies
 
-## Builds
-[![Build status](https://ci.appveyor.com/api/projects/status/0glh2fi8uic17vl4/branch/dev?svg=true)](https://ci.appveyor.com/project/akkadotnet-contrib/akka-streams-kafka/branch/dev)
-
 ## Producer
 
 A producer publishes messages to Kafka topics. The message itself contains information about what topic and partition to publish to so you can publish to different topics with the same producer.
@@ -123,7 +120,7 @@ Source
 
 This flow accepts implementations of `Akka.Streams.Kafka.Messages.IEnvelope` and return `Akka.Streams.Kafka.Messages.IResults` elements. 
 `IEnvelope` elements contain an extra field to pass through data, the so called `passThrough`. 
-Its value is passed through the flow and becomes available in the `ProducerMessage.Results`’s `PassThrough`. 
+Its value is passed through the flow and becomes available in the `ProducerMessage.Results`'s `PassThrough`. 
 It can for example hold a `Akka.Streams.Kafka.Messages.CommittableOffset` or `Akka.Streams.Kafka.Messages.CommittableOffsetBatch` (from a `KafkaConsumer.CommittableSource`) 
 that can be committed after publishing to Kafka:
 
@@ -252,76 +249,7 @@ var settings = ConsumerSettings<string, string>.Create(actorSystem, null, null)
 
 ### Default Consumer HOCON Settings
 
-```HOCON
-# Properties for akka.kafka.ConsumerSettings can be
-# defined in this section or a configuration section with
-# the same layout.
-akka.kafka.consumer {
-  # Tuning property of scheduled polls.
-  # Controls the interval from one scheduled poll to the next.
-  poll-interval = 50ms
-
-  # Tuning property of the `KafkaConsumer.poll` parameter.
-  # Note that non-zero value means that the thread that
-  # is executing the stage will be blocked. See also the `wakup-timeout` setting below.
-  poll-timeout = 50ms
-
-  # The stage will delay stopping the internal actor to allow processing of
-  # messages already in the stream (required for successful committing).
-  # This can be set to 0 for streams using `DrainingControl`.
-  stop-timeout = 30s
-
-  # If offset commit requests are not completed within this timeout
-  # the returned Future is completed `CommitTimeoutException`.
-  # The `Transactional.source` waits this ammount of time for the producer to mark messages as not
-  # being in flight anymore as well as waiting for messages to drain, when rebalance is triggered.
-  commit-timeout = 15s
-
-  # If commits take longer than this time a warning is logged
-  commit-time-warning = 1s
-
-  # Not relevant for Kafka after version 2.1.0.
-  # If set to a finite duration, the consumer will re-send the last committed offsets periodically
-  # for all assigned partitions. See https://issues.apache.org/jira/browse/KAFKA-4682.
-  commit-refresh-interval = infinite
-
-  buffer-size = 128
-
-  # Fully qualified config path which holds the dispatcher configuration
-  # to be used by the KafkaConsumerActor. Some blocking may occur.
-  use-dispatcher = "akka.kafka.default-dispatcher"
-
-  # Properties defined by Confluent.Kafka.ConsumerConfig
-  # can be defined in this configuration section.
-  kafka-clients {
-    # Disable auto-commit by default
-    enable.auto.commit = false
-  }
-
-  # Time to wait for pending requests when a partition is closed
-  wait-close-partition = 500ms
-
-  # Limits the query to Kafka for a topic's position
-  position-timeout = 5s
-
-  # When using `AssignmentOffsetsForTimes` subscriptions: timeout for the
-  # call to Kafka's API
-  offset-for-times-timeout = 5s
-  
-  # Timeout for akka.kafka.Metadata requests
-  # This value is used instead of Kafka's default from `default.api.timeout.ms`
-  # which is 1 minute.
-  metadata-request-timeout = 5s
-  
-  # Interval for checking that transaction was completed before closing the consumer.
-  # Used in the transactional flow for exactly-once-semantics processing.
-  eos-draining-check-interval = 30ms
-  
-  # Issue warnings when a call to a partition assignment handler method takes
-  # longer than this.
-  partition-handler-warning = 5s
-}
-```
+See [`reference.conf`](https://github.com/akkadotnet/Akka.Streams.Kafka/blob/dev/src/Akka.Streams.Kafka/reference.conf) for the latest on settings.
 
 ### PlainSource
 
@@ -357,27 +285,73 @@ The `KafkaConsumer.CommittableSource` makes it possible to commit offset positio
 
 If you need to store offsets in anything other than Kafka, `PlainSource` should be used instead of this API.
 
-This is useful when “at-least once delivery” is desired, as each message will likely be delivered one time but in failure cases could be duplicated:
+This is useful when "at-least once delivery" is desired, as each message will likely be delivered one time but in failure cases could be duplicated.
+
+The recommended way to handle commits is to use the built-in `Committer` facilities, which provide proper batching and error handling:
 
 ```C#
-KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics("topic1"))
-    .SelectAsync(1, async elem => 
-    {
-        await elem.CommitableOffset.Commit();
-        return Done.Instance;
-    })
-    .RunWith(Sink.Ignore<Done>(), _materializer);
-```
-The above example uses separate `SelectAsync` stages for processing and committing. This guarantees that for parallelism higher than 1 we will keep correct ordering of messages sent for commit.
+// Recommended pattern - using Committer.Sink for safe batched commits
+var control = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics("topic1"))
+    .ToMaterialized(Committer.Sink(CommitterSettings.Create(system)), Keep.Both)
+    .MapMaterializedValue(DrainingControl<Done>.Create)
+    .Run(materializer);
 
-Committing the offset for each message as illustrated above is rather slow. 
-It is recommended to batch the commits for better throughput, with the trade-off that more messages may be re-delivered in case of failures.
+// For more complex scenarios, you can process messages before committing
+var control = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics("topic1"))
+    .SelectAsync(parallelism: 10, async message =>
+    {
+        await ProcessMessage(message.Record); // Your message processing logic
+        return message.CommitableOffset;
+    })
+    .ToMaterialized(Committer.Sink(CommitterSettings.Create(system)), Keep.Both)
+    .MapMaterializedValue(DrainingControl<Done>.Create)
+    .Run(materializer);
+
+// When you need to produce messages to Kafka before committing
+DrainingControl<Done> control = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics("topic1"))
+    .Select(msg => 
+        ProducerMessage.Single(
+            new ProducerRecord<Null, string>("topic2", msg.Record.Message.Key, msg.Record.Message.Value),
+            msg.CommitableOffset))
+    .Via(KafkaProducer.FlexiFlow<Null, string, ICommittableOffset>(producerSettings))
+    .Select(ICommittable (result) => result.PassThrough)
+    .ToMaterialized(Committer.Sink(CommitterSettings.Create(system)), Keep.Both)
+    .MapMaterializedValue<DrainingControl<Done>>(tuple => DrainingControl.Create(tuple.Item1, tuple.Item2))
+    .Run(system);
+```
+
+The `Committer` facilities handle batching automatically based on your `CommitterSettings`. You can configure batch size, parallelism, and other parameters:
+
+```C#
+var committerSettings = CommitterSettings.Create(system)
+    .WithMaxBatch(100) // Maximum number of offsets in one commit
+    .WithParallelism(5) // Number of commits that can be in progress at the same time
+    .WithMaxInterval(TimeSpan.FromSeconds(3)); // Maximum interval between commits
+```
+
+> **WARNING**: Avoid calling `CommittableOffset.Commit()` or `CommittableOffsetBatch.Commit()` directly. Always use the `Committer` facilities to ensure proper batching and error handling. Direct commits can lead to reduced performance and potential data loss in failure scenarios.
+
+When using manual partition assignment or when you need more control over the commit process:
+
+```C#
+var subscription = Subscriptions.Assignment(new TopicPartition("topic1", 0));
+
+DrainingControl<Done> control = KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Assignment(topicPartition1))
+    .Select(ICommittable (c) => c.CommitableOffset)
+    .ToMaterialized(
+        Committer.Sink(CommitterSettings.Create(system)
+            .WithMaxBatch(100)
+            .WithParallelism(5)), 
+        Keep.Both)
+    .MapMaterializedValue<DrainingControl<Done>>(tuple => DrainingControl.Create(tuple.Item1, tuple.Item2))
+    .Run(system);
+```
 
 ### PlainPartitionedSource
 
 The `PlainPartitionedSource` is a way to track automatic partition assignment from Kafka.
 When a topic-partition is assigned to a consumer, this source will emit tuples with the assigned topic-partition and a corresponding source of `ConsumerRecord`s.
-When a topic-partition is revoked, the corresponding source completes.
+When a topic-partition is revoked, the corresponding source completes. As of version 1.5.39, the source automatically filters out any messages from recently revoked partitions, providing better consistency during rebalancing operations.
 
 ```c#
 var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
@@ -420,7 +394,7 @@ KafkaConsumer.CommitWithMetadataSource(settings, Subscriptions.Topics("topic"), 
 
 This source emits <see cref="ConsumeResult{TKey,TValue}"/> together with the offset position as flow context, thus makes it possible to commit offset positions to Kafka.
 This is useful when "at-least once delivery" is desired, as each message will likely be delivered one time but in failure cases could be duplicated.
-It is intended to be used with `KafkaProducer.FlowWithContext` and/or `Committer.SinkWithOffsetContext`
+It is intended to be used with `KafkaProducer.FlowWithContext` and/or `Committer.SinkWithOffsetContext`. As of version 1.5.39, this source includes improved partition handling with automatic filtering of messages from revoked partitions.
 
 ```c#
 var control = KafkaConsumer.SourceWithOffsetContext(consumerSettings, Subscriptions.Topics("topic1"))
@@ -462,18 +436,24 @@ but allows the use of an offset store outside of Kafka, while retaining the auto
 When a topic-partition is assigned to a consumer, the `getOffsetsOnAssign`
 function will be called to retrieve the offset, followed by a seek to the correct spot in the partition.
 
+As of version 1.5.39, this source uses `IncrementalAssign` internally to prevent offset resets during partition reassignment, making it more reliable for scenarios where you're managing offsets externally - in other words: the stage now remembers any previous assignments you've made.
+
 The `onRevoke` function gives the consumer a chance to store any uncommitted offsets, and do any other cleanup
-that is required. 
+that is required. The source also automatically filters out any messages from recently revoked partitions to maintain consistency during rebalancing.
 
 ```c#
 var source = KafkaConsumer.PlainPartitionedManualOffsetSource(consumerSettings, Subscriptions.Topics(topic),
     assignedPartitions =>
     {
-        // Handle assigned partitions
+        // Handle assigned partitions - retrieve offsets from your external store
+        return Task.FromResult(assignedPartitions.ToDictionary(
+            p => p, 
+            _ => new TopicPartitionOffset(_.Topic, _.Partition, Offset.Stored)));
     },
     revokedPartitions =>
     {
-        // Handle partitions that are revoked
+        // Handle partitions that are revoked - store current offsets externally
+        return Task.CompletedTask;
     })
     // Pass message values down to the stream
     .Select(m => m.Value);
@@ -685,7 +665,6 @@ When set, all logs will be written to `logs` subfolder near to your test assembl
 ```C#
 public readonly string LogPath = $"logs\\{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid():N}.txt";
 ```
-
 ### Tests: Kafka container reuse
 
 By default, tests are configured to be friendly to CI - that is, before starting tests docker Kafka images will be downloaded (if not yet exist) and containers started, and after all tests finish full cleanup will be performed (except the fact that downloaded docker images will not be removed).
@@ -693,3 +672,4 @@ By default, tests are configured to be friendly to CI - that is, before starting
 While this might be useful when running tests locally, there are situations when you would like to save startup/shutdown tests time by using some pre-existing container, that will be used for all test runs and will not be stopped/started each time.
 
 To achieve that, set `AKKA_STREAMS_KAFKA_TEST_CONTAINER_REUSE` environment variable on your local machine to any value. This will force using existing Kafka container, listening on port `29092` . Use `docker-compose up` console command in the root of project folder to get this container up and running.
+
