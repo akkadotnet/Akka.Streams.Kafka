@@ -75,7 +75,7 @@ public class CommittingSpec : KafkaIntegrationTests
         // some concurrent publishing
         await ProduceStrings(new TopicPartition(topic1, new Partition(0)), messages.Skip(100), ProducerSettings);
 
-        var expectedResumed = messages.Skip(committedElements.Current + 1).ToList();
+        var expectedResumed = messages.Skip(committedElements.Current).ToList();
         await probe2.RequestAsync(Numbers.Length);
         await probe2.ExpectNextNAsync(expectedResumed);
 

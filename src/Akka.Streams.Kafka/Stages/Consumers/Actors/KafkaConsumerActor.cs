@@ -890,6 +890,8 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Actors
                 {
                     s.Tell(Done.Instance);
                 }
+                
+                _log.Debug("Committed offsets: {0}", string.Join(", ", commitMap));
             }
             catch (KafkaException offsetException)
             {
