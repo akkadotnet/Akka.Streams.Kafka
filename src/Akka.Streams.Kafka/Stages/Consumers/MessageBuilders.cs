@@ -172,7 +172,7 @@ namespace Akka.Streams.Kafka.Stages.Consumers
                 record.Offset, 
                 _transactionalMessageBuilderStage.CommittedMarker);
             
-            return new TransactionalMessage<K, V>(record, offset);
+            return new TransactionalMessage<K, V>(record, offset.GroupTopicPartitionOffset);
         }
     }
 }

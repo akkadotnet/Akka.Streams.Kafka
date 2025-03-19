@@ -24,7 +24,7 @@ namespace Akka.Streams.Kafka.Messages
     /// <summary>
     /// Used by <see cref="TransactionalMessageBuilder{K,V}"/>
     /// </summary>
-    internal sealed record PartitionOffsetCommittedMarker : GroupTopicPartitionOffset
+    internal sealed record PartitionOffsetCommittedMarker
     {
         /// <summary>
         /// Committed marker
@@ -32,15 +32,27 @@ namespace Akka.Streams.Kafka.Messages
         public ICommittedMarker CommittedMarker { get; }
 
         public PartitionOffsetCommittedMarker(string groupId, string topic, int partition, Offset offset, ICommittedMarker committedMarker) 
-            : base(groupId, topic, partition, offset)
+            : this(new GroupTopicPartitionOffset(groupId, topic, partition, offset), committedMarker)
         {
             CommittedMarker = committedMarker;
         }
 
-        public PartitionOffsetCommittedMarker(GroupTopicPartition groupTopicPartition, Offset offset, ICommittedMarker committedMarker) 
-            : base(groupTopicPartition, offset)
+        public PartitionOffsetCommittedMarker(GroupTopicPartitionOffset groupTopicPartition, ICommittedMarker committedMarker)
         {
             CommittedMarker = committedMarker;
+            GroupTopicPartitionOffset = groupTopicPartition;
         }
+        
+        public GroupTopicPartitionOffset GroupTopicPartitionOffset { get; }
+        
+        public string GroupId => GroupTopicPartitionOffset.GroupId;
+        
+        public string Topic => GroupTopicPartitionOffset.Topic;
+        
+        public int Partition => GroupTopicPartitionOffset.Partition;
+        
+        public Offset Offset => GroupTopicPartitionOffset.Offset;
+        
+        public GroupTopicPartition GroupTopicPartition => GroupTopicPartitionOffset.GroupTopicPartition;
     }
 }
