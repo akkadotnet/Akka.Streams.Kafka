@@ -50,6 +50,8 @@ public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
+    [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+        BenchmarkCategories.PartitionedConsumerBenchmark, BenchmarkCategories.CommittableConsumerBenchmark)]
     public Task ConsumeMessageAsync()
     {
         StartDemand();

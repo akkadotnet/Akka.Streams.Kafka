@@ -42,6 +42,8 @@ public class PlainPartitionedSourceBenchmark : KafkaConsumerBenchmark<ConsumeRes
     }
 
     [Benchmark(OperationsPerInvoke = TestMessageCount)]
+    [BenchmarkCategory(BenchmarkCategories.MacroBenchmark, BenchmarkCategories.ConsumerBenchmark,
+        BenchmarkCategories.PlainConsumerBenchmark, BenchmarkCategories.PlainConsumerBenchmark)]
     public Task ConsumeMessageAsync()
     {
         StartDemand();
