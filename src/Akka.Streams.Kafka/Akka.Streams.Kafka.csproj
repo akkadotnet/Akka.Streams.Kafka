@@ -25,4 +25,8 @@
     <None Include="../../README.md" Pack="true" PackagePath="\" />
     <None Include="../../docs/images/icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Akka.Streams.Kafka.Benchmark" />
+    </ItemGroup>
 </Project>
