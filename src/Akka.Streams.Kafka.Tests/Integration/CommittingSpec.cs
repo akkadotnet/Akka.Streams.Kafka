@@ -328,8 +328,14 @@ public class CommittingSpec : KafkaIntegrationTests
             ConsumeAndBatchCommit(string t)
         {
             return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(t))
-                .Select(ICommittable (c) => c.CommitableOffset)
-                .Via(Committer.BatchFlow(CommitterSettings.Create(Sys).WithMaxBatch(10)))
+                .Select(c => c.CommitableOffset)
+                .Batch(10, CommittableOffsetBatch.Create, (s, o) => s.Updated(o))
+                .SelectAsync(1, async c =>
+                {
+                    var b = (CommittableOffsetBatch)c;
+                    await b.Commit();
+                    return c;
+                })
                 .ToMaterialized(this.SinkProbe<ICommittableOffsetBatch>(), Keep.Both)
                 .Run(Sys);
         }
