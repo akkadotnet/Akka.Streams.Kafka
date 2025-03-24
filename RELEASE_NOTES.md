@@ -1,3 +1,9 @@
+#### 1.5.40 March 24th 2025 ####
+
+* [Major bug fix: Committers: fixed n+1 errors with offset committing](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/484)
+* [Upgraded to Akka.NET v1.5.40](https://github.com/akkadotnet/akka.net/releases/tag/1.5.40)
+
+
 #### 1.5.39 March 19th 2025 ####
 
 Akka.Streams.Kafka 1.5.39 represents a major improvement in stability and performance for Kafka stream processing,
