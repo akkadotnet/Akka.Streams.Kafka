@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="CommitCollectorStageSpecs.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Immutable;
 using System.Linq;
@@ -35,7 +41,11 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     }
 
     public CommitterSettings DefaultCommitterSettings { get; }
-    public static TimeSpan MessageAbsenceTimeout => TimeSpan.FromSeconds(2);
+
+    public static TimeSpan MessageAbsenceTimeout
+    {
+        get { return TimeSpan.FromSeconds(2); }
+    }
 
     [Fact]
     public async Task CommitCollectorStage_when_BatchIsFull_batch_commit_without_errors()
@@ -219,7 +229,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         var testException = new IllegalStateException("BOOM!");
         await sourceProbe.SendErrorAsync(testException);
 
-        var receivedError = await PullTillFailureAsync(sinkProbe, maxEvents: 4);
+        var receivedError = await PullTillFailureAsync(sinkProbe, 4);
         receivedError.Should().Be(testException);
 
         var commits = offsetFactory.Committer.Commits;
@@ -318,7 +328,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
-    
+
     [Fact(DisplayName =
         "CommitCollectorStage using NextObservedOffset should only commit when next offset is observed for correct partitions")]
     public async Task
@@ -327,12 +337,12 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
         var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
         // create batches of size 1
-        var (msg1, msg2, msg3, msg4, msg5) 
-            = (offsetFactory.MakeOffset(partitionNum:1), offsetFactory.MakeOffset(partitionNum:2),
-                offsetFactory.MakeOffset(partitionNum:1), offsetFactory.MakeOffset(partitionNum:2),
-                offsetFactory.MakeOffset(partitionNum:1));
-        
-        var allMessages = new[] {msg1, msg2, msg3, msg4, msg5};
+        var (msg1, msg2, msg3, msg4, msg5)
+            = (offsetFactory.MakeOffset(partitionNum: 1), offsetFactory.MakeOffset(partitionNum: 2),
+                offsetFactory.MakeOffset(partitionNum: 1), offsetFactory.MakeOffset(partitionNum: 2),
+                offsetFactory.MakeOffset(partitionNum: 1));
+
+        var allMessages = new[] { msg1, msg2, msg3, msg4, msg5 };
 
         await sinkProbe.RequestAsync(100);
 
@@ -404,28 +414,26 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 public static class TestCommittableOffset
 {
     public static ICommittableOffset Create(AtomicCounterLong offsetCounter,
-        TestBatchCommitter committer, Option<Exception> failWith = default, int partitionNum = 1)
-    {
-        return new CommittableOffset(committer.Underlying,
+        TestBatchCommitter committer, Option<Exception> failWith = default, int partitionNum = 1) =>
+        new CommittableOffset(committer.Underlying,
             ConsumerResultFactory.PartitionOffset("group1", "topic1", partitionNum,
                 offsetCounter.IncrementAndGet()), "metadata1");
-    }
 }
 
 public class TestOffsetFactory(TestBatchCommitter committer)
 {
-    public TestBatchCommitter Committer => committer;
-    private readonly AtomicCounterLong _offsetCounter = new AtomicCounterLong(0);
-
-    public ICommittableOffset MakeOffset(Option<Exception> failWith = default, int partitionNum = 1)
+    public TestBatchCommitter Committer
     {
-        return TestCommittableOffset.Create(_offsetCounter, committer, failWith, partitionNum);
+        get { return committer; }
     }
 
-    public ICommittableOffsetBatch MakeBatch(Option<Exception> failWith = default, int partitionNum = 1)
-    {
-        return CommittableOffsetBatch.Create(MakeOffset(failWith, partitionNum));
-    }
+    private readonly AtomicCounterLong _offsetCounter = new(0);
+
+    public ICommittableOffset MakeOffset(Option<Exception> failWith = default, int partitionNum = 1) =>
+        TestCommittableOffset.Create(_offsetCounter, committer, failWith, partitionNum);
+
+    public ICommittableOffsetBatch MakeBatch(Option<Exception> failWith = default, int partitionNum = 1) =>
+        CommittableOffsetBatch.Create(MakeOffset(failWith, partitionNum));
 }
 
 public class TestBatchCommitter
@@ -485,9 +493,7 @@ public class TestBatchCommitter
         }
 
         public override void TellCommit(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata,
-            bool emergency)
-        {
+            bool emergency) =>
             _ = CommitOneOfMany(topicPartition, offsetAndMetadata);
-        }
     }
 }

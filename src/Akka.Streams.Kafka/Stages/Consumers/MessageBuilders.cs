@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="MessageBuilders.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -10,169 +16,178 @@ using Akka.Streams.Kafka.Stages.Consumers.Concrete;
 using Confluent.Kafka;
 using Debug = System.Diagnostics.Debug;
 
-namespace Akka.Streams.Kafka.Stages.Consumers
+namespace Akka.Streams.Kafka.Stages.Consumers;
+
+public interface IMessageBuilder<K, V, out TMessage>
 {
-    public interface IMessageBuilder<K, V, out TMessage>
-    {
-        /// <summary>
-        /// Creates downstream message
-        /// </summary>
-        /// <remarks>
-        /// We pass consumer here, because there is no way to get consumer instance from
-        /// some global configuration, like Alpakka does getting consumer actor ref
-        /// </remarks>
-        TMessage CreateMessage(ConsumeResult<K, V> record);
-    }
-    
     /// <summary>
-    /// Message builder used for <see cref="PlainSourceStage{K,V}"/>
+    /// Creates downstream message
     /// </summary>
-    public class PlainMessageBuilder<K, V> : IMessageBuilder<K, V, ConsumeResult<K, V>>
-    {
-        public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record) => record;
-    }
-    
-    /// <summary>
-    /// This base class used for different committable source message builders
-    /// </summary>
-    internal abstract class CommittableMessageBuilderBase<K, V> : IMessageBuilder<K, V, CommittableMessage<K, V>>
-    {
-        /// <summary>
-        /// Committed object
-        /// </summary>
-        public abstract KafkaAsyncConsumerCommitter Committer { get; }
-        
-        /// <summary>
-        /// Consumer group Id
-        /// </summary>
-        public abstract string GroupId { get; }
-        /// <summary>
-        /// Method for extracting string metadata from consumed record
-        /// </summary>
-        public abstract string MetadataFromRecord(ConsumeResult<K, V> record);
+    /// <remarks>
+    /// We pass consumer here, because there is no way to get consumer instance from
+    /// some global configuration, like Alpakka does getting consumer actor ref
+    /// </remarks>
+    TMessage CreateMessage(ConsumeResult<K, V> record);
+}
 
-        /// <inheritdoc />
-        public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
-        {
-            var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
-            return new CommittableMessage<K, V>(record, new CommittableOffset(Committer, offset, MetadataFromRecord(record)));
-        }
-    }
+/// <summary>
+/// Message builder used for <see cref="PlainSourceStage{K,V}"/>
+/// </summary>
+public class PlainMessageBuilder<K, V> : IMessageBuilder<K, V, ConsumeResult<K, V>>
+{
+    public ConsumeResult<K, V> CreateMessage(ConsumeResult<K, V> record) => record;
+}
+
+/// <summary>
+/// This base class used for different committable source message builders
+/// </summary>
+internal abstract class CommittableMessageBuilderBase<K, V> : IMessageBuilder<K, V, CommittableMessage<K, V>>
+{
+    /// <summary>
+    /// Committed object
+    /// </summary>
+    public abstract KafkaAsyncConsumerCommitter Committer { get; }
 
     /// <summary>
-    /// Message builder used by <see cref="CommittableSourceStage{K,V}"/>
+    /// Consumer group Id
     /// </summary>
-    internal class CommittableSourceMessageBuilder<K, V> : CommittableMessageBuilderBase<K, V>
-    {
-        private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
-        
-        /// <inheritdoc />
-        public override KafkaAsyncConsumerCommitter Committer { get; }
-
-        /// <inheritdoc />
-        public override string GroupId { get; }
-
-        /// <summary>
-        /// CommittableSourceMessageBuilder
-        /// </summary>
-        public CommittableSourceMessageBuilder(KafkaAsyncConsumerCommitter committer, string groupId, Func<ConsumeResult<K, V>, string> metadataFromRecord)
-        {
-            Committer = committer;
-            GroupId = groupId;
-            _metadataFromRecord = metadataFromRecord;
-        }
-        
-        /// <inheritdoc />
-        public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
-    }
+    public abstract string GroupId { get; }
 
     /// <summary>
-    /// Message builder used by <see cref="SourceWithOffsetContextStage{K,V}"/>
+    /// Method for extracting string metadata from consumed record
     /// </summary>
-    internal class OffsetContextBuilder<K, V> : IMessageBuilder<K, V, (ConsumeResult<K, V>, ICommittableOffset)>
-    {
-        /// <summary>
-        /// Method for extracting string metadata from consumed record
-        /// </summary>
-        private readonly Func<ConsumeResult<K, V>, string> _metadataFromMessage;
-        /// <summary>
-        /// Committed object
-        /// </summary>
-        public KafkaAsyncConsumerCommitter Committer { get; }
-        /// <summary>
-        /// Consumer group Id
-        /// </summary>
-        public string? GroupId { get; }
-        
-        /// <summary>
-        /// OffsetContextBuilder
-        /// </summary>
-        public OffsetContextBuilder(KafkaAsyncConsumerCommitter committer, ConsumerSettings<K, V> setting, Func<ConsumeResult<K, V>, string> metadataFromMessage)
-        {
-            _metadataFromMessage = metadataFromMessage;
-            Committer = committer;
-            GroupId = setting.GroupId;
-        }
+    public abstract string MetadataFromRecord(ConsumeResult<K, V> record);
 
-        /// <inheritdoc />
-        public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
-        {
-            // Use a default group ID if GroupId is null
-            var groupId = GroupId ?? "default-group";
-            var offset = new GroupTopicPartitionOffset(groupId, record.Topic, record.Partition, record.Offset);
-            return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
-        }
+    /// <inheritdoc />
+    public CommittableMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
+    {
+        var offset = new GroupTopicPartitionOffset(GroupId, record.Topic, record.Partition, record.Offset);
+        return new CommittableMessage<K, V>(record,
+            new CommittableOffset(Committer, offset, MetadataFromRecord(record)));
     }
+}
+
+/// <summary>
+/// Message builder used by <see cref="CommittableSourceStage{K,V}"/>
+/// </summary>
+internal class CommittableSourceMessageBuilder<K, V> : CommittableMessageBuilderBase<K, V>
+{
+    private readonly Func<ConsumeResult<K, V>, string> _metadataFromRecord;
+
+    /// <inheritdoc />
+    public override KafkaAsyncConsumerCommitter Committer { get; }
+
+    /// <inheritdoc />
+    public override string GroupId { get; }
 
     /// <summary>
-    /// Base interface for transactional message builders
+    /// CommittableSourceMessageBuilder
     /// </summary>
-    internal interface ITransactionalMessageBuilderStage<K, V, out TMsg> : IMessageBuilder<K, V, TMsg>
+    public CommittableSourceMessageBuilder(KafkaAsyncConsumerCommitter committer, string groupId,
+        Func<ConsumeResult<K, V>, string> metadataFromRecord)
     {
-        /// <summary>
-        /// Consumer's group Id
-        /// </summary>
-        string GroupId { get; }
-        
-        /// <summary>
-        /// Committed marker for consumed offset
-        /// </summary>
-        ICommittedMarker CommittedMarker { get; }
-        /// <summary>
-        /// On message callback
-        /// </summary>
-        /// <param name="message"></param>
-        void OnMessage(ConsumeResult<K, V> message);
+        Committer = committer;
+        GroupId = groupId;
+        _metadataFromRecord = metadataFromRecord;
     }
 
+    /// <inheritdoc />
+    public override string MetadataFromRecord(ConsumeResult<K, V> record) => _metadataFromRecord(record);
+}
+
+/// <summary>
+/// Message builder used by <see cref="SourceWithOffsetContextStage{K,V}"/>
+/// </summary>
+internal class OffsetContextBuilder<K, V> : IMessageBuilder<K, V, (ConsumeResult<K, V>, ICommittableOffset)>
+{
     /// <summary>
-    /// Message builder used by <see cref="TransactionalSourceStage{K,V}"/>
+    /// Method for extracting string metadata from consumed record
     /// </summary>
-    internal class TransactionalMessageBuilder<K, V> : IMessageBuilder<K, V, TransactionalMessage<K, V>>
+    private readonly Func<ConsumeResult<K, V>, string> _metadataFromMessage;
+
+    /// <summary>
+    /// Committed object
+    /// </summary>
+    public KafkaAsyncConsumerCommitter Committer { get; }
+
+    /// <summary>
+    /// Consumer group Id
+    /// </summary>
+    public string? GroupId { get; }
+
+    /// <summary>
+    /// OffsetContextBuilder
+    /// </summary>
+    public OffsetContextBuilder(KafkaAsyncConsumerCommitter committer, ConsumerSettings<K, V> setting,
+        Func<ConsumeResult<K, V>, string> metadataFromMessage)
     {
-        private readonly ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>> _transactionalMessageBuilderStage;
+        _metadataFromMessage = metadataFromMessage;
+        Committer = committer;
+        GroupId = setting.GroupId;
+    }
 
-        public TransactionalMessageBuilder(ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>> transactionalMessageBuilderStage)
-        {
-            _transactionalMessageBuilderStage = transactionalMessageBuilderStage;
-        }
+    /// <inheritdoc />
+    public (ConsumeResult<K, V>, ICommittableOffset) CreateMessage(ConsumeResult<K, V> record)
+    {
+        // Use a default group ID if GroupId is null
+        var groupId = GroupId ?? "default-group";
+        var offset = new GroupTopicPartitionOffset(groupId, record.Topic, record.Partition, record.Offset);
+        return (record, new CommittableOffset(Committer, offset, _metadataFromMessage(record)));
+    }
+}
 
-        /// <inheritdoc />
-        public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
-        {
-            _transactionalMessageBuilderStage.OnMessage(record);
+/// <summary>
+/// Base interface for transactional message builders
+/// </summary>
+internal interface ITransactionalMessageBuilderStage<K, V, out TMsg> : IMessageBuilder<K, V, TMsg>
+{
+    /// <summary>
+    /// Consumer's group Id
+    /// </summary>
+    string GroupId { get; }
 
-            // groupId can be null sometimes, but never in this context
-            Debug.Assert(_transactionalMessageBuilderStage.GroupId != null, "_transactionalMessageBuilderStage.GroupId != null");
-            
-            var offset = new PartitionOffsetCommittedMarker(
-                _transactionalMessageBuilderStage.GroupId!, 
-                record.Topic, 
-                record.Partition, 
-                record.Offset, 
-                _transactionalMessageBuilderStage.CommittedMarker);
-            
-            return new TransactionalMessage<K, V>(record, offset);
-        }
+    /// <summary>
+    /// Committed marker for consumed offset
+    /// </summary>
+    ICommittedMarker CommittedMarker { get; }
+
+    /// <summary>
+    /// On message callback
+    /// </summary>
+    /// <param name="message"></param>
+    void OnMessage(ConsumeResult<K, V> message);
+}
+
+/// <summary>
+/// Message builder used by <see cref="TransactionalSourceStage{K,V}"/>
+/// </summary>
+internal class TransactionalMessageBuilder<K, V> : IMessageBuilder<K, V, TransactionalMessage<K, V>>
+{
+    private readonly ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>>
+        _transactionalMessageBuilderStage;
+
+    public TransactionalMessageBuilder(
+        ITransactionalMessageBuilderStage<K, V, TransactionalMessage<K, V>> transactionalMessageBuilderStage)
+    {
+        _transactionalMessageBuilderStage = transactionalMessageBuilderStage;
+    }
+
+    /// <inheritdoc />
+    public TransactionalMessage<K, V> CreateMessage(ConsumeResult<K, V> record)
+    {
+        _transactionalMessageBuilderStage.OnMessage(record);
+
+        // groupId can be null sometimes, but never in this context
+        Debug.Assert(_transactionalMessageBuilderStage.GroupId != null,
+            "_transactionalMessageBuilderStage.GroupId != null");
+
+        var offset = new PartitionOffsetCommittedMarker(
+            _transactionalMessageBuilderStage.GroupId!,
+            record.Topic,
+            record.Partition,
+            record.Offset,
+            _transactionalMessageBuilderStage.CommittedMarker);
+
+        return new TransactionalMessage<K, V>(record, offset);
     }
 }

@@ -4,17 +4,17 @@
         <TargetFramework>$(NetCoreTestVersion)</TargetFramework>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
-    
+
     <ItemGroup>
-        <PackageReference Include="Docker.DotNet" />
-        <PackageReference Include="NDesk.Options.Core" />
-        <PackageReference Include="Testcontainers.Kafka" />
-        <PackageReference Include="Tmds.ExecFunction" />
-        <PackageReference Include="Universe.CpuUsage" />
+        <PackageReference Include="Docker.DotNet"/>
+        <PackageReference Include="NDesk.Options.Core"/>
+        <PackageReference Include="Testcontainers.Kafka"/>
+        <PackageReference Include="Tmds.ExecFunction"/>
+        <PackageReference Include="Universe.CpuUsage"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
+        <ProjectReference Include="..\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj"/>
     </ItemGroup>
 
 </Project>

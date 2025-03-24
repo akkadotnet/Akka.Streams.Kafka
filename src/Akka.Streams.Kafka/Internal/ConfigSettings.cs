@@ -1,36 +1,41 @@
-﻿using System.Collections.Generic;
+﻿// -----------------------------------------------------------------------
+//  <copyright file="ConfigSettings.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Akka.Configuration;
 using Akka.Configuration.Hocon;
 
-namespace Akka.Streams.Kafka.Internal
+namespace Akka.Streams.Kafka.Internal;
+
+internal static class ConfigSettings
 {
-    internal static class ConfigSettings
+    public static ImmutableDictionary<string, string> ParseKafkaClientsProperties(this Config config)
     {
-        public static ImmutableDictionary<string, string> ParseKafkaClientsProperties(this Config config)
+        var keys = CollectKeys(config.Root, [], config.Root.GetObject().Items.Keys.ToList());
+        return keys.ToDictionary(k => k, v => config.GetString(v)).ToImmutableDictionary();
+
+        HashSet<string> CollectKeys(HoconValue c, HashSet<string> processedKeys, List<string> unprocessedKeys)
         {
-            var keys = CollectKeys(config.Root, [], config.Root.GetObject().Items.Keys.ToList());
-            return keys.ToDictionary(k => k, v => config.GetString(v)).ToImmutableDictionary();
-
-            HashSet<string> CollectKeys(HoconValue c, HashSet<string> processedKeys, List<string> unprocessedKeys)
+            while (true)
             {
-                while (true)
+                if (unprocessedKeys.Count == 0) return processedKeys;
+
+                var currentKey = unprocessedKeys[0];
+                unprocessedKeys.RemoveAt(0);
+
+                var v = c.ToConfig().GetValue(currentKey);
+                if (v.IsObject())
                 {
-                    if (unprocessedKeys.Count == 0) return processedKeys;
-
-                    var currentKey = unprocessedKeys[0];
-                    unprocessedKeys.RemoveAt(0);
-
-                    var v = c.ToConfig().GetValue(currentKey);
-                    if (v.IsObject())
-                    {
-                        unprocessedKeys.AddRange(v.GetObject().Items.Select(kvp => $"{currentKey}.{kvp.Key}"));
-                        continue;
-                    }
-
-                    processedKeys.Add(currentKey);
+                    unprocessedKeys.AddRange(v.GetObject().Items.Select(kvp => $"{currentKey}.{kvp.Key}"));
+                    continue;
                 }
+
+                processedKeys.Add(currentKey);
             }
         }
     }

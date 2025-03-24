@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj" />
+        <ProjectReference Include="..\..\src\Akka.Streams.Kafka\Akka.Streams.Kafka.csproj"/>
     </ItemGroup>
 
 </Project>

@@ -1,26 +1,39 @@
+// -----------------------------------------------------------------------
+//  <copyright file="ConsumerFailed.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 
-namespace Akka.Streams.Kafka.Stages.Consumers.Exceptions
+namespace Akka.Streams.Kafka.Stages.Consumers.Exceptions;
+
+/// <summary>
+/// Kafka consumer stages fail with this exception.
+/// </summary>
+public sealed class ConsumerFailed : Exception
 {
     /// <summary>
-    /// Kafka consumer stages fail with this exception.
+    /// ConsumerFailed
     /// </summary>
-    public sealed class ConsumerFailed : Exception
+    public ConsumerFailed() : this("Consumer actor failed")
     {
-        /// <summary>
-        /// ConsumerFailed
-        /// </summary>
-        public ConsumerFailed() : this("Consumer actor failed") { }
-        /// <summary>
-        /// ConsumerFailed
-        /// </summary>
-        /// <param name="message">Message</param>
-        public ConsumerFailed(string message) : base(message) { }
-        /// <summary>
-        /// Consumer failed
-        /// </summary>
-        /// <param name="message">Message</param>
-        /// <param name="innerException">Inner exception</param>
-        public ConsumerFailed(string message, Exception? innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>
+    /// ConsumerFailed
+    /// </summary>
+    /// <param name="message">Message</param>
+    public ConsumerFailed(string message) : base(message)
+    {
+    }
+
+    /// <summary>
+    /// Consumer failed
+    /// </summary>
+    /// <param name="message">Message</param>
+    /// <param name="innerException">Inner exception</param>
+    public ConsumerFailed(string message, Exception? innerException) : base(message, innerException)
+    {
     }
 }

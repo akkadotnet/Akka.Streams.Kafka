@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="MacroBenchmarkConfig.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
@@ -19,19 +25,19 @@ public class MacroBenchmarkConfig : ManualConfig
         AddLogger(ConsoleLogger.Default);
 
         // Safer affinity mask (optional; remove if not needed)
-        int processorCount = Environment.ProcessorCount;
-        ulong affinityMaskValue = processorCount == 64 
-            ? ulong.MaxValue 
+        var processorCount = Environment.ProcessorCount;
+        var affinityMaskValue = processorCount == 64
+            ? ulong.MaxValue
             : (1UL << processorCount) - 1;
-        IntPtr affinityMask = (IntPtr)affinityMaskValue;
+        var affinityMask = (IntPtr)affinityMaskValue;
 
         AddJob(Job.LongRun
                 .WithGcMode(new GcMode { Server = true, Concurrent = true })
                 .WithEvaluateOverhead(false)
-                .WithWarmupCount(3)   // Reduced from 25
+                .WithWarmupCount(3) // Reduced from 25
                 .WithIterationCount(10) // Reduced from 50
                 .WithStrategy(RunStrategy.Monitoring)
-                //.WithAffinity(affinityMask) // Optional
+            //.WithAffinity(affinityMask) // Optional
         );
     }
 }

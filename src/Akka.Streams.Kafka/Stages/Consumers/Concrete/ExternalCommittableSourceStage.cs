@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="ExternalCommittableSourceStage.cs" company="Akka.NET Project">
+//      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -10,59 +16,65 @@ using Akka.Streams.Kafka.Stages.Consumers.Abstract;
 using Akka.Streams.Stage;
 using Confluent.Kafka;
 
-namespace Akka.Streams.Kafka.Stages.Consumers.Concrete
+namespace Akka.Streams.Kafka.Stages.Consumers.Concrete;
+
+/// <summary>
+/// This stage is used for <see cref="KafkaConsumer.CommittableExternalSource{K,V}"/>
+/// </summary>
+/// <typeparam name="K">The key type</typeparam>
+/// <typeparam name="V">The value type</typeparam>
+public class ExternalCommittableSourceStage<K, V> : KafkaSourceStage<K, V, CommittableMessage<K, V>>
 {
     /// <summary>
-    /// This stage is used for <see cref="KafkaConsumer.CommittableExternalSource{K,V}"/>
+    /// Externally provided consumer
     /// </summary>
-    /// <typeparam name="K">The key type</typeparam>
-    /// <typeparam name="V">The value type</typeparam>
-    public class ExternalCommittableSourceStage<K, V> : KafkaSourceStage<K, V, CommittableMessage<K, V>>
+    public IActorRef Consumer { get; }
+
+    /// <summary>
+    /// Subscription
+    /// </summary>
+    public IManualSubscription Subscription { get; }
+
+    /// <summary>
+    /// Consumer group Id
+    /// </summary>
+    public string GroupId { get; }
+
+    /// <summary>
+    /// Commit timeout
+    /// </summary>
+    public TimeSpan CommitTimeout { get; }
+
+    public bool AutoCreateTopics { get; }
+
+    /// <summary>
+    /// ExternalCommittableSourceStage
+    /// </summary>
+    public ExternalCommittableSourceStage(IActorRef consumer, string groupId, TimeSpan commitTimeout,
+        IManualSubscription subscription, bool autoCreateTopics)
+        : base("ExternalCommittableSource")
     {
-        /// <summary>
-        /// Externally provided consumer
-        /// </summary>
-        public IActorRef Consumer { get; }
-        /// <summary>
-        /// Subscription
-        /// </summary>
-        public IManualSubscription Subscription { get; }
-        /// <summary>
-        /// Consumer group Id
-        /// </summary>
-        public string GroupId { get; }
-        /// <summary>
-        /// Commit timeout
-        /// </summary>
-        public TimeSpan CommitTimeout { get; }
+        Consumer = consumer;
+        GroupId = groupId;
+        CommitTimeout = commitTimeout;
+        Subscription = subscription;
+        AutoCreateTopics = autoCreateTopics;
+    }
 
-        public bool AutoCreateTopics { get; }
-        
-        /// <summary>
-        /// ExternalCommittableSourceStage
-        /// </summary>
-        public ExternalCommittableSourceStage(IActorRef consumer, string groupId, TimeSpan commitTimeout, IManualSubscription subscription, bool autoCreateTopics) 
-            : base("ExternalCommittableSource")
-        {
-            Consumer = consumer;
-            GroupId = groupId;
-            CommitTimeout = commitTimeout;
-            Subscription = subscription;
-            AutoCreateTopics = autoCreateTopics;
-        }
+    /// <inheritdoc />
+    protected override (GraphStageLogic, IControl) Logic(SourceShape<CommittableMessage<K, V>> shape,
+        Attributes inheritedAttributes)
+    {
+        var logic = new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription,
+            inheritedAttributes, GetMessageBuilder, AutoCreateTopics);
 
-        /// <inheritdoc />
-        protected override (GraphStageLogic, IControl) Logic(SourceShape<CommittableMessage<K, V>> shape, Attributes inheritedAttributes)
-        {
-            var logic = new ExternalSingleSourceLogic<K, V, CommittableMessage<K, V>>(shape, Consumer, Subscription, inheritedAttributes, GetMessageBuilder, AutoCreateTopics);
+        return (logic, logic.Control);
+    }
 
-            return (logic, logic.Control);
-        }
-        
-        private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
-        {
-            var committer = new KafkaAsyncConsumerCommitter(() => logic.ConsumerActor, CommitTimeout);
-            return new CommittableSourceMessageBuilder<K, V>(committer, GroupId, m => string.Empty);
-        }
+    private CommittableSourceMessageBuilder<K, V> GetMessageBuilder(
+        BaseSingleSourceLogic<K, V, CommittableMessage<K, V>> logic)
+    {
+        var committer = new KafkaAsyncConsumerCommitter(() => logic.ConsumerActor, CommitTimeout);
+        return new CommittableSourceMessageBuilder<K, V>(committer, GroupId, m => string.Empty);
     }
 }

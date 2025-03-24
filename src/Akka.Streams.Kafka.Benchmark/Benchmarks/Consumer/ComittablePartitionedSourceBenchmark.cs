@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------
+//  <copyright file="ComittablePartitionedSourceBenchmark.cs" company="Akka.NET Project">
+//      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
+// </copyright>
+// -----------------------------------------------------------------------
+
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -21,7 +27,7 @@ public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>
 
     protected override Source<int, IControl> CreateSource()
     {
-        var mergeHubSource = MergeHub.Source<ICommittableOffsetBatch>(perProducerBufferSize: 10);
+        var mergeHubSource = MergeHub.Source<ICommittableOffsetBatch>(10);
         var (sink, trueSource) = mergeHubSource.PreMaterialize(ActorSystem);
 
         var consumerSettings = CreateConsumerSettings<Null, string>()

@@ -1,6 +1,9 @@
 #### 1.5.39 March 19th 2025 ####
 
-Akka.Streams.Kafka 1.5.39 represents a major improvement in stability and performance for Kafka stream processing, particularly for applications using manual partition assignment and rebalancing scenarios. This release includes critical fixes for partition management and introduces new performance tuning capabilities that give users more control over their Kafka consumer behavior.
+Akka.Streams.Kafka 1.5.39 represents a major improvement in stability and performance for Kafka stream processing,
+particularly for applications using manual partition assignment and rebalancing scenarios. This release includes
+critical fixes for partition management and introduces new performance tuning capabilities that give users more control
+over their Kafka consumer behavior.
 
 **Key Improvements**
 
@@ -12,12 +15,19 @@ Akka.Streams.Kafka 1.5.39 represents a major improvement in stability and perfor
 * Improved memory efficiency through C# record types
 
 **Breaking Changes**
-* Manual partition assignment now uses `IncrementalAssign` instead of `Assign` - this prevents offset resets for users running `ManualSubscription`s. If you're using manual partition assignment, you'll need to verify your offset management logic is compatible with incremental assignment behavior.
-* Several internal types have been converted from classes to C# `record`s for better performance and nullability support. This change should be transparent for most users as records are fully compatible with standard class usage patterns. The only potential impact would be if you're using inheritance on these types (which is not a recommended pattern for Akka.Streams.Kafka types).
+
+* Manual partition assignment now uses `IncrementalAssign` instead of `Assign` - this prevents offset resets for users
+  running `ManualSubscription`s. If you're using manual partition assignment, you'll need to verify your offset
+  management logic is compatible with incremental assignment behavior.
+* Several internal types have been converted from classes to C# `record`s for better performance and nullability
+  support. This change should be transparent for most users as records are fully compatible with standard class usage
+  patterns. The only potential impact would be if you're using inheritance on these types (which is not a recommended
+  pattern for Akka.Streams.Kafka types).
 * We removed some extension methods that should have never been made `public` in the first place.
 * We made some changes to `ICommittable` interface and others.
 
 **Major Bug Fixes and Improvements**
+
 * [Fixed critical issue: Exception inside SelectAsync with null cancellation cause](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/426)
 * [Resolved: System.ArgumentException during rebalance operations](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415)
 * [Added performance tuning capability through ConsumerSettings.MaxPollRecords](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/453)
@@ -42,13 +52,15 @@ LaunchCount=3  RunStrategy=Monitoring  UnrollFactor=1
 WarmupCount=3  Categories=MacroBenchmark,Consumer,Plain                              
                                                                                      
 ```                                                                                  
-| Method              | PollBatchSize | Mean     | Error    | StdDev   | msg/sec   | 
-|-------------------- |-------------- |---------:|---------:|---------:|----------:| 
+
+| Method              | PollBatchSize |     Mean |    Error |   StdDev |   msg/sec | 
+|---------------------|---------------|---------:|---------:|---------:|----------:| 
 | ConsumeMessageAsync | 500           | 41.29 μs | 1.960 μs | 2.933 μs | 24,217.30 | 
 
 This is a ~2.5x improvement over what v1.5.38 was able to achieve.
 
 **Dependencies**
+
 * [Upgraded to Akka.NET v1.5.39](https://github.com/akkadotnet/akka.net/releases/tag/1.5.39)
 
 #### 1.5.39-beta2 March 14th 2025 ####
@@ -61,8 +73,12 @@ This is a ~2.5x improvement over what v1.5.38 was able to achieve.
 *v1.5.39 is a major update for Akka.Streams.Kafka*
 
 * [Resolved: System.ArgumentException: Unexpected records polled potentially thrown during a rebalance](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/415)
-* [Expose `ConsumerSettings.MaxPollRecords`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/453) available so users can performance-tune how many records to fetch during polling.
-* [Change `Assign` and `AssignWithOffsets` to use `IncrementalAssign`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/455) - prevents `Offset` resets for users running `ManualSubscription`s
-* [Refactor `SubSourceStageLogic`; filter messages from revoked partitions in partitioned stream sources](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/452)
+* [Expose `ConsumerSettings.MaxPollRecords`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/453) available so
+  users can performance-tune how many records to fetch during polling.
+* [Change `Assign` and `AssignWithOffsets` to use
+  `IncrementalAssign`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/455) - prevents `Offset` resets for users
+  running `ManualSubscription`s
+* [Refactor
+  `SubSourceStageLogic`; filter messages from revoked partitions in partitioned stream sources](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/452)
 * [Filter out buffered records from recently revoked partitions](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/450)
 * [Enable nullability](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/449)

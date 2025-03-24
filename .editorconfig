@@ -48,14 +48,14 @@ dotnet_style_null_propagation = true:warning
 dotnet_style_explicit_tuple_names = true:warning
 
 # Naming
-dotnet_naming_rule.async_methods_end_in_async.symbols  = any_async_methods
-dotnet_naming_rule.async_methods_end_in_async.style    = end_in_async
+dotnet_naming_rule.async_methods_end_in_async.symbols = any_async_methods
+dotnet_naming_rule.async_methods_end_in_async.style = end_in_async
 dotnet_naming_rule.async_methods_end_in_async.severity = warning
-dotnet_naming_symbols.any_async_methods.applicable_kinds           = method
+dotnet_naming_symbols.any_async_methods.applicable_kinds = method
 dotnet_naming_symbols.any_async_methods.applicable_accessibilities = *
-dotnet_naming_symbols.any_async_methods.required_modifiers         = async
+dotnet_naming_symbols.any_async_methods.required_modifiers = async
 dotnet_naming_style.end_in_async.required_suffix = Async
-dotnet_naming_style.end_in_async.capitalization  = pascal_case
+dotnet_naming_style.end_in_async.capitalization = pascal_case
 
 # CSharp code style settings:
 [*.cs]
@@ -90,7 +90,7 @@ csharp_preserve_single_line_statements = false
 
 # VS 2017 15.5
 [*.cs]
-csharp_prefer_inferred_tuple_names = true:warning 
+csharp_prefer_inferred_tuple_names = true:warning
 csharp_prefer_inferred_anonymous_type_member_names = true:warning
 csharp_style_pattern_local_over_anonymous_function = true:warning
 csharp_style_deconstructed_variable_declaration = true:warning
