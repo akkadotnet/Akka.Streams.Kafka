@@ -112,7 +112,7 @@ public class CommittableSourceIntegrationTests : KafkaIntegrationTests
             .RunWith(KafkaProducer.PlainSink(ProducerSettings), Materializer);
 
         probe2.Request(100);
-        foreach (var i in Enumerable.Range(committedElements.Count, 100).Select(c => c.ToString()))
+        foreach (var i in Enumerable.Range(committedElements.Count + 1, 100).Select(c => c.ToString()))
             probe2.ExpectNext(i, TimeSpan.FromSeconds(10));
 
         probe2.Cancel();

@@ -69,8 +69,14 @@ internal class KafkaAsyncConsumerCommitter : IEquatable<KafkaAsyncConsumerCommit
     public static Task Commit(CommittableOffset committableOffset)
     {
         var committer = committableOffset.Committer;
+        
+        /*
+         * https://kafka.apache.org/10/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html
+         * "The committed offset should always be the offset of the next message that your application will read.
+         * Thus, when calling commitSync(offsets) you should add one to the offset of the last message processed."
+         */
         return committer.CommitSingle(committableOffset.Offset.GroupTopicPartition.TopicPartition,
-            new OffsetAndMetadata(committableOffset.Offset.Offset, committableOffset.Metadata));
+            new OffsetAndMetadata(committableOffset.Offset.Offset + 1, committableOffset.Metadata));
     }
 
     public static Task Commit(CommittableOffsetBatch batch)
