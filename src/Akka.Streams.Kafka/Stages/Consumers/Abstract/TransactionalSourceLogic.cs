@@ -243,12 +243,14 @@ namespace Akka.Streams.Kafka.Stages.Consumers.Abstract
                 _commitTimeout = commitTimeout;
             }
 
-            /// <inheritdoc />
-            public async Task Committed(IImmutableDictionary<TopicPartition, OffsetAndMetadata> offsets)
-            {
-                var topicPartitionOffsets = offsets.Select(o => new TopicPartitionOffset(o.Key, o.Value.Offset)).ToImmutableHashSet();
-                await _sourceActor.Ask(new KafkaConsumerActorMetadata.Internal.Committed(topicPartitionOffsets), _commitTimeout);
-            }
+        /// <inheritdoc />
+        public async Task Committed(IImmutableDictionary<TopicPartition, OffsetAndMetadata> offsets)
+        {
+            var topicPartitionOffsets = offsets.Select(o => new TopicPartitionOffset(o.Key, o.Value.Offset + 1))
+                .ToImmutableHashSet();
+            await _sourceActor.Ask(new KafkaConsumerActorMetadata.Internal.Committed(topicPartitionOffsets),
+                _commitTimeout);
+        }
 
             /// <inheritdoc />
             public void Failed() => _sourceActor.Tell(new CommittingFailure());
