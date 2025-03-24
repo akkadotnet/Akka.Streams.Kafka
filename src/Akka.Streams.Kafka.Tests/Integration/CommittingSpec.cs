@@ -29,7 +29,6 @@ public class CommittingSpec : KafkaIntegrationTests
     }
 
     private static readonly string[] Numbers = Enumerable.Range(1, 200).Select(c => c.ToString()).ToArray();
-    private const int Partition1 = 1;
 
     [Fact]
     public async Task CommittingMustEnsureUncommittedMessagesAreRedelivered()
