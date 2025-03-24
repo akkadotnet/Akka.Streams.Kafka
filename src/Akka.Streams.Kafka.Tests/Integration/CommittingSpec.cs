@@ -299,4 +299,47 @@ public class CommittingSpec : KafkaIntegrationTests
         await probe1.CancelAsync();
         await control.IsShutdown;
     }
+
+    [Fact]
+    public async Task CommittingMustWorkInBatches()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
+
+        var consumerSettings = CreateConsumerSettings<Null, string>(group);
+
+        var (control, probe) = ConsumeAndBatchCommit(topic);
+        
+        // Request one batch
+        await probe.AsyncBuilder().Request(1).ExpectNextNAsync(1).ToListAsync();
+
+        await probe.CancelAsync();
+        await control.IsShutdown.WaitAsync(RemainingOrDefault);
+
+        var element = await ConsumeFirstElementAsync(topic, consumerSettings);
+        var i = int.Parse(element);
+        Assert.True(i > 1, "Should start after the first element");
+        
+        return;
+
+        (IControl control, TestSubscriber.Probe<ICommittableOffsetBatch> probe)
+            ConsumeAndBatchCommit(string t)
+        {
+            return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(t))
+                .Select(ICommittable (c) => c.CommitableOffset)
+                .Via(Committer.BatchFlow(CommitterSettings.Create(Sys).WithMaxBatch(10)))
+                .ToMaterialized(this.SinkProbe<ICommittableOffsetBatch>(), Keep.Both)
+                .Run(Sys);
+        }
+    }
+
+    private async Task<string> ConsumeFirstElementAsync(string topic, ConsumerSettings<Null, string> consumerSettings)
+    {
+        var (_, probe2) = CreateProbe(consumerSettings, topic);
+        var element = await probe2.AsyncBuilder().Request(1).ExpectNextAsync(TimeSpan.FromSeconds(60));
+        await probe2.CancelAsync();
+        return element;
+    }
 }
