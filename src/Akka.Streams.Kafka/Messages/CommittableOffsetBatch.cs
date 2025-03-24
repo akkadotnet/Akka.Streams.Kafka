@@ -130,7 +130,12 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         var key = partitionOffset.GroupTopicPartition;
         var metadata = newOffset is ICommittableOffsetMetadata withMetadata ? withMetadata.Metadata : string.Empty;
 
-        var newOffsets = OffsetsAndMetadata.SetItem(key, new OffsetAndMetadata(partitionOffset.Offset, metadata));
+        /*
+         * https://kafka.apache.org/10/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html
+         * "The committed offset should always be the offset of the next message that your application will read.
+         * Thus, when calling commitSync(offsets) you should add one to the offset of the last message processed."
+         */
+        var newOffsets = OffsetsAndMetadata.SetItem(key, new OffsetAndMetadata(partitionOffset.Offset + 1, metadata));
 
         var newCommitter = newOffset switch
         {

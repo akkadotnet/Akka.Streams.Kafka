@@ -486,7 +486,9 @@ public class TestBatchCommitter
 
         public override Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
         {
-            var commitOffset = offsetAndMetadata.Offset;
+            // CommittableOffsetBatch.OffsetsAndMetadata points the next committed message.
+            // So to get committed message offset we need to subtract 1
+            var commitOffset = offsetAndMetadata.Offset - 1;
             var commit = new TopicPartitionOffset(topicPartition, commitOffset);
             _committer.Commits = _committer.Commits.Add(commit);
             return _committer.CompleteCommit();
