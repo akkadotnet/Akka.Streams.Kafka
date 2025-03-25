@@ -96,8 +96,8 @@ internal sealed class CommitObservationLogic
                     OffsetBatch = OffsetBatch.Updated(dOffset);
                     break;
                 case CommittableOffsetBatch dOffsetBatch
-                    when dOffsetBatch.OffsetsAndMetadata.ContainsKey(groupTopicPartition)
-                         && dOffsetBatch.OffsetsAndMetadata[groupTopicPartition].Offset < offset:
+                    when dOffsetBatch.Offsets.ContainsKey(groupTopicPartition)
+                         && dOffsetBatch.Offsets[groupTopicPartition].Value < offset:
                     DeferredOffsets = DeferredOffsets.SetItem(groupTopicPartition, committable);
                     OffsetBatch = OffsetBatch.Updated(dOffsetBatch);
                     break;

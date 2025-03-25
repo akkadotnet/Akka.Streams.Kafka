@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Stages.Consumers;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Messages;
 
@@ -34,17 +35,15 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
     
     public long BatchSize { get; }
 
+    /// INTERNAL COMMENT
     /// Represents the offsets as they are, rather than how they're going to be committed.
     ///
     /// We have to +1 all offsets upon commit - which is what you get inside OffsetsAndMetadata.
-    ///
-    /// This is useful for debugging and for testing, but not much else.
-    public IImmutableSet<GroupTopicPartitionOffset> Offsets
+    public IImmutableDictionary<GroupTopicPartition, Offset> Offsets
     {
         get
         {
-            return OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset - 1L))
-                .ToImmutableHashSet();
+            return OffsetsAndMetadata.ToImmutableDictionary(c => c.Key, c => new Offset(c.Value.Offset.Value - 1L));
         }
     }
 
@@ -168,7 +167,7 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         var newOffsets = OffsetsAndMetadata.Where(o => p(o.Key))
             .ToImmutableDictionary(o => o.Key, o => o.Value);
         var newCommiters =
-            Offsets.ToImmutableDictionary(c => c.GroupTopicPartition, v => CommitterFor(v.GroupTopicPartition));
+            Offsets.ToImmutableDictionary(c => c.Key, c => CommitterFor(c.Key));
         return new CommittableOffsetBatch(newOffsets, newCommiters, BatchSize);
     }
 
