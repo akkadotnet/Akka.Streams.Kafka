@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Immutable;
 using System.Threading.Tasks;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Messages;
 
@@ -44,7 +45,7 @@ public interface ICommittableOffsetBatch : ICommittable
     /// <summary>
     /// Get current offset positions
     /// </summary>
-    IImmutableSet<GroupTopicPartitionOffset> Offsets { get; }
+    IImmutableDictionary<GroupTopicPartition, Offset> Offsets { get; }
 
     /// <summary>
     /// Returns <c>true</c> if the batch contains no commits.

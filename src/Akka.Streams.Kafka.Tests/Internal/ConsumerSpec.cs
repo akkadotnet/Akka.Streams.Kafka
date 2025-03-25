@@ -75,13 +75,13 @@ akka.stream.materializer.debug.fuzzing-mode = on")
     {
     }
 
-    private readonly ImmutableList<CommittableMessage<K, V>> Messages =
+    private readonly ImmutableList<CommittableMessage<K, V>> _messages =
         Enumerable.Range(1, 1000).Select(CreateMessage).ToImmutableList();
 
     private async Task CheckMessagesReceivingAsync(List<List<CommittableMessage<K, V>>> msgss)
     {
         var mock = new MockConsumer<K, V>();
-        var (control, probe) = CreateCommitableSource(mock)
+        var (control, probe) = CreateCommittableSource(mock)
             .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
             .Run(Sys.Materializer());
 
@@ -94,7 +94,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         var messages = msgss.SelectMany(m => m).Select(m => m);
         foreach (var message in messages)
         {
-            var received = probe.ExpectNext();
+            var received = await probe.ExpectNextAsync();
             received.Record.Message.Key.Should().Be(message.Record.Message.Key);
             received.Record.Message.Value.Should().Be(message.Record.Message.Value);
         }
@@ -102,10 +102,10 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         await control.Shutdown().WithTimeoutAsync(RemainingOrDefault);
     }
 
-    private Source<CommittableMessage<K, V>, IControl> CreateCommitableSource(
+    private Source<CommittableMessage<K, V>, IControl> CreateCommittableSource(
         MockConsumer<K, V> mock, string groupId = "group1", string[]? topics = null)
     {
-        topics ??= new[] { "topic" };
+        topics ??= ["topic"];
         var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
             .WithGroupId(groupId)
             .WithCloseTimeout(MockConsumer.CloseTimeout)
@@ -121,11 +121,11 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
     private Source<CommittableMessage<K, V>, IControl> CreateSourceWithMetadata(
         MockConsumer<K, V> mock,
-        Func<ConsumeResult<K, V>, string> metadataFromRecord,
+        Func<Record, string> metadataFromRecord,
         string groupId = "group1",
         string[]? topics = null)
     {
-        topics ??= new[] { "topic" };
+        topics ??= ["topic"];
         var settings = ConsumerSettings<K, V>.Create(Sys, Deserializers.Utf8, Deserializers.Utf8)
             .WithGroupId(groupId)
             .WithCloseTimeout(MockConsumer.CloseTimeout)
@@ -144,7 +144,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
     public void ShouldFailWhenPollFails()
     {
         var mock = new FailingMockConsumer<K, V>(new Exception("Fatal Kafka error"), 1);
-        var probe = CreateCommitableSource(mock)
+        var probe = CreateCommittableSource(mock)
             .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Right)
             .Run(Sys.Materializer());
 
@@ -155,7 +155,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
     public async Task ShouldCompleteWhenStoppedAsync()
     {
         var mock = new MockConsumer<K, V>();
-        var (control, probe) = CreateCommitableSource(mock)
+        var (control, probe) = CreateCommittableSource(mock)
             .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
             .Run(Sys.Materializer());
 
@@ -170,7 +170,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
     public async Task ShouldCompleteWhenCanceledAsync()
     {
         var mock = new MockConsumer<K, V>();
-        var (control, probe) = CreateCommitableSource(mock)
+        var (control, probe) = CreateCommittableSource(mock)
             .ToMaterialized(this.SinkProbe<CommittableMessage<K, V>>(), Keep.Both)
             .Run(Sys.Materializer());
 
@@ -184,18 +184,18 @@ akka.stream.materializer.debug.fuzzing-mode = on")
     [Fact(DisplayName = "CommittableSource should emit messages received as one big chunk")]
     public async Task ShouldEmitBigChunkAsync() =>
         await CheckMessagesReceivingAsync(
-            new List<List<CommittableMessage<string, string>>> { Messages.ToList() });
+            new List<List<CommittableMessage<string, string>>> { _messages.ToList() });
 
     [Fact(DisplayName = "CommittableSource should emit messages received as medium chunk")]
-    public async Task ShouldEmitMediumChunkAsync() => await CheckMessagesReceivingAsync(Messages.Grouped(97));
+    public async Task ShouldEmitMediumChunkAsync() => await CheckMessagesReceivingAsync(_messages.Grouped(97));
 
     [Fact(DisplayName = "CommittableSource should emit messages received as chunked singles")]
     public async Task ShouldEmitSinglesAsync()
     {
         var splits = new List<List<CommittableMessage<string, string>>>();
-        foreach (var message in Messages)
+        foreach (var message in _messages)
         {
-            splits.Add(new List<CommittableMessage<string, string>> { message });
+            splits.Add([message]);
         }
 
         await CheckMessagesReceivingAsync(splits);
@@ -203,7 +203,7 @@ akka.stream.materializer.debug.fuzzing-mode = on")
 
     [Fact(DisplayName = "CommittableSource should emit messages received empties")]
     public async Task ShouldEmitEmptiesAsync() =>
-        await CheckMessagesReceivingAsync(Messages.Grouped(97)
+        await CheckMessagesReceivingAsync(_messages.Grouped(97)
             .Select(x => new List<CommittableMessage<string, string>>()).ToList());
 
     [Fact(DisplayName =
@@ -223,7 +223,7 @@ internal static class Extensions
             if (completed == timeoutTask)
                 throw new OperationCanceledException("Operation timed out");
             else
-                cts.Cancel();
+                await cts.CancelAsync();
         }
     }
 
@@ -238,7 +238,7 @@ internal static class Extensions
             if (index != 0 && index % size == 0)
             {
                 groups.Add(list);
-                list = new List<T>();
+                list = [];
             }
 
             index++;
@@ -260,7 +260,7 @@ internal static class Extensions
     public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit2.TestKit spec, Func<T> block,
         IMaterializer materializer)
     {
-        if (!(materializer is ActorMaterializerImpl impl))
+        if (materializer is not ActorMaterializerImpl impl)
             return block();
 
         var probe = spec.CreateTestProbe(impl.System);

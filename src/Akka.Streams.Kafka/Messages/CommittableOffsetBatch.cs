@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Akka.Streams.Kafka.Extensions;
 using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Stages.Consumers;
+using Confluent.Kafka;
 
 namespace Akka.Streams.Kafka.Messages;
 
@@ -31,17 +32,18 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         Committers = committers;
         BatchSize = batchSize;
     }
-
-    /// <inheritdoc />
+    
     public long BatchSize { get; }
 
-    /// <inheritdoc />
-    public IImmutableSet<GroupTopicPartitionOffset> Offsets
+    /// INTERNAL COMMENT
+    /// Represents the offsets as they are, rather than how they're going to be committed.
+    ///
+    /// We have to +1 all offsets upon commit - which is what you get inside OffsetsAndMetadata.
+    public IImmutableDictionary<GroupTopicPartition, Offset> Offsets
     {
         get
         {
-            return OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset))
-                .ToImmutableHashSet();
+            return OffsetsAndMetadata.ToImmutableDictionary(c => c.Key, c => new Offset(c.Value.Offset.Value - 1L));
         }
     }
 
@@ -130,7 +132,12 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         var key = partitionOffset.GroupTopicPartition;
         var metadata = newOffset is ICommittableOffsetMetadata withMetadata ? withMetadata.Metadata : string.Empty;
 
-        var newOffsets = OffsetsAndMetadata.SetItem(key, new OffsetAndMetadata(partitionOffset.Offset, metadata));
+        /*
+         * https://kafka.apache.org/10/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html
+         * "The committed offset should always be the offset of the next message that your application will read.
+         * Thus, when calling commitSync(offsets) you should add one to the offset of the last message processed."
+         */
+        var newOffsets = OffsetsAndMetadata.SetItem(key, new OffsetAndMetadata(partitionOffset.Offset + 1, metadata));
 
         var newCommitter = newOffset switch
         {
@@ -160,7 +167,7 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         var newOffsets = OffsetsAndMetadata.Where(o => p(o.Key))
             .ToImmutableDictionary(o => o.Key, o => o.Value);
         var newCommiters =
-            Offsets.ToImmutableDictionary(c => c.GroupTopicPartition, v => CommitterFor(v.GroupTopicPartition));
+            Offsets.ToImmutableDictionary(c => c.Key, c => CommitterFor(c.Key));
         return new CommittableOffsetBatch(newOffsets, newCommiters, BatchSize);
     }
 

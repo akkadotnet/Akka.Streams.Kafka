@@ -72,6 +72,14 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
         get { return CommitterSettings.Create(Sys); }
     }
 
+    protected (IControl control, TestSubscriber.Probe<string> probe) CreateProbe(ConsumerSettings<Null, string> consumerSettings, params string[] topics)
+    {
+        return KafkaConsumer.PlainSource(consumerSettings, Subscriptions.Topics(topics))
+            .Select(c => c.Message.Value)
+            .ToMaterialized(this.SinkProbe<string>(), Keep.Both)
+            .Run(Sys);
+    }
+
     protected ConsumerSettings<TKey, TValue> CreateConsumerSettings<TKey, TValue>(string group) =>
         ConsumerSettings<TKey, TValue>.Create(Sys, null, null)
             .WithBootstrapServers(Fixture.KafkaServer)

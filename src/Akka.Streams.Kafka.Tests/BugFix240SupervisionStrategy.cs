@@ -219,7 +219,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
                 Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topicPartition, Offset.Beginning)))
             .Select(c =>
             {
-                if (++count == 7)
+                if (++count == 6)
                     throw new Exception("BOOM!");
                 return c;
             })
@@ -230,7 +230,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         var offsets = new List<string>();
         await probe.RequestAsync(11);
-        offsets.AddRange(await probe.ExpectNextNAsync(6)
+        offsets.AddRange(await probe.ExpectNextNAsync(5) // we always commit 1 element ahead
             .ToListAsync()); // we get an extra element here even though the offset is not committed
 
         // stream fails at index 7
@@ -281,12 +281,6 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         var committedTopicPartition = new TopicPartition($"{topic}-done", 0);
         var callCount = 0;
 
-        Directive Decider(Exception cause)
-        {
-            callCount++;
-            return Directive.Resume;
-        }
-
         var committerSettings = CommitterSettings.Create(Sys);
         var consumerSettings = CreateConsumerSettings<string>(group);
         var counter = 0;
@@ -321,7 +315,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
                 t.CommitableOffset))
             .Via(KafkaProducer.FlexiFlow<Null, string, ICommittableOffset>(ProducerSettings))
             .WithAttributes(Attributes.CreateName("FlexiFlow"))
-            .Select(m => (ICommittable)m.PassThrough)
+            .Select(ICommittable (m) => m.PassThrough)
             .AlsoToMaterialized(Committer.Sink(committerSettings), DrainingControl<NotUsed>.Create)
             .To(Flow.Create<ICommittable>()
                 .Async()
@@ -348,7 +342,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         var messages = new List<string>();
         for (var i = 0; i < 9; ++i)
         {
-            var message = probe.RequestNext();
+            var message = await probe.RequestNextAsync();
             messages.Add(message);
         }
 
@@ -356,6 +350,13 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         // ignore it in the decider
         messages.Should().BeEquivalentTo(new[] { "1", "2", "3", "4", "6", "7", "8", "9", "10" });
         probe.Cancel();
+        return;
+
+        Directive Decider(Exception cause)
+        {
+            callCount++;
+            return Directive.Resume;
+        }
     }
 
     // Test that an error that happened internally inside the PlainSink stage should be handled
@@ -364,18 +365,6 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
     public async Task SupervisionStrategy_Decider_on_PlainSink_should_work()
     {
         var callCount = 0;
-
-        Directive Decider(Exception cause)
-        {
-            callCount++;
-            switch (cause)
-            {
-                case ProduceException<Null, string> ex when ex.Error.IsSerializationError():
-                    return Directive.Resume;
-                default:
-                    return Directive.Stop;
-            }
-        }
 
         var topic1 = CreateTopic(1);
         var group1 = CreateGroup(1);
@@ -387,7 +376,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
         // when the message "5" is encountered.
         var sourceTask = Source
-            .From(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
+            .From([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
             .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
             .RunWith(
                 KafkaProducer.PlainSink(producerSettings)
@@ -405,12 +394,25 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         probe.Request(10);
         for (var i = 0; i < 9; i++)
         {
-            var message = probe.ExpectNext();
+            var message = await probe.ExpectNextAsync();
             Log.Info($"> [{i}]: {message}");
         }
 
         callCount.Should().Be(1);
         probe.Cancel();
+        return;
+
+        Directive Decider(Exception cause)
+        {
+            callCount++;
+            switch (cause)
+            {
+                case ProduceException<Null, string> ex when ex.Error.IsSerializationError():
+                    return Directive.Resume;
+                default:
+                    return Directive.Stop;
+            }
+        }
     }
 
     // Test that the default decider can be overridden with custom decider.
@@ -429,7 +431,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         // Exception is injected into the sink by the FailingSerializer serializer, it throws an exceptions
         // when the message "5" is encountered.
         var sourceTask = Source
-            .From(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
+            .From([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
             .Select(elem => new ProducerRecord<Null, string>(new TopicPartition(topic1, 0), elem.ToString()))
             .RunWith(
                 KafkaProducer.PlainSink(producerSettings)
@@ -447,7 +449,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         probe.Request(10);
         for (var i = 0; i < 9; i++)
         {
-            var message = probe.ExpectNext();
+            var message = await probe.ExpectNextAsync();
             Log.Info($"> [{i}]: {message}");
         }
 
@@ -461,17 +463,6 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
     public async Task SupervisionStrategy_Decider_on_PlainSource_should_work()
     {
         var callCount = 0;
-
-        Directive Decider(Exception cause)
-        {
-            callCount++;
-            if (cause is ConsumeException ex && ex.Error.IsSerializationError())
-            {
-                return Directive.Resume;
-            }
-
-            return Directive.Stop;
-        }
 
         var elementsCount = 10;
         var topic1 = CreateTopic(1);
@@ -495,6 +486,18 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         // this is twice elementCount because Decider is called twice on each exceptions
         callCount.Should().Be(elementsCount * 2);
         probe.Cancel();
+        return;
+
+        Directive Decider(Exception cause)
+        {
+            callCount++;
+            if (cause is ConsumeException ex && ex.Error.IsSerializationError())
+            {
+                return Directive.Resume;
+            }
+
+            return Directive.Stop;
+        }
     }
 
     // Test that the default decider can be overridden with custom decider.
@@ -590,7 +593,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
             if (completedTask == timeoutTask)
                 throw new TimeoutException($"Task exceeds timeout duration {timeout}");
             else
-                cts.Cancel();
+                await cts.CancelAsync();
         }
         finally
         {
