@@ -1,3 +1,8 @@
+#### 1.5.40.1 March 24th 2025 ####
+
+* Fixed another major N+1 bug when committing offsets to Kafka: [Committing: fix N+1 issues in `CommittableOffsetBatch`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/487)
+
+
 #### 1.5.40 March 24th 2025 ####
 
 * [Major bug fix: Committers: fixed n+1 errors with offset committing](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/484)
