@@ -219,7 +219,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
                 Subscriptions.AssignmentWithOffset(new TopicPartitionOffset(topicPartition, Offset.Beginning)))
             .Select(c =>
             {
-                if (++count == 7)
+                if (++count == 6)
                     throw new Exception("BOOM!");
                 return c;
             })
@@ -230,7 +230,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         var offsets = new List<string>();
         await probe.RequestAsync(11);
-        offsets.AddRange(await probe.ExpectNextNAsync(6)
+        offsets.AddRange(await probe.ExpectNextNAsync(5) // we always commit 1 element ahead
             .ToListAsync()); // we get an extra element here even though the offset is not committed
 
         // stream fails at index 7
