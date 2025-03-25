@@ -31,16 +31,19 @@ internal sealed class CommittableOffsetBatch : ICommittableOffsetBatch
         Committers = committers;
         BatchSize = batchSize;
     }
-
-    /// <inheritdoc />
+    
     public long BatchSize { get; }
 
-    /// <inheritdoc />
+    /// Represents the offsets as they are, rather than how they're going to be committed.
+    ///
+    /// We have to +1 all offsets upon commit - which is what you get inside OffsetsAndMetadata.
+    ///
+    /// This is useful for debugging and for testing, but not much else.
     public IImmutableSet<GroupTopicPartitionOffset> Offsets
     {
         get
         {
-            return OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset))
+            return OffsetsAndMetadata.Select(o => new GroupTopicPartitionOffset(o.Key, o.Value.Offset - 1L))
                 .ToImmutableHashSet();
         }
     }

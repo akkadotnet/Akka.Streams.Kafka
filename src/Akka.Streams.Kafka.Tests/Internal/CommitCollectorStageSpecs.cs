@@ -305,6 +305,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     {
         var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
         var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        
         // create batches of size 1
         var (batch1, msg2, batch3) = (offsetFactory.MakeBatch(), offsetFactory.MakeOffset(), offsetFactory.MakeBatch());
 
