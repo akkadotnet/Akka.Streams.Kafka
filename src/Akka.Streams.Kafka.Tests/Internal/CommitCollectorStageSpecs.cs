@@ -68,7 +68,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         committedBatch.BatchSize.Should().Be(2);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg2.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg2.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -89,7 +89,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         var committedBatch = await sinkProbe.ExpectNextAsync();
         committedBatch.BatchSize.Should().Be(1);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -115,7 +115,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         committedBatch.BatchSize.Should().Be(1);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -143,11 +143,11 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         committedBatch.BatchSize.Should().Be(1);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg1.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg1.Offset.Offset);
 
         committedBatch2.BatchSize.Should().Be(2);
         committedBatch2.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch2.Offsets.Last().Offset.Should().Be(msg3.Offset.Offset);
+        committedBatch2.Offsets.Values.Last().Should().Be(msg3.Offset.Offset);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -172,7 +172,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         committedBatch.BatchSize.Should().Be(1);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg1.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg1.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -200,7 +200,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         committedBatch.BatchSize.Should().Be(2);
         committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Last().Offset.Should().Be(msg2.Offset.Offset);
+        committedBatch.Offsets.Values.Last().Should().Be(msg2.Offset.Offset);
         offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -257,10 +257,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
 
         // batches are committed using SelectAsyncUnordered, so order is not guaranteed
-        var lastBatch = batches.MaxBy(c => c.Offsets.Last().Offset.Value);
+        var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Last().Offset.Should()
+        lastBatch.Offsets.Values.Last().Should()
             .Be(msg2.Offset.Offset, "expected only second message to be committed");
         offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
 
@@ -288,11 +288,11 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
 
         // batches are committed using SelectAsyncUnordered, so order is not guaranteed
-        var lastBatch = batches.MaxBy(c => c.Offsets.Last().Offset.Value);
+        var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Last().Offset.Should()
-            .Be(batch2.Offsets.First().Offset, "expected only second message to be committed");
+        lastBatch.Offsets.Values.Last().Should()
+            .Be(batch2.Offsets.Values.First(), "expected only second message to be committed");
         offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -305,6 +305,7 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
     {
         var settings = DefaultCommitterSettings.WithMaxBatch(1).WithCommitWhen(CommitWhen.NextOffsetObserved.Instance);
         var (sourceProbe, control, sinkProbe, offsetFactory) = StreamProbesWithOffsetFactory(settings);
+        
         // create batches of size 1
         var (batch1, msg2, batch3) = (offsetFactory.MakeBatch(), offsetFactory.MakeOffset(), offsetFactory.MakeBatch());
 
@@ -319,10 +320,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
         await sinkProbe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(10));
 
         // batches are committed using SelectAsyncUnordered, so order is not guaranteed
-        var lastBatch = batches.MaxBy(c => c.Offsets.Last().Offset.Value);
+        var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Last().Offset.Should()
+        lastBatch.Offsets.Values.Last().Should()
             .Be(msg2.Offset.Offset, "expected only second message to be committed");
         offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
 
@@ -353,13 +354,13 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
 
         // batches are committed using SelectAsyncUnordered, so order is not guaranteed
         // Get the last 2 batches
-        var lastBatches = batches.OrderByDescending(c => c.Offsets.Last().Offset.Value)
+        var lastBatches = batches.OrderByDescending(c => c.Offsets.Values.Last().Value)
             .Take(2).ToList();
         var lastBatch = lastBatches[0];
         var secondLastBatch = lastBatches[1];
 
-        lastBatch.Offsets.Should().Contain(msg3.Offset, "expected the second offset of partition 1");
-        secondLastBatch.Offsets.Should().Contain(msg2.Offset, "expected the first offset of partition 2");
+        lastBatch.Offsets.Values.Should().Contain(msg3.Offset.Offset, "expected the second offset of partition 1");
+        secondLastBatch.Offsets.Values.Should().Contain(msg2.Offset.Offset, "expected the first offset of partition 2");
         offsetFactory.Committer.Commits.Count.Should().Be(3, "expected only three commits");
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
@@ -486,7 +487,9 @@ public class TestBatchCommitter
 
         public override Task CommitOneOfMany(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata)
         {
-            var commitOffset = offsetAndMetadata.Offset;
+            // CommittableOffsetBatch.OffsetsAndMetadata points the next committed message.
+            // So to get committed message offset we need to subtract 1
+            var commitOffset = offsetAndMetadata.Offset - 1;
             var commit = new TopicPartitionOffset(topicPartition, commitOffset);
             _committer.Commits = _committer.Commits.Add(commit);
             return _committer.CompleteCommit();

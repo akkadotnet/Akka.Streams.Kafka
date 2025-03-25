@@ -29,7 +29,6 @@ public class CommittingSpec : KafkaIntegrationTests
     }
 
     private static readonly string[] Numbers = Enumerable.Range(1, 200).Select(c => c.ToString()).ToArray();
-    private const int Partition1 = 1;
 
     [Fact]
     public async Task CommittingMustEnsureUncommittedMessagesAreRedelivered()
@@ -298,5 +297,134 @@ public class CommittingSpec : KafkaIntegrationTests
 
         await probe1.CancelAsync();
         await control.IsShutdown;
+    }
+
+    [Fact]
+    public async Task CommittingMustWorkInBatches()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
+
+        var consumerSettings = CreateConsumerSettings<Null, string>(group);
+
+        var (control, probe) = ConsumeAndBatchCommit(topic);
+        
+        // Request one batch
+        await probe.AsyncBuilder().Request(1).ExpectNextNAsync(1).ToListAsync();
+
+        await probe.CancelAsync();
+        await control.IsShutdown.WaitAsync(RemainingOrDefault);
+
+        var element = await ConsumeFirstElementAsync(topic, consumerSettings);
+        var i = int.Parse(element);
+        Assert.True(i > 1, "Should start after the first element");
+        
+        return;
+
+        (IControl control, TestSubscriber.Probe<ICommittableOffsetBatch> probe)
+            ConsumeAndBatchCommit(string t)
+        {
+            return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(t))
+                .Select(c => c.CommitableOffset)
+                .Batch(10, CommittableOffsetBatch.Create, (s, o) => s.Updated(o))
+                .SelectAsync(1, async c =>
+                {
+                    var b = (CommittableOffsetBatch)c;
+                    await b.Commit();
+                    return c;
+                })
+                .ToMaterialized(this.SinkProbe<ICommittableOffsetBatch>(), Keep.Both)
+                .Run(Sys);
+        }
+    }
+
+    [Fact]
+    public async Task CommittingMustWorkWithCommitterSink()
+    {
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
+
+        var consumerSettings = CreateConsumerSettings<Null, string>(group);
+        var committerSettings = CommitterSettings.Create(Sys).WithMaxBatch(5);
+
+        // Consume and fail in the middle of the commit batch
+        const int failAt1 = 32;
+
+        await Assert.ThrowsAsync<Exception>(async () =>
+        {
+            await ConsumeAndCommitUntil(topic, failAt1.ToString());
+        });
+
+        var element1 = await ConsumeFirstElementAsync(topic, consumerSettings);
+        var i = int.Parse(element1);
+        Assert.True(i >= failAt1 - committerSettings.MaxBatch, "Should re-process at most maxBatch elements");
+        return;
+
+        Task<Done> ConsumeAndCommitUntil(string t, string failAt)
+        {
+            return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(t))
+                .Select(c =>
+                {
+                    if (c.Record.Message.Value.Equals(failAt))
+                        throw new Exception();
+                    return c;
+                })
+                .Select(ICommittable (c) => c.CommitableOffset)
+                .ToMaterialized(Committer.Sink(committerSettings), Keep.Right)
+                .Run(Sys);
+        }
+    }
+
+    [Fact]
+    public async Task CommittingMustWorkWithCommitterBatchFlowEvenWithUpstreamFailure()
+    { 
+        var topic = CreateTopic(1);
+        var group = CreateGroup(1);
+        
+        await ProduceStrings(new TopicPartition(topic, new Partition(0)), Numbers.Take(100), ProducerSettings);
+
+        var consumerSettings = CreateConsumerSettings<Null, string>(group);
+        var committerSettings = CommitterSettings.Create(Sys).WithMaxBatch(5);
+
+        // Consume and fail in the middle of the commit batch
+        const int failAt1 = 32;
+
+        await Assert.ThrowsAsync<Exception>(async () =>
+        {
+            await ConsumeAndCommitUntil(topic, failAt1.ToString());
+        });
+
+        var element1 = await ConsumeFirstElementAsync(topic, consumerSettings);
+        var i = int.Parse(element1);
+        Assert.True(i >= failAt1 - committerSettings.MaxBatch, "Should re-process at most maxBatch elements");
+        return;
+
+        Task<Done> ConsumeAndCommitUntil(string t, string failAt)
+        {
+            return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(t))
+                .Select(c =>
+                {
+                    if (c.Record.Message.Value.Equals(failAt))
+                        throw new Exception();
+                    return c;
+                })
+                .Select(ICommittable (c) => c.CommitableOffset)
+                .Via(Committer.BatchFlow(committerSettings))
+                .ToMaterialized(Sink.Ignore<ICommittableOffsetBatch>(), Keep.Right)
+                .Run(Sys);
+        }
+        
+    }
+
+    private async Task<string> ConsumeFirstElementAsync(string topic, ConsumerSettings<Null, string> consumerSettings)
+    {
+        var (_, probe2) = CreateProbe(consumerSettings, topic);
+        var element = await probe2.AsyncBuilder().Request(1).ExpectNextAsync(TimeSpan.FromSeconds(60));
+        await probe2.CancelAsync();
+        return element;
     }
 }
