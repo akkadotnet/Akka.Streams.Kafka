@@ -6,33 +6,40 @@
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
     <TestSdkVersion>17.4.1</TestSdkVersion>
+    <AspireVersion>9.3.0</AspireVersion>
   </PropertyGroup>
   <!-- App dependencies -->
   <ItemGroup>
-    <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)"/>
-    <PackageVersion Include="Confluent.Kafka" Version="2.8.0"/>
-    <PackageVersion Include="coverlet.collector" Version="6.0.4"/>
-    <PackageVersion Include="Polyfill" Version="7.21.0"/>
-    <PackageVersion Include="Testcontainers.Kafka" Version="4.1.0"/>
+    <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.8.0" />
+    <PackageVersion Include="Polyfill" Version="7.21.0" />
   </ItemGroup>
   <!-- Test dependencies -->
   <ItemGroup>
-    <PackageVersion Include="EntityFramework" Version="6.4.4"/>
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0"/>
-    <PackageVersion Include="xunit" Version="2.8.1"/>
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.1"/>
-    <PackageVersion Include="Akka.TestKit.Xunit2" Version="$(AkkaVersion)"/>
-    <PackageVersion Include="Akka.Streams.TestKit" Version="$(AkkaVersion)"/>
-    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0"/>
-    <PackageVersion Include="Docker.DotNet" Version="3.125.15"/>
-    <PackageVersion Include="NDesk.Options.Core" Version="1.2.5"/>
-    <PackageVersion Include="Tmds.ExecFunction" Version="0.6.0"/>
-    <PackageVersion Include="Universe.CpuUsage" Version="2.2.497.598"/>
-    <PackageVersion Include="FakeItEasy" Version="7.4.0"/>
-    <PackageVersion Include="FluentAssertions" Version="6.12.0"/>
+    <PackageVersion Include="Testcontainers.Kafka" Version="4.1.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="EntityFramework" Version="6.4.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageVersion Include="xunit" Version="2.8.1" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.1" />
+    <PackageVersion Include="Akka.TestKit.Xunit2" Version="$(AkkaVersion)" />
+    <PackageVersion Include="Akka.Streams.TestKit" Version="$(AkkaVersion)" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageVersion Include="Docker.DotNet" Version="3.125.15" />
+    <PackageVersion Include="NDesk.Options.Core" Version="1.2.5" />
+    <PackageVersion Include="Tmds.ExecFunction" Version="0.6.0" />
+    <PackageVersion Include="Universe.CpuUsage" Version="2.2.497.598" />
+    <PackageVersion Include="FakeItEasy" Version="7.4.0" />
+    <PackageVersion Include="FluentAssertions" Version="6.12.0" />
+  </ItemGroup>
+  <!-- Sample dependencies -->
+  <ItemGroup>
+    <PackageVersion Include="Akka" Version="$(AkkaVersion)" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.Kafka" Version="$(AspireVersion)" />
   </ItemGroup>
   <!-- SourceLink support for all Akka.NET projects -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0"/>
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
   </ItemGroup>
 </Project>
