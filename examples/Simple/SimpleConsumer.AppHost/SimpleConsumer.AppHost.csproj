@@ -8,9 +8,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <UserSecretsId>df5f361f-692c-4438-a33f-9f6b45342370</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Remove="Akka.Event" />
+  </ItemGroup>
+  
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" />
     <PackageReference Include="Aspire.Hosting.Kafka" />
