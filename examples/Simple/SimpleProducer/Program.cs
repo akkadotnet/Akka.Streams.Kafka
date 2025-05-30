@@ -25,6 +25,10 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        var connectionString = Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__KAFKA");
+        if(connectionString is null)
+            throw new Exception("The environment variable CONNECTIONSTRINGS__KAFKA was not set.");
+        
         var fallbackConfig = ConfigurationFactory.ParseString(@"
                     akka.suppress-json-serializer-warning=true
                     akka.loglevel = DEBUG
@@ -35,7 +39,7 @@ public class Program
         var materializer = system.Materializer();
 
         var producerSettings = ProducerSettings<string, string>.Create(system, null, null)
-            .WithBootstrapServers("localhost:29092");
+            .WithBootstrapServers(connectionString);
 
         Source
             .Cycle(() => Enumerable.Range(1, 1000).GetEnumerator())
