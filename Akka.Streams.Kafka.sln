@@ -31,6 +31,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kafka.Partitioned.Consumer", "examples\Kafka.Partitioned.Consumer\Kafka.Partitioned.Consumer.csproj", "{EB6C9C63-DA66-44E6-938B-5CA0D3F4312E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Simple", "Simple", "{051927DB-19E0-4BF1-B495-9316AC09D765}"
+	ProjectSection(SolutionItems) = preProject
+		examples\Simple\README.md = examples\Simple\README.md
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleConsumer", "examples\Simple\SimpleConsumer\SimpleConsumer.csproj", "{A4C29CBB-0EA1-4B49-A35C-9FE7A86EB58A}"
 EndProject
