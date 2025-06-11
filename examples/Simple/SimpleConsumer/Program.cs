@@ -6,6 +6,7 @@
 
 using System;
 using System.Text;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
 using Akka.Streams;
@@ -18,7 +19,7 @@ namespace SimpleConsumer;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__KAFKA");
         if(connectionString is null)
@@ -39,7 +40,7 @@ public class Program
 
         var subscription = Subscriptions.Topics("akka100");
 
-        KafkaConsumer.PlainSource(consumerSettings, subscription)
+        _ = KafkaConsumer.PlainSource(consumerSettings, subscription)
             .RunForeach(
                 result =>
                 {
@@ -48,6 +49,6 @@ public class Program
                 }, materializer);
 
 
-        Console.ReadLine();
+        await system.WhenTerminated;
     }
 }

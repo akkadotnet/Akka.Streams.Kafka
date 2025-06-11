@@ -23,7 +23,7 @@ namespace SimpleProducer;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__KAFKA");
         if(connectionString is null)
@@ -41,7 +41,7 @@ public class Program
         var producerSettings = ProducerSettings<string, string>.Create(system, null, null)
             .WithBootstrapServers(connectionString);
 
-        Source
+        _ = Source
             .Cycle(() => Enumerable.Range(1, 1000).GetEnumerator())
             .Throttle(1, TimeSpan.FromMilliseconds(200), 1, ThrottleMode.Shaping)
             .Select(c => c.ToString())
@@ -60,6 +60,6 @@ public class Program
 
         // TODO: Sharing KafkaProducer
 
-        Console.ReadLine();
+        await system.WhenTerminated;
     }
 }
