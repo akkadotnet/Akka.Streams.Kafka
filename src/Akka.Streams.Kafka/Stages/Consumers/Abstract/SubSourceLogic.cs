@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Streams.Dsl;
@@ -139,6 +140,11 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
     /// Kafka has signalled these partitions are revoked, but some may be re-assigned just after revoking.
     /// </summary>
     private IImmutableSet<TopicPartition> _partitionsToRevoke = ImmutableHashSet<TopicPartition>.Empty;
+
+    /// <summary>
+    /// Cancellation token source for shutting down seek operations when stage is stopping
+    /// </summary>
+    private readonly CancellationTokenSource _shutdownTokenSource = new();
 
     protected StageActor SourceActor { get; private set; } = null!;
     public IActorRef ConsumerActor { get; private set; } = null!;
@@ -295,9 +301,15 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
 
     public override void PostStop()
     {
+        // Cancel any ongoing seek operations
+        _shutdownTokenSource.Cancel();
+        
         ConsumerActor.Tell(new KafkaConsumerActorMetadata.Internal.StopFromStage(_shape.ToString()), SourceActor.Ref);
 
         Control.OnShutdown();
+        
+        // Clean up cancellation token
+        _shutdownTokenSource.Dispose();
 
         base.PostStop();
     }
@@ -382,14 +394,32 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
             try
             {
                 await ConsumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Seek(offsets),
-                    TimeSpan.FromSeconds(10));
+                    TimeSpan.FromSeconds(10), _shutdownTokenSource.Token);
                 _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
             }
-            catch (Exception)
+            catch (OperationCanceledException) when (_shutdownTokenSource.IsCancellationRequested)
             {
-                // only exceptions that can be thrown here are related to TCS cancellation / timeout
-                _stageFailCallback(new ConsumerFailed(
-                    $"{_actorNumber} Consumer failed during seek, Ask timed out. Partitions: {offsets.JoinToString(", ")}"));
+                // Stage is shutting down, this is expected - don't treat as fatal error
+                if (Log.IsDebugEnabled)
+                    Log.Debug("#{0} Seek operation cancelled due to stage shutdown. Partitions: {1}", 
+                        _actorNumber, offsets.JoinToString(", "));
+            }
+            catch (Exception ex)
+            {
+                // Other exceptions (timeout, etc.) - check if we're shutting down before failing
+                if (_shutdownTokenSource.IsCancellationRequested)
+                {
+                    // Stage is shutting down, timeout is expected
+                    if (Log.IsDebugEnabled)
+                        Log.Debug("#{0} Seek operation timed out during stage shutdown (expected). Partitions: {1}", 
+                            _actorNumber, offsets.JoinToString(", "));
+                }
+                else
+                {
+                    // Unexpected timeout while stage is still active
+                    _stageFailCallback(new ConsumerFailed(
+                        $"{_actorNumber} Consumer failed during seek, Ask timed out. Partitions: {offsets.JoinToString(", ")}", ex));
+                }
             }
         }
     }
@@ -499,6 +529,9 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
     {
         Log.Info("Completing. Partitions [{0}], StageActor {1}", string.Join(", ", _subSources.Keys), SourceActor.Ref);
         SetKeepGoing(true);
+
+        // Cancel any ongoing seek operations immediately to avoid timeouts
+        _shutdownTokenSource.Cancel();
 
         // TODO from alpakka: we should wait for subsources to be shutdown and next shutdown main stage
         _subSources.Values.Select(c => c.ControlAndStageActor.Control).ForEach(control => control.Shutdown());
