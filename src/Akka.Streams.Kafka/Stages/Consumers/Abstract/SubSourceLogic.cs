@@ -145,6 +145,16 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
     /// Cancellation token source for shutting down seek operations when stage is stopping
     /// </summary>
     private readonly CancellationTokenSource _shutdownTokenSource = new();
+    
+    /// <summary>
+    /// Track when the stage started to detect race conditions
+    /// </summary>
+    private readonly DateTime _startTime = DateTime.UtcNow;
+    
+    /// <summary>
+    /// Track if seek operation is in progress to detect race conditions
+    /// </summary>
+    private volatile bool _seekInProgress = false;
 
     protected StageActor SourceActor { get; private set; } = null!;
     public IActorRef ConsumerActor { get; private set; } = null!;
@@ -391,21 +401,32 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
 
         async Task AskToSeekOffsets()
         {
+            _seekInProgress = true;
+            
+            if (Log.IsDebugEnabled)
+                Log.Debug("#{0} Starting seek operation for partitions: {1}", _actorNumber, offsets.JoinToString(", "));
+                
             try
             {
                 await ConsumerActor.Ask(new KafkaConsumerActorMetadata.Internal.Seek(offsets),
                     TimeSpan.FromSeconds(10), _shutdownTokenSource.Token);
+                    
+                if (Log.IsDebugEnabled)
+                    Log.Debug("#{0} Seek operation completed successfully", _actorNumber);
+                    
                 _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
             }
             catch (OperationCanceledException) when (_shutdownTokenSource.IsCancellationRequested)
             {
                 // Stage is shutting down, this is expected - don't treat as fatal error
                 if (Log.IsDebugEnabled)
-                    Log.Debug("#{0} Seek operation cancelled due to stage shutdown. Partitions: {1}", 
+                    Log.Debug("#{0} Seek operation cancelled due to stage shutdown (expected). Partitions: {1}", 
                         _actorNumber, offsets.JoinToString(", "));
             }
             catch (Exception ex)
             {
+                var timeSinceStart = DateTime.UtcNow.Subtract(_startTime);
+                
                 // Other exceptions (timeout, etc.) - check if we're shutting down before failing
                 if (_shutdownTokenSource.IsCancellationRequested)
                 {
@@ -416,10 +437,22 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
                 }
                 else
                 {
+                    // Check for race condition pattern - very fast failure
+                    if (timeSinceStart.TotalMilliseconds < 100)
+                    {
+                        Log.Warning("#{0} Seek operation failed very quickly ({1}ms after start) - possible race condition. " +
+                                   "Error: {2}, Partitions: {3}", 
+                            _actorNumber, timeSinceStart.TotalMilliseconds, ex.Message, offsets.JoinToString(", "));
+                    }
+                    
                     // Unexpected timeout while stage is still active
                     _stageFailCallback(new ConsumerFailed(
                         $"{_actorNumber} Consumer failed during seek, Ask timed out. Partitions: {offsets.JoinToString(", ")}", ex));
                 }
+            }
+            finally
+            {
+                _seekInProgress = false;
             }
         }
     }
@@ -527,6 +560,22 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
 
     private void PerformShutdown()
     {
+        var timeSinceStart = DateTime.UtcNow.Subtract(_startTime);
+        
+        // Only log if this looks like the race condition (very fast shutdown with seek in progress)
+        if (timeSinceStart.TotalMilliseconds < 100 && _seekInProgress)
+        {
+            Log.Warning("#{0} Potential race condition detected: PerformShutdown called {1}ms after start " +
+                       "with seek operation still in progress. Pending: {2}, InStartup: {3}, SubSources: {4}",
+                _actorNumber, timeSinceStart.TotalMilliseconds, _pendingPartitions.Count, 
+                _partitionsInStartup.Count, _subSources.Count);
+        }
+        else if (Log.IsDebugEnabled)
+        {
+            Log.Debug("#{0} PerformShutdown called normally after {1}ms. SeekInProgress: {2}", 
+                _actorNumber, timeSinceStart.TotalMilliseconds, _seekInProgress);
+        }
+        
         Log.Info("Completing. Partitions [{0}], StageActor {1}", string.Join(", ", _subSources.Keys), SourceActor.Ref);
         SetKeepGoing(true);
 
