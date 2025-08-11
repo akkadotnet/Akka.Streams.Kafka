@@ -206,3 +206,4 @@ build/
 .idea
 /.cursor
 BenchmarkDotNet.Artifacts/
+/.claude

@@ -55,10 +55,10 @@ internal class Program
 
         var committerDefaults = CommitterSettings.Create(system);
 
-        // Comment for simple no-commit consumer
+        // Comment for committable consumer
         var control = KafkaConsumer.CommittableSource(consumerSettings, subscription)
             .SelectAsync(1, msg =>
-                Business(msg.Record).ContinueWith(done => (ICommittable)msg.CommitableOffset))
+                Business(msg.Record).ContinueWith(ICommittable (_) => msg.CommitableOffset))
             .ToMaterialized(
                 Committer.Sink(committerDefaults.WithMaxBatch(1)),
                 DrainingControl<NotUsed>.Create)
