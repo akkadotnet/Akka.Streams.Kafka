@@ -198,6 +198,38 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
         SetHandler(shape.Outlet, EmitSubSourcesForPendingPartitions, _ => PerformShutdown());
     }
 
+    private Func<IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>>? ConvertOffsetProvider(
+        Func<IImmutableSet<TopicPartition>, Task<IImmutableSet<TopicPartitionOffset>>> asyncProvider)
+    {
+        return partitions =>
+        {
+            try
+            {
+                // We need to block here because Confluent.Kafka's handler is synchronous
+                // This should be fast as the offset provider typically just returns stored offsets
+                var task = asyncProvider(partitions);
+                if (task.IsCompleted)
+                {
+                    return task.Result;
+                }
+                
+                // Use a reasonable timeout to avoid blocking forever
+                if (task.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    return task.Result;
+                }
+                
+                Log.Warning("Offset provider timed out for partitions: {0}", string.Join(", ", partitions));
+                return ImmutableHashSet<TopicPartitionOffset>.Empty;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error in offset provider for partitions: {0}", string.Join(", ", partitions));
+                return ImmutableHashSet<TopicPartitionOffset>.Empty;
+            }
+        };
+    }
+    
     protected void ConfigureSubscription(Action<IImmutableSet<TopicPartition>> partitionsAssignedCb,
         Action<IImmutableSet<TopicPartitionOffset>> partitionsRevokedCb)
     {
@@ -206,13 +238,15 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
             case TopicSubscription topicSubscription:
                 ConsumerActor.Tell(
                     new KafkaConsumerActorMetadata.Internal.Subscribe(topicSubscription.Topics,
-                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription))),
+                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscription)),
+                        _getOffsetsOnAssign.HasValue ? ConvertOffsetProvider(_getOffsetsOnAssign.Value) : null),
                     SourceActor.Ref);
                 break;
             case TopicSubscriptionPattern topicSubscriptionPattern:
                 ConsumerActor.Tell(
                     new KafkaConsumerActorMetadata.Internal.SubscribePattern(topicSubscriptionPattern.TopicPattern,
-                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern))),
+                        AddToPartitionAssignmentHandler(CreateRebalanceListener(topicSubscriptionPattern)),
+                        _getOffsetsOnAssign.HasValue ? ConvertOffsetProvider(_getOffsetsOnAssign.Value) : null),
                     SourceActor.Ref);
                 break;
             default:
@@ -361,26 +395,9 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
         // make sure re-assigned partitions don't get closed on CloseRevokedPartitions timer
         _partitionsToRevoke = _partitionsToRevoke.Except(assigned);
 
-        if (!_getOffsetsOnAssign.HasValue)
-        {
-            _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
-        }
-        else
-        {
-            _getOffsetsOnAssign.Value(assigned).ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                {
-                    _stageFailCallback(new ConsumerFailed(
-                        $"{_actorNumber} Failed to fetch offset for partitions: {formerlyUnknown.JoinToString(", ")}",
-                        t.Exception));
-                }
-                else
-                {
-                    _offsetsFromExternalResponseCb((formerlyUnknown, t.Result));
-                }
-            }, TaskContinuationOptions.ExecuteSynchronously);
-        }
+        // When using subscription-based assignment with offset provider, the offsets are already
+        // set during partition assignment by the KafkaConsumerActor, so we can directly emit sub-sources
+        _updatePendingPartitionsAndEmitSubSourcesCallback(formerlyUnknown);
     }
 
     private void OffsetsFromExternalResponseCallback(
@@ -471,9 +488,25 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
         _subSources = _subSources.Remove(topicPartition);
         _partitionsInStartup = _partitionsInStartup.Remove(topicPartition);
 
+        // Check if this partition is scheduled for revocation - if so, don't re-emit
+        if (_partitionsToRevoke.Contains(topicPartition))
+        {
+            if (Log.IsDebugEnabled)
+                Log.Debug("#{0} Partition {1} is scheduled for revocation, not re-emitting", _actorNumber, topicPartition);
+            return;
+        }
+
         switch (cancellationStrategy)
         {
             case SeekToOffsetAndReEmit seek:
+                // If the stage is shutting down, don't re-emit partitions to avoid infinite loops
+                if (_shutdownTokenSource.IsCancellationRequested)
+                {
+                    if (Log.IsDebugEnabled)
+                        Log.Debug("#{0} Stage is shutting down, not re-emitting partition {1} with seek", _actorNumber, topicPartition);
+                    return;
+                }
+
                 var offset = seek.Offset;
                 // re-add this partition to pending partitions so it can be re-emitted
                 _pendingPartitions = _pendingPartitions.Add(topicPartition);
@@ -486,6 +519,14 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
                     ImmutableList.Create(topicPartitionOffset).ToImmutableHashSet());
                 break;
             case ReEmit:
+                // If the stage is shutting down, don't re-emit partitions to avoid infinite loops
+                if (_shutdownTokenSource.IsCancellationRequested)
+                {
+                    if (Log.IsDebugEnabled)
+                        Log.Debug("#{0} Stage is shutting down, not re-emitting partition {1}", _actorNumber, topicPartition);
+                    return;
+                }
+
                 // re-add this partition to pending partitions so it can be re-emitted
                 _pendingPartitions = _pendingPartitions.Add(topicPartition);
                 EmitSubSourcesForPendingPartitions();
@@ -746,7 +787,10 @@ internal abstract class SubSourceStageLogic<K, V, TMessage> : GraphStageLogic
 
     protected virtual ISubSourceCancellationStrategy OnDownstreamFinishSubSourceCancellationStrategy
     {
-        get { return _buffer.Count > 0 ? new SeekToOffsetAndReEmit(_buffer.Peek().Offset) : ReEmit.Instance; }
+        get 
+        { 
+            return _buffer.Count > 0 ? new SeekToOffsetAndReEmit(_buffer.Peek().Offset) : ReEmit.Instance; 
+        }
     }
 
     public override void PreStart()

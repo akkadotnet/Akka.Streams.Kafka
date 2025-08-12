@@ -4,6 +4,7 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.Collections.Immutable;
 using System.Threading;
 using Akka.Actor;
@@ -69,7 +70,16 @@ public static class KafkaConsumerActorMetadata
         public sealed record AssignWithOffset(IImmutableSet<TopicPartitionOffset> TopicPartitionOffsets)
             : ISubscriptionRequest;
 
-        public sealed record Subscribe(IImmutableSet<string> Topics, IPartitionEventHandler RebalanceHandler)
+        /// <summary>
+        /// Subscribe to a set of topics.
+        /// </summary>
+        /// <param name="Topics">The topics to subscribe to.</param>
+        /// <param name="RebalanceHandler">Optional - used to help handle and filter incoming rebalance events.</param>
+        /// <param name="OffsetProvider">Optional - function to provide custom offsets for assigned partitions.</param>
+        public sealed record Subscribe(
+            IImmutableSet<string> Topics, 
+            IPartitionEventHandler RebalanceHandler,
+            Func<IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>>? OffsetProvider = null)
             : ISubscriptionRequest;
 
         /// <summary>
@@ -77,7 +87,11 @@ public static class KafkaConsumerActorMetadata
         /// </summary>
         /// <param name="TopicPattern">Topic pattern (regular expression to be matched)</param>
         /// <param name="RebalanceHandler">Optional - used to help handle and filter incoming rebalance events.</param>
-        public sealed record SubscribePattern(string TopicPattern, IPartitionEventHandler RebalanceHandler)
+        /// <param name="OffsetProvider">Optional - function to provide custom offsets for assigned partitions.</param>
+        public sealed record SubscribePattern(
+            string TopicPattern, 
+            IPartitionEventHandler RebalanceHandler,
+            Func<IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>>? OffsetProvider = null)
             : ISubscriptionRequest;
 
         /// <summary>

@@ -48,6 +48,11 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
     /// Stores delegates for external handling of partition events
     /// </summary>
     private IPartitionEventHandler _partitionEventHandler;
+    
+    /// <summary>
+    /// Optional function to provide custom offsets during partition assignment
+    /// </summary>
+    private Func<IImmutableSet<TopicPartition>, IImmutableSet<TopicPartitionOffset>>? _offsetProvider;
 
     private readonly TimeSpan _warningDuration;
 
@@ -453,7 +458,31 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
 
             _consumer = _settings.CreateKafkaConsumer(
                 (c, e) => ProcessExceptions(new KafkaException(e)),
-                (c, tp) => PartitionsAssignedHandler(tp.ToImmutableHashSet()),
+                (c, tp) => 
+                {
+                    var partitions = tp.ToImmutableHashSet();
+                    PartitionsAssignedHandler(partitions);
+                    
+                    // If we have an offset provider, use it to return custom offsets
+                    if (_offsetProvider != null)
+                    {
+                        var customOffsets = _offsetProvider(partitions);
+                        if (customOffsets != null && customOffsets.Any())
+                        {
+                            // Create a dictionary of custom offsets for fast lookup
+                            var offsetLookup = customOffsets.ToDictionary(o => o.TopicPartition);
+                            
+                            // Return custom offsets where provided, Offset.Unset for others
+                            return tp.Select(p => offsetLookup.TryGetValue(p, out var customOffset) 
+                                ? customOffset 
+                                : new TopicPartitionOffset(p, Offset.Unset));
+                        }
+                    }
+                    
+                    // Otherwise return the partitions converted to TopicPartitionOffsets with Unset offset
+                    // This tells Confluent.Kafka to use the default offset behavior
+                    return tp.Select(p => new TopicPartitionOffset(p, Offset.Unset));
+                },
                 (c, tp) => PartitionsRevokedHandler(tp.ToImmutableHashSet()),
                 (c, tp) => PartitionsLostHandler(tp.ToImmutableHashSet()),
                 (c, json) => _statisticsHandler.OnStatistics(c, json));
@@ -553,12 +582,14 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
                 {
                     _consumer.Subscribe(subscribe.Topics);
                     _partitionEventHandler = subscribe.RebalanceHandler;
+                    _offsetProvider = subscribe.OffsetProvider;
                     break;
                 }
                 case SubscribePattern subscribePattern:
                 {
                     _consumer.Subscribe(subscribePattern.TopicPattern);
                     _partitionEventHandler = subscribePattern.RebalanceHandler;
+                    _offsetProvider = subscribePattern.OffsetProvider;
                     break;
                 }
             }
