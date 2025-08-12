@@ -1,3 +1,9 @@
+#### 1.5.46 August 12th 2025 ####
+
+* [Upgraded to Akka.NET v1.5.46](https://github.com/akkadotnet/akka.net/releases/tag/1.5.46)
+* [Fix race condition in PlainPartitionedManualOffsetSource when seeking custom offsets](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/498)
+* [Fix race condition in SubSourceLogic when consumer is aborted](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/500)
+
 #### 1.5.40.1 March 24th 2025 ####
 
 * Fixed another major N+1 bug when committing offsets to Kafka: [Committing: fix N+1 issues in `CommittableOffsetBatch`](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/487)
