@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 using Akka.Actor;
 using Akka.Streams.Kafka.Internal;
@@ -486,7 +487,7 @@ public sealed record ConsumerSettings<TKey, TValue>
     /// </summary>
     public IConsumer<TKey, TValue> CreateKafkaConsumer(
         Action<IConsumer<TKey, TValue>, Error>? consumeErrorHandler = null,
-        Action<IConsumer<TKey, TValue>, List<TopicPartition>>? partitionAssignedHandler = null,
+        Func<IConsumer<TKey, TValue>, List<TopicPartition>, IEnumerable<TopicPartitionOffset>>? partitionAssignedHandler = null,
         Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionRevokedHandler = null,
         Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? partitionLostHandler = null,
         Action<IConsumer<TKey, TValue>, string>? statisticHandler = null)
@@ -509,7 +510,7 @@ public sealed record ConsumerSettings<TKey, TValue>
 
         return builder
             .SetErrorHandler((c, e) => consumeErrorHandler?.Invoke(c, e))
-            .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions))
+            .SetPartitionsAssignedHandler((c, partitions) => partitionAssignedHandler?.Invoke(c, partitions) ?? partitions.Select(p => new TopicPartitionOffset(p, Offset.Unset)))
             .SetPartitionsRevokedHandler((c, partitions) => partitionRevokedHandler?.Invoke(c, partitions))
             .SetPartitionsLostHandler((c, partitions) => partitionLostHandler?.Invoke(c, partitions))
             .SetStatisticsHandler((c, json) => statisticHandler?.Invoke(c, json))
@@ -520,7 +521,7 @@ public sealed record ConsumerSettings<TKey, TValue>
 internal sealed class RebalanceListener<TKey, TValue>
 {
     public RebalanceListener(
-        Action<IConsumer<TKey, TValue>, List<TopicPartition>>? onPartitionAssigned,
+        Func<IConsumer<TKey, TValue>, List<TopicPartition>, IEnumerable<TopicPartitionOffset>>? onPartitionAssigned,
         Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionRevoked,
         Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? onPartitionLost)
     {
@@ -529,7 +530,7 @@ internal sealed class RebalanceListener<TKey, TValue>
         OnPartitionLost = onPartitionLost;
     }
 
-    public Action<IConsumer<TKey, TValue>, List<TopicPartition>>? OnPartitionAssigned { get; }
+    public Func<IConsumer<TKey, TValue>, List<TopicPartition>, IEnumerable<TopicPartitionOffset>>? OnPartitionAssigned { get; }
     public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionRevoked { get; }
     public Action<IConsumer<TKey, TValue>, List<TopicPartitionOffset>>? OnPartitionLost { get; }
 }
