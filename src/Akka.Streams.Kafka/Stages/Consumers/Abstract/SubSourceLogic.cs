@@ -488,9 +488,25 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
         _subSources = _subSources.Remove(topicPartition);
         _partitionsInStartup = _partitionsInStartup.Remove(topicPartition);
 
+        // Check if this partition is scheduled for revocation - if so, don't re-emit
+        if (_partitionsToRevoke.Contains(topicPartition))
+        {
+            if (Log.IsDebugEnabled)
+                Log.Debug("#{0} Partition {1} is scheduled for revocation, not re-emitting", _actorNumber, topicPartition);
+            return;
+        }
+
         switch (cancellationStrategy)
         {
             case SeekToOffsetAndReEmit seek:
+                // If the stage is shutting down, don't re-emit partitions to avoid infinite loops
+                if (_shutdownTokenSource.IsCancellationRequested)
+                {
+                    if (Log.IsDebugEnabled)
+                        Log.Debug("#{0} Stage is shutting down, not re-emitting partition {1} with seek", _actorNumber, topicPartition);
+                    return;
+                }
+
                 var offset = seek.Offset;
                 // re-add this partition to pending partitions so it can be re-emitted
                 _pendingPartitions = _pendingPartitions.Add(topicPartition);
@@ -503,6 +519,14 @@ internal class SubSourceLogic<K, V, TMessage> : TimerGraphStageLogic
                     ImmutableList.Create(topicPartitionOffset).ToImmutableHashSet());
                 break;
             case ReEmit:
+                // If the stage is shutting down, don't re-emit partitions to avoid infinite loops
+                if (_shutdownTokenSource.IsCancellationRequested)
+                {
+                    if (Log.IsDebugEnabled)
+                        Log.Debug("#{0} Stage is shutting down, not re-emitting partition {1}", _actorNumber, topicPartition);
+                    return;
+                }
+
                 // re-add this partition to pending partitions so it can be re-emitted
                 _pendingPartitions = _pendingPartitions.Add(topicPartition);
                 EmitSubSourcesForPendingPartitions();
@@ -763,7 +787,10 @@ internal abstract class SubSourceStageLogic<K, V, TMessage> : GraphStageLogic
 
     protected virtual ISubSourceCancellationStrategy OnDownstreamFinishSubSourceCancellationStrategy
     {
-        get { return _buffer.Count > 0 ? new SeekToOffsetAndReEmit(_buffer.Peek().Offset) : ReEmit.Instance; }
+        get 
+        { 
+            return _buffer.Count > 0 ? new SeekToOffsetAndReEmit(_buffer.Peek().Offset) : ReEmit.Instance; 
+        }
     }
 
     public override void PreStart()
