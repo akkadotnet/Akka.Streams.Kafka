@@ -3,6 +3,35 @@
 Akka Streams Kafka is an Akka Streams connector for Apache Kafka. This is a port of the Alpakka Kafka
 project (https://github.com/akka/alpakka-kafka).
 
+## Why Akka.Streams.Kafka?
+
+📺 **[Watch: Why Akka.Streams.Kafka is the Best Kafka Client for .NET](https://www.youtube.com/watch?v=QWUOVgjIXCE)**
+
+📖 **[Read: In-depth blog post on Akka.Streams.Kafka advantages](https://petabridge.com/blog/akka-streams-kafka-best-kafka-client-dotnet/)**
+
+### Key Benefits
+
+✨ **Simplified Complexity** - Reduce Kafka development from ~350 lines to ~50 lines of code while maintaining full control
+
+🚀 **Instant Productivity** - Focus on solving business problems, not distributed systems challenges
+
+🛡️ **Built-in Resilience** - Automatic handling of:
+- Backpressure management
+- Partition rebalancing with message invalidation
+- Error handling and retry strategies
+- Race condition prevention
+- Dead letter queue management
+
+⚡ **Enterprise Performance** - Production-ready with:
+- Parallel and batch processing support
+- Zero manual infrastructure code
+- Transparent offset management
+- Compositional processing pipelines
+
+🔧 **Developer-Friendly** - Higher-level abstraction that handles complex distributed systems challenges transparently while providing enterprise-grade reliability
+
+## Technical Overview
+
 Library is based on [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet) driver, and implements
 Sources, Sinks and Flows to handle Kafka message streams.
 All stages are build with Akka.Streams advantages in mind:
