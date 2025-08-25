@@ -216,7 +216,7 @@ var multiMessage = ProducerMessage.Multi(new[]
 {
     new ProducerRecord<string, string>(topic2, record.Key, record.Value),
     new ProducerRecord<string, string>(topic3, record.Key, record.Value)
-}.ToImmutableSet(), passThrough);
+}.ToImmutableHashSet(), passThrough);
 ```
 
 The flow with `ProducerMessage.MultiMessage` will continue as `ProducerMessage.MultiResult` elements containing:
