@@ -1,3 +1,7 @@
+#### 1.5.55 October 26th 2025 ####
+
+* [Upgraded to Akka.NET v1.5.55](https://github.com/akkadotnet/akka.net/releases/tag/1.5.55) - see [PR #505](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/505)
+
 #### 1.5.46 August 12th 2025 ####
 
 * [Upgraded to Akka.NET v1.5.46](https://github.com/akkadotnet/akka.net/releases/tag/1.5.46)
