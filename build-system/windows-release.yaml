@@ -19,7 +19,7 @@ variables:
 jobs:
   - job: Release
     pool:
-      vmImage: windows-latest
+      vmImage: windows-2022
       demands: Cmd
     steps:
       - powershell: ./build.ps1
