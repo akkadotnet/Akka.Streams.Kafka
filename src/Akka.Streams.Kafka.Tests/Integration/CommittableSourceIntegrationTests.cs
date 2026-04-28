@@ -15,7 +15,6 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
 

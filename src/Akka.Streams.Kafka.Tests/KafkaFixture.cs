@@ -58,7 +58,7 @@ public class KafkaFixture : IAsyncLifetime
     public const int KafkaReplicationFactor = 1;
     public const int KafkaPartitions = 3;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (TestsConfiguration.UseExistingDockerContainer)
         {
@@ -70,5 +70,5 @@ public class KafkaFixture : IAsyncLifetime
         KafkaPort = _container.GetMappedPublicPort(KafkaBuilder.KafkaPort);
     }
 
-    public async Task DisposeAsync() => await _container.DisposeAsync();
+    public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 }

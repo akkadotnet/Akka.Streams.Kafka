@@ -24,7 +24,6 @@ using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
 using K = string;
 using V = string;
@@ -33,7 +32,7 @@ namespace Akka.Streams.Kafka.Tests.Internal;
 
 using Record = ConsumeResult<K, V>;
 
-public class ConsumerSpec : Akka.TestKit.Xunit2.TestKit
+public class ConsumerSpec : Akka.TestKit.Xunit.TestKit
 {
     private static CommittableMessage<K, V> CreateMessage(int seed)
         => CreateMessage(seed, "topic");
@@ -249,7 +248,7 @@ internal static class Extensions
         return groups;
     }
 
-    public static void AssertAllStagesStopped(this Akka.TestKit.Xunit2.TestKit spec, Action block,
+    public static void AssertAllStagesStopped(this Akka.TestKit.Xunit.TestKit spec, Action block,
         IMaterializer materializer) =>
         AssertAllStagesStopped(spec, () =>
         {
@@ -257,7 +256,7 @@ internal static class Extensions
             return NotUsed.Instance;
         }, materializer);
 
-    public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit2.TestKit spec, Func<T> block,
+    public static T AssertAllStagesStopped<T>(this Akka.TestKit.Xunit.TestKit spec, Func<T> block,
         IMaterializer materializer)
     {
         if (materializer is not ActorMaterializerImpl impl)

@@ -22,7 +22,6 @@ using Akka.Streams.Supervision;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Akka.Streams.TestKit;
 
 namespace Akka.Streams.Kafka.Tests;

@@ -22,7 +22,6 @@ using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Decider = Akka.Streams.Supervision.Decider;
 
 namespace Akka.Streams.Kafka.Tests.Integration;

@@ -26,7 +26,6 @@ using Confluent.Kafka;
 using FluentAssertions;
 using FluentAssertions.Extensions;
 using Xunit;
-using Xunit.Abstractions;
 using static FluentAssertions.FluentActions;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -80,7 +79,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         await Task.Delay(1000); // Wait for message handling finished after all messages received
 
         var shutdownTask = control.DrainAndShutdown();
-        var shutdownResult = await shutdownTask.ShouldCompleteWithin(10.Seconds());
+        var shutdownResult = await shutdownTask.WaitAsync(10.Seconds());
         shutdownResult.Should().Be(totalMessages);
     }
 
@@ -117,7 +116,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         await Task.Delay(5000);
 
         var shutdownTask = control.DrainAndShutdown();
-        var shutdownResult = await shutdownTask.ShouldCompleteWithin(10.Seconds());
+        var shutdownResult = await shutdownTask.WaitAsync(10.Seconds());
         shutdownResult.Should().BeTrue();
     }
 
@@ -227,7 +226,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
             .TakeWhile(m => m < totalMessages, true)
             .RunWith(Sink.Last<int>(), Materializer);
 
-        var consumedMessages = await consumedMessagesTask.ShouldCompleteWithin(60.Seconds());
+        var consumedMessages = await consumedMessagesTask.WaitAsync(60.Seconds());
         consumedMessages.Should().Be(totalMessages);
     }
 

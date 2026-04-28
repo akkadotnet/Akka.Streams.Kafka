@@ -21,13 +21,12 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Config = Akka.Configuration.Config;
 
 namespace Akka.Streams.Kafka.Tests;
 
 [Collection(KafkaSpecsFixture.Name)]
-public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
+public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
 {
     public KafkaFixture Fixture { get; }
     protected IMaterializer Materializer { get; }
@@ -38,21 +37,11 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit2.TestKit
         Fixture = fixture;
         Materializer = Sys.Materializer();
 
-        Sys.Log.Info("Starting test: " + GetCurrentTestName(output));
+        Sys.Log.Info("Starting test: " + GetCurrentTestName());
     }
 
-    private static string GetCurrentTestName(ITestOutputHelper output)
-    {
-        var type = output.GetType();
-        var testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (testMember != null)
-        {
-            var test = (ITest)testMember.GetValue(output)!;
-            return test.DisplayName;
-        }
-
-        return "Unknown test";
-    }
+    private static string GetCurrentTestName()
+        => TestContext.Current.Test?.TestDisplayName ?? "Unknown test";
 
     private string Uuid { get; } = Guid.NewGuid().ToString();
 

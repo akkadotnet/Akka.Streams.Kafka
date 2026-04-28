@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.5.60</AkkaVersion>
+    <AkkaVersion>1.5.67</AkkaVersion>
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
     <AspireVersion>9.3.0</AspireVersion>
@@ -18,10 +18,10 @@
     <PackageVersion Include="Testcontainers.Kafka" Version="4.1.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="EntityFramework" Version="6.4.4" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
-    <PackageVersion Include="xunit" Version="2.8.1" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.1" />
-    <PackageVersion Include="Akka.TestKit.Xunit2" Version="$(AkkaVersion)" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Akka.TestKit.Xunit" Version="$(AkkaVersion)" />
     <PackageVersion Include="Akka.Streams.TestKit" Version="$(AkkaVersion)" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="Docker.DotNet" Version="3.125.15" />
