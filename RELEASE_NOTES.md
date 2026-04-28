@@ -1,3 +1,7 @@
+#### 1.5.67 April 28th 2026 ####
+
+* [Upgraded to Akka.NET v1.5.67](https://github.com/akkadotnet/akka.net/releases/tag/1.5.67)
+
 #### 1.5.59 January 26th 2026 ####
 
 * [Upgraded to Akka.NET v1.5.59](https://github.com/akkadotnet/akka.net/releases/tag/1.5.59)
