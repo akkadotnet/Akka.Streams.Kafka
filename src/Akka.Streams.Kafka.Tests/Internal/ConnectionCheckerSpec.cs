@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Internal;
 
-public class ConnectionCheckerSpec : Akka.TestKit.Xunit2.TestKit
+public class ConnectionCheckerSpec : Akka.TestKit.Xunit.TestKit
 {
     private readonly TimeSpan _retryInterval;
     private readonly ConnectionCheckerSettings _config;

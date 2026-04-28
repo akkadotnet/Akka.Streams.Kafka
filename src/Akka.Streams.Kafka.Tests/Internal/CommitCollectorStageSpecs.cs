@@ -25,12 +25,11 @@ using Akka.Util.Internal;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Debug = System.Diagnostics.Debug;
 
 namespace Akka.Streams.Kafka.Tests.Internal;
 
-public class CommitCollectorStageSpecs : Akka.TestKit.Xunit2.TestKit
+public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
 {
     private static readonly Akka.Configuration.Config Config = "akka.loglevel=DEBUG";
 

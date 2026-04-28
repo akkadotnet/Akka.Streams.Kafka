@@ -18,7 +18,6 @@ using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using FluentAssertions;
 using Xunit;
-using Xunit.Abstractions;
 using Directive = Akka.Streams.Supervision.Directive;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
