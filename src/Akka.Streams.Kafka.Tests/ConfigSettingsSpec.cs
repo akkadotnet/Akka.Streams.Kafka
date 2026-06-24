@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 //  <copyright file="ConfigSettingsSpec.cs" company="Akka.NET Project">
 //      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
 // </copyright>
@@ -8,7 +8,6 @@ using System;
 using Akka.Configuration;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests;
@@ -28,11 +27,11 @@ akka.kafka.consumer.kafka-clients {{
             ").WithFallback(KafkaExtensions.DefaultSettings).GetConfig("akka.kafka.consumer");
 
         var settings = ConsumerSettings<string, string>.Create(conf, null, null);
-        settings.GetProperty("bootstrap.servers").Should().Be("localhost:9092");
-        settings.GetProperty("client.id").Should().Be("client1");
-        settings.GetProperty("foo").Should().Be("bar");
-        settings.GetProperty("bootstrap.foo").Should().Be("baz");
-        settings.GetProperty("enable.auto.commit").Should().Be("false");
+        Assert.Equal("localhost:9092", settings.GetProperty("bootstrap.servers"));
+        Assert.Equal("client1", settings.GetProperty("client.id"));
+        Assert.Equal("bar", settings.GetProperty("foo"));
+        Assert.Equal("baz", settings.GetProperty("bootstrap.foo"));
+        Assert.Equal("false", settings.GetProperty("enable.auto.commit"));
     }
 
     [Fact]
@@ -50,11 +49,11 @@ akka.kafka.consumer.kafka-clients {{
         };
 
         settings = settings.WithConsumerConfig(config);
-        settings.GetProperty("bootstrap.servers").Should().Be("localhost:9092");
-        settings.GetProperty("auto.offset.reset").Should().Be("latest");
-        settings.GetProperty("enable.auto.commit").Should().Be("True");
-        settings.GetProperty("group.id").Should().Be("group1");
-        settings.GetProperty("client.id").Should().Be("client1");
+        Assert.Equal("localhost:9092", settings.GetProperty("bootstrap.servers"));
+        Assert.Equal("latest", settings.GetProperty("auto.offset.reset"));
+        Assert.Equal("True", settings.GetProperty("enable.auto.commit"));
+        Assert.Equal("group1", settings.GetProperty("group.id"));
+        Assert.Equal("client1", settings.GetProperty("client.id"));
     }
 
     [Fact]
@@ -70,10 +69,10 @@ akka.kafka.producer.kafka-clients {{
             ").WithFallback(KafkaExtensions.DefaultSettings).GetConfig("akka.kafka.producer");
 
         var settings = ProducerSettings<string, string>.Create(conf, null, null);
-        settings.GetProperty("bootstrap.servers").Should().Be("localhost:9092");
-        settings.GetProperty("client.id").Should().Be("client1");
-        settings.GetProperty("foo").Should().Be("bar");
-        settings.GetProperty("bootstrap.foo").Should().Be("baz");
+        Assert.Equal("localhost:9092", settings.GetProperty("bootstrap.servers"));
+        Assert.Equal("client1", settings.GetProperty("client.id"));
+        Assert.Equal("bar", settings.GetProperty("foo"));
+        Assert.Equal("baz", settings.GetProperty("bootstrap.foo"));
     }
 
     [Fact]
@@ -89,9 +88,9 @@ akka.kafka.producer.kafka-clients {{
         };
 
         settings = settings.WithProducerConfig(config);
-        settings.GetProperty("bootstrap.servers").Should().Be("localhost:9092");
-        settings.GetProperty("client.id").Should().Be("client1");
-        settings.GetProperty("enable.idempotence").Should().Be("True");
+        Assert.Equal("localhost:9092", settings.GetProperty("bootstrap.servers"));
+        Assert.Equal("client1", settings.GetProperty("client.id"));
+        Assert.Equal("True", settings.GetProperty("enable.idempotence"));
     }
 
     [Fact]
@@ -146,10 +145,10 @@ akka.kafka.producer.kafka-clients {{
             .WithDispatcher("")
             .WithGroupId("group1");
 
-        consumerSettings.ConnectionCheckerSettings.Enabled.Should().Be(false);
-        consumerSettings.ConnectionCheckerSettings.MaxRetries.Should().Be(3);
-        consumerSettings.ConnectionCheckerSettings.CheckInterval.Should().Be(TimeSpan.FromSeconds(15));
-        consumerSettings.ConnectionCheckerSettings.Factor.Should().Be(2.0);
+        Assert.False(consumerSettings.ConnectionCheckerSettings.Enabled);
+        Assert.Equal(3, consumerSettings.ConnectionCheckerSettings.MaxRetries);
+        Assert.Equal(TimeSpan.FromSeconds(15), consumerSettings.ConnectionCheckerSettings.CheckInterval);
+        Assert.Equal(2.0, consumerSettings.ConnectionCheckerSettings.Factor);
     }
 
     [Fact]
@@ -160,10 +159,10 @@ akka.kafka.producer.kafka-clients {{
         var settings = CommitterSettings.Create(conf);
 
         // Verify default values match those in reference.conf
-        settings.MaxBatch.Should().Be(1000);
-        settings.MaxInterval.Should().Be(TimeSpan.FromSeconds(10));
-        settings.Parallelism.Should().Be(100);
-        settings.When.Should().BeOfType<CommitWhen.OffsetFirstObserved>();
+        Assert.Equal(1000, settings.MaxBatch);
+        Assert.Equal(TimeSpan.FromSeconds(10), settings.MaxInterval);
+        Assert.Equal(100, settings.Parallelism);
+        Assert.True((settings.When) is CommitWhen.OffsetFirstObserved);
     }
 
     [Fact]
@@ -182,10 +181,10 @@ akka.kafka.committer {
         var settings = CommitterSettings.Create(conf);
 
         // Verify overridden values
-        settings.MaxBatch.Should().Be(500);
-        settings.MaxInterval.Should().Be(TimeSpan.FromSeconds(5));
-        settings.Parallelism.Should().Be(4);
-        settings.When.Should().BeOfType<CommitWhen.NextOffsetObserved>();
+        Assert.Equal(500, settings.MaxBatch);
+        Assert.Equal(TimeSpan.FromSeconds(5), settings.MaxInterval);
+        Assert.Equal(4, settings.Parallelism);
+        Assert.True((settings.When) is CommitWhen.NextOffsetObserved);
 
         // Test the fluent API for modifying settings
         var modifiedSettings = settings
@@ -194,9 +193,9 @@ akka.kafka.committer {
             .WithParallelism(8)
             .WithCommitWhen(CommitWhen.OffsetFirstObserved.Instance);
 
-        modifiedSettings.MaxBatch.Should().Be(200);
-        modifiedSettings.MaxInterval.Should().Be(TimeSpan.FromSeconds(2));
-        modifiedSettings.Parallelism.Should().Be(8);
-        modifiedSettings.When.Should().BeOfType<CommitWhen.OffsetFirstObserved>();
+        Assert.Equal(200, modifiedSettings.MaxBatch);
+        Assert.Equal(TimeSpan.FromSeconds(2), modifiedSettings.MaxInterval);
+        Assert.Equal(8, modifiedSettings.Parallelism);
+        Assert.True((modifiedSettings.When) is CommitWhen.OffsetFirstObserved);
     }
 }

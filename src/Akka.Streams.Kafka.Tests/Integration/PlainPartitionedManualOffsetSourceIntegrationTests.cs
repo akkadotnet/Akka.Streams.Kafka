@@ -16,7 +16,6 @@ using Akka.Streams.TestKit;
 using Akka.Streams.Util;
 using Akka.Util;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -82,8 +81,7 @@ public class PlainPartitionedManualOffsetSourceIntegrationTests : KafkaIntegrati
 
         probe.Request(99);
         var messages = probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(99));
-        messages.ToHashSet().Count.Should()
-            .Be(99); // All consumed messages should be different (only one value is missing)
+        Assert.Equal(99, messages.ToHashSet().Count); // All consumed messages should be different (only one value is missing)
 
         probe.Cancel();
     }

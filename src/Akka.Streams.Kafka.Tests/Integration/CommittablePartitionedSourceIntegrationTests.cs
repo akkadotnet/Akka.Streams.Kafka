@@ -14,7 +14,6 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -45,7 +44,7 @@ public class CommittablePartitionedSourceIntegrationTests : KafkaIntegrationTest
         await ProduceStrings(i => new TopicPartition(topic, i % partitionsCount), Enumerable.Range(1, totalMessages),
             ProducerSettings);
 
-        var control = KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+        var mergedFlow = (Source<int, IControl>)(object)KafkaConsumer.CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(topic))
             .GroupBy(partitionsCount, tuple => tuple.Item1)
             .SelectAsync(6, async tuple =>
             {
@@ -92,8 +91,9 @@ public class CommittablePartitionedSourceIntegrationTests : KafkaIntegrationTest
                 Log.Info($"sub-source for {topicPartition} completed: Received {result} messages in total.");
                 return result;
             })
-            .MergeSubstreams()
-            .As<Source<int, IControl>>()
+            .MergeSubstreams();
+
+        var control = mergedFlow
             .Scan(0, (c, n) => c + n)
             .ToMaterialized(Sink.Last<int>(), Keep.Both)
             .MapMaterializedValue(tuple => DrainingControl<int>.Create(tuple.Item1, tuple.Item2))
@@ -102,11 +102,11 @@ public class CommittablePartitionedSourceIntegrationTests : KafkaIntegrationTest
         AwaitCondition(() => exceptionTriggered.Value, TimeSpan.FromSeconds(10));
 
         var shutdown = control.DrainAndShutdown();
-        await AwaitConditionAsync(() => shutdown.IsCompleted);
-        createdSubSources.Should().Contain(allTopicPartitions);
-        shutdown.Exception!.Flatten().InnerExceptions[0].Message.Should().Be("FAIL");
+        AwaitCondition(() => shutdown.IsCompleted, TimeSpan.FromSeconds(10));
+        Assert.True(allTopicPartitions.All(tp => createdSubSources.Contains(tp)));
+        Assert.Equal("FAIL", shutdown.Exception!.Flatten().InnerExceptions[0].Message);
 
         // commits will fail if we shut down the consumer too early
-        commitFailures.Should().BeEmpty();
+        Assert.Empty(commitFailures ?? []);
     }
 }
