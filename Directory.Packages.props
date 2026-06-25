@@ -10,7 +10,7 @@
   <!-- App dependencies -->
   <ItemGroup>
     <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
-    <PackageVersion Include="Confluent.Kafka" Version="2.8.0" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.14.2" />
     <PackageVersion Include="Polyfill" Version="7.21.0" />
   </ItemGroup>
   <!-- Test dependencies -->
