@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Nuget package versions -->
-    <AkkaVersion>1.5.68</AkkaVersion>
+    <AkkaVersion>1.5.70</AkkaVersion>
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
     <AspireVersion>9.3.0</AspireVersion>
