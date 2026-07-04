@@ -5,7 +5,7 @@
     <AkkaVersion>1.5.68</AkkaVersion>
     <!-- Unit test Nuget package versions -->
     <NBenchVersion>1.2.2</NBenchVersion>
-    <AspireVersion>9.3.0</AspireVersion>
+    <AspireVersion>13.4.6</AspireVersion>
   </PropertyGroup>
   <!-- App dependencies -->
   <ItemGroup>
