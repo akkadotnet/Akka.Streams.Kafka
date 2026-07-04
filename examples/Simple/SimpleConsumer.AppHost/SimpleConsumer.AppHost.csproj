@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" />
     <PackageReference Include="Aspire.Hosting.Kafka" />
+    <PackageReference Include="Confluent.Kafka" />
   </ItemGroup>
 
   <ItemGroup>
