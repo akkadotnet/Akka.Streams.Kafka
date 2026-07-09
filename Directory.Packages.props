@@ -11,7 +11,7 @@
   <ItemGroup>
     <PackageVersion Include="Akka.Streams" Version="$(AkkaVersion)" />
     <PackageVersion Include="Confluent.Kafka" Version="2.8.0" />
-    <PackageVersion Include="Polyfill" Version="7.21.0" />
+    <PackageVersion Include="Polyfill" Version="10.11.2" />
   </ItemGroup>
   <!-- Test dependencies -->
   <ItemGroup>
