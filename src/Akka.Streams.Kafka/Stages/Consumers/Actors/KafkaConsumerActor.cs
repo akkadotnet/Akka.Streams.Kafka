@@ -1007,10 +1007,11 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
             return;
 
         var directive = _decider(exception);
-        ProcessError(exception);
         if (directive == Directive.Resume)
             return;
 
+        ProcessError(exception);
+        
         Timers.CancelAll();
         if (directive == Directive.Stop && _log.IsErrorEnabled)
             _log.Error(exception, "Exception when polling from consumer, stopping actor: {0}", exception.Message);
