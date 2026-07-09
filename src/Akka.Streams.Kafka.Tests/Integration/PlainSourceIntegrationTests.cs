@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 //  <copyright file="PlainSourceIntegrationTests.cs" company="Akka.NET Project">
 //      Copyright (C) 2023 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
 // </copyright>
@@ -22,7 +22,6 @@ using Akka.Streams.Supervision;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -138,8 +137,8 @@ public class PlainSourceIntegrationTests : KafkaIntegrationTests
         AwaitAssert(() =>
         {
             var info = logProbe.ExpectMsg<Info>();
-            regex.IsMatch(info.Message.ToString() ?? "").Should().BeTrue();
-            info.Message.ToString().Should().Contain("[Resume]");
+            Assert.Matches(regex, info.Message.ToString());
+            Assert.Contains("[Resume]", info.Message.ToString());
         });
         //AwaitCondition(() => control.IsShutdown.IsCompleted, TimeSpan.FromSeconds(10));
     }
@@ -164,7 +163,7 @@ public class PlainSourceIntegrationTests : KafkaIntegrationTests
         var @event = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(10));
         var error = (TestSubscriber.OnError)@event;
         var exception = (ConsumeException)error.Cause;
-        exception.Error.Code.Should().Be(ErrorCode.Local_ValueDeserialization);
+        Assert.Equal(ErrorCode.Local_ValueDeserialization, exception.Error.Code);
         probe.Cancel();
     }
 
@@ -201,7 +200,7 @@ public class PlainSourceIntegrationTests : KafkaIntegrationTests
         probe.Request(elementsCount);
         probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
         // this is twice elementCount because Decider is called twice on each exceptions
-        callCount.Should().Be(elementsCount * 2);
+        Assert.Equal(elementsCount * 2, callCount);
         probe.Cancel();
     }
 
@@ -230,8 +229,8 @@ public class PlainSourceIntegrationTests : KafkaIntegrationTests
         var shutdown = control.Shutdown();
         await AwaitConditionAsync(() => shutdown.IsCompleted);
 
-        customHandler.AssignmentEventsCounter.Current.Should().BeGreaterThan(0);
-        customHandler.StopEventsCounter.Current.Should().BeGreaterThan(0);
+        Assert.True((customHandler.AssignmentEventsCounter.Current) > (0));
+        Assert.True((customHandler.StopEventsCounter.Current) > (0));
     }
 
     private class CustomEventsHandler : IPartitionEventHandler

@@ -20,8 +20,6 @@ using Akka.Streams.TestKit;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
-using FluentAssertions.Extensions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -66,8 +64,8 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             .Run(Materializer);
 
         Log.Debug("Await initial partition assignment");
-        (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Should()
-            .BeEquivalentTo([tp0, tp1]);
+        var partitions1 = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions;
+        Assert.True(partitions1.Contains(tp0) && partitions1.Contains(tp1) && partitions1.Count == 2);
 
         Log.Debug("Read one message from probe1 with partition 1");
         var m = await probe1.RequestNextAsync();
@@ -145,8 +143,8 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             .Run(Materializer);
 
         Log.Debug("Await initial partition assignment");
-        (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Should()
-            .BeEquivalentTo([tp0, tp1]);
+        var partitions2 = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions;
+        Assert.True(partitions2.Contains(tp0) && partitions2.Contains(tp1) && partitions2.Count == 2);
 
         Log.Debug("Read 2 sub-sources returned by the partitioned source");
         await probe1.RequestAsync(2);

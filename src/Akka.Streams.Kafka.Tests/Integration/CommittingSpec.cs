@@ -1,10 +1,11 @@
-﻿// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 //  <copyright file="CommittingSpec.cs" company="Akka.NET Project">
 //      Copyright (C) 2025 - 2025 .NET Foundation <https://github.com/akkadotnet/akka.net>
 // </copyright>
 // -----------------------------------------------------------------------
 
 using System;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
@@ -15,7 +16,6 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -63,7 +63,7 @@ public class CommittingSpec : KafkaIntegrationTests
 
         await probe1.RequestAsync(25);
         var found = await probe1.ExpectNextNAsync(25).ToListAsync();
-        messages.Take(25).Should().BeEquivalentTo(found);
+        Assert.Equivalent(found, messages.Take(25));
 
         await probe1.CancelAsync();
         await control.IsShutdown;
@@ -137,8 +137,8 @@ public class CommittingSpec : KafkaIntegrationTests
 
         // Await initial partition assignment
         var tp1 = await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
-        tp1.Partitions.Should().BeEquivalentTo([partition0, partition1]);
-        tp1.Subscription.Should().Be(subscription1);
+        Assert.Equivalent(ImmutableHashSet.Create(partition0, partition1), tp1.Partitions);
+        Assert.Equal(subscription1, tp1.Subscription);
 
         // read all messages from both partitions
         var committables1 = await probe1.AsyncBuilder()
@@ -168,8 +168,8 @@ public class CommittingSpec : KafkaIntegrationTests
         await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
 
         var finalResults = await consumer1Read;
-        finalResults.Should().BeEquivalentTo(Numbers.Take(count).Select(c => c + "-p0")
-            .Concat(Numbers.Take(count).Select(c => c + "-p1")));
+        Assert.Equivalent(Numbers.Take(count).Select(c => c + "-p0")
+            .Concat(Numbers.Take(count).Select(c => c + "-p1")), finalResults);
 
         probe1.Cancel();
         probe2.Cancel();
@@ -211,8 +211,8 @@ public class CommittingSpec : KafkaIntegrationTests
 
         // Await initial partition assignment
         var tp1 = await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
-        tp1.Partitions.Should().BeEquivalentTo([partition0, partition1]);
-        tp1.Subscription.Should().Be(subscription1);
+        Assert.Equivalent(ImmutableHashSet.Create(partition0, partition1), tp1.Partitions);
+        Assert.Equal(subscription1, tp1.Subscription);
 
         // read all messages from both partitions
         var committables1 = await probe1.AsyncBuilder()
@@ -254,7 +254,7 @@ public class CommittingSpec : KafkaIntegrationTests
         var consumer2Read = committables2.Select(c => c.Record.Message.Value);
         var expectedResults = Numbers.Take(count).Select(c => c + "-" + recordSuffix);
 
-        consumer2Read.Should().BeEquivalentTo(expectedResults);
+        Assert.Equivalent(expectedResults, consumer2Read);
 
         await probe1.CancelAsync();
         await probe2.CancelAsync();

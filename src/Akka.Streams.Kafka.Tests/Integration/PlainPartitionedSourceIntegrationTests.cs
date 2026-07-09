@@ -23,10 +23,7 @@ using Akka.Streams.TestKit;
 using Akka.TestKit.Extensions;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
-using FluentAssertions.Extensions;
 using Xunit;
-using static FluentAssertions.FluentActions;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
 
@@ -48,7 +45,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         await ProduceStrings(topic, Enumerable.Range(1, totalMessages), ProducerSettings);
 
         var consumerSettings = CreateConsumerSettings<string>(group);
-        var control = KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
+        var mergedFlow = (Source<long, IControl>)(object)KafkaConsumer.PlainPartitionedSource(consumerSettings, Subscriptions.Topics(topic))
             .GroupBy(3, tuple => tuple.Item1)
             .SelectAsync(8, async tuple =>
             {
@@ -66,8 +63,9 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
                 Log.Info($"{topicPartition}: Received {sourceMessages} messages in total");
                 return sourceMessages;
             })
-            .MergeSubstreams()
-            .As<Source<long, IControl>>()
+            .MergeSubstreams();
+
+        var control = mergedFlow
             .Scan(0L, (i, subValue) => i + subValue)
             .ToMaterialized(Sink.Last<long>(), Keep.Both)
             .MapMaterializedValue(tuple => DrainingControl<long>.Create(tuple.Item1, tuple.Item2))
@@ -79,8 +77,8 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         await Task.Delay(1000); // Wait for message handling finished after all messages received
 
         var shutdownTask = control.DrainAndShutdown();
-        var shutdownResult = await shutdownTask.WaitAsync(10.Seconds());
-        shutdownResult.Should().Be(totalMessages);
+        var shutdownResult = await shutdownTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(totalMessages, shutdownResult);
     }
 
     [Fact]
@@ -105,7 +103,6 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
                 // Return flag that all messages in child source are from the same, expected partition 
                 return consumedPartitions.All(partition => partition == topicPartition.Partition);
             })
-            .As<Source<bool, IControl>>()
             .ToMaterialized(
                 Sink.Aggregate<bool, bool>(true, (result, childSourceIsValid) => result && childSourceIsValid),
                 Keep.Both)
@@ -116,8 +113,8 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         await Task.Delay(5000);
 
         var shutdownTask = control.DrainAndShutdown();
-        var shutdownResult = await shutdownTask.WaitAsync(10.Seconds());
-        shutdownResult.Should().BeTrue();
+        var shutdownResult = await shutdownTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(shutdownResult);
     }
 
     [Fact]
@@ -160,7 +157,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         var resultTask = KafkaConsumer.PlainPartitionedSource(settings, Subscriptions.Topics("topic"))
             .RunWith(Sink.First<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)>(), Materializer);
 
-        await Awaiting(() => resultTask).Should().ThrowAsync<KafkaException>();
+        await Assert.ThrowsAsync<KafkaException>(() => resultTask);
     }
 
     [Fact]
@@ -192,8 +189,8 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
         Within(TimeSpan.FromSeconds(10), () =>
         {
             var err = substream.ExpectError();
-            err.Should().BeOfType<ConsumeException>();
-            ((ConsumeException)err).Error.IsSerializationError().Should().BeTrue();
+            Assert.True((err) is ConsumeException);
+            Assert.True(((ConsumeException)err).Error.IsSerializationError());
         });
 
         var shutdown = control1.Shutdown();
@@ -226,8 +223,8 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
             .TakeWhile(m => m < totalMessages, true)
             .RunWith(Sink.Last<int>(), Materializer);
 
-        var consumedMessages = await consumedMessagesTask.WaitAsync(60.Seconds());
-        consumedMessages.Should().Be(totalMessages);
+        var consumedMessages = await consumedMessagesTask.WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.Equal(totalMessages, consumedMessages);
     }
 
     [Fact]
@@ -284,7 +281,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
             TimeSpan.FromMilliseconds(100));
 
         var sorted = queue.ToImmutableSortedSet();
-        sorted.Should().BeEquivalentTo(Enumerable.Range(1, totalMessages));
+        Assert.Equivalent(Enumerable.Range(1, totalMessages), sorted);
     }
 
     // This is a rough benchmark number for the unit test above, of how much time it should have taken
@@ -369,7 +366,7 @@ public class PlainPartitionedSourceIntegrationTests : KafkaIntegrationTests
 
         watch.Stop();
 
-        consumeCount.Should().Be(totalMessages);
+        Assert.Equal(totalMessages, consumeCount);
     }
 
     private (int count, TopicPartitionOffset? seekOffset) CheckForSeek(List<ConsumeResult<string, string>> messages)

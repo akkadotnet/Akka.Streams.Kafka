@@ -22,7 +22,6 @@ using Akka.Streams.Kafka.Tests.TestKit.Internal;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 using Config = Akka.Configuration.Config;
 using K = string;
@@ -94,8 +93,8 @@ akka.stream.materializer.debug.fuzzing-mode = on")
         foreach (var message in messages)
         {
             var received = await probe.ExpectNextAsync();
-            received.Record.Message.Key.Should().Be(message.Record.Message.Key);
-            received.Record.Message.Value.Should().Be(message.Record.Message.Value);
+            Assert.Equal(message.Record.Message.Key, received.Record.Message.Key);
+            Assert.Equal(message.Record.Message.Value, received.Record.Message.Value);
         }
 
         await control.Shutdown().WithTimeoutAsync(RemainingOrDefault);

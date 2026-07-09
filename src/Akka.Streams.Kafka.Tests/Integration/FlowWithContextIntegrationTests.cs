@@ -17,7 +17,6 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -121,6 +120,6 @@ public class FlowWithContextIntegrationTests : KafkaIntegrationTests
 
         AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control.DrainAndShutdown());
         AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), control2.Shutdown());
-        AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result).Should().Be(totalConsumed);
+        Assert.Equal(totalConsumed, AssertTaskCompletesWithin(TimeSpan.FromSeconds(10), result));
     }
 }
