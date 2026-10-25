@@ -505,6 +505,11 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
         }
     }
 
+    // KIP-848 (group.protocol=consumer) is incremental and ignores partition.assignment.strategy
+    private bool UsesIncrementalRebalance =>
+        string.Equals(_settings.GetProperty("group.protocol"), "consumer", StringComparison.OrdinalIgnoreCase) ||
+        _settings.GetProperty("partition.assignment.strategy")?.IndexOf("cooperative", StringComparison.OrdinalIgnoreCase) >= 0;
+
     protected override void PostStop()
     {
         base.PostStop();
@@ -532,7 +537,17 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
             // Make sure that the consumer is unassigned from the partition AND closed before we dispose
             try
             {
-                _consumer.Unassign();
+                // librdkafka rejects a plain unassign under an incremental rebalance protocol
+                if (UsesIncrementalRebalance)
+                {
+                    var assignment = _consumer.Assignment;
+                    if (assignment.Count > 0)
+                        _consumer.IncrementalUnassign(assignment);
+                }
+                else
+                {
+                    _consumer.Unassign();
+                }
             }
             catch (Exception)
             {
