@@ -636,7 +636,8 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
 
     private void RequestDelayedPoll()
     {
-        if (_delayedPollInFlight)
+        // at most one delayed poll in the mailbox at a time
+        if (!_delayedPollInFlight)
         {
             _delayedPollInFlight = true;
             Self.Tell(_delayedPollMessage);
@@ -666,11 +667,13 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
         // We overloaded `==`, we need to use `ReferenceEquals` to do this
         if (ReferenceEquals(poll.Target, this))
         {
+            // reset before polling, so an exception thrown by CommitAndPoll can't leave the flag stuck
+            if (!poll.Periodic)
+                _delayedPollInFlight = false;
+
             CommitAndPoll();
             if (poll.Periodic)
                 SchedulePollTask();
-            else
-                _delayedPollInFlight = false;
         }
         else
         {
@@ -966,7 +969,8 @@ internal class KafkaConsumerActor<K, V> : ActorBase, ILogReceive, IWithTimers
                 string.Join(", ", _commitsInProgress));
             _commitMaps = commitMap.ToImmutableList().AddRange(_commitMaps);
             _commitSenders = _commitSenders.Union(replyTo);
-            RequestDelayedPoll();
+            // Commit is synchronous, so retry on the next periodic poll instead of a delayed poll:
+            // the poll interval acts as a backoff when a retriable error fails fast
         }
 
         void HandleFatal(TimeSpan duration, Exception ex)
