@@ -1,3 +1,18 @@
+#### 1.5.73 November 2nd 2026 ####
+
+* [Upgraded to Akka.NET v1.5.73](https://github.com/akkadotnet/akka.net/releases/tag/1.5.73)
+* [Upgraded Confluent.Kafka from 2.8.0 to 2.16.0 (bundled librdkafka 2.16.0)](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/548). KIP-848 (`group.protocol=consumer`) is now GA in the client.
+* [Fixed `KafkaConsumerActor` delayed poll never firing](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/550). Multi-stage consumers (`PlainPartitionedSource`, `CommittablePartitionedSource`, etc.) were throttled to one poll per `PollInterval`, and `CommittableOffset.Commit()` calls and commit retries waited for the next periodic poll. Commits and extra stages now trigger an immediate poll instead.
+
+  | Benchmark (100k messages, default 50ms `PollInterval`) | Before fix | After fix | Throughput |
+  |---|---|---|---|
+  | `PlainPartitionedSourceBenchmark` (3 partitions) | 157.4 / 160.6 µs/msg | 57.1 / 58.9 µs/msg | ~6,300 → ~17,000 msg/s (~2.7x) |
+  | `PlainSourceBenchmark` (single stage, control) | 44.7 / 44.0 µs/msg | 45.5 µs/msg | ~22,000 msg/s (unchanged) |
+
+  Two independent before/after runs, BenchmarkDotNet LongRun (3 launches × 10 iterations), i9-9900K, .NET 9, single-broker Kafka.
+* [Use `IncrementalUnassign` when stopping a consumer under the `cooperative-sticky` or KIP-848 (`group.protocol=consumer`) rebalance protocols](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/547). This fixes the `*assign() call failed` error logged on every consumer stop, see [#546](https://github.com/akkadotnet/Akka.Streams.Kafka/issues/546).
+* [Upgraded Microsoft.SourceLink.GitHub to 10.0.303 to remediate CVE-2026-62900](https://github.com/akkadotnet/Akka.Streams.Kafka/pull/545)
+
 #### 1.5.67 April 28th 2026 ####
 
 * [Upgraded to Akka.NET v1.5.67](https://github.com/akkadotnet/akka.net/releases/tag/1.5.67)
