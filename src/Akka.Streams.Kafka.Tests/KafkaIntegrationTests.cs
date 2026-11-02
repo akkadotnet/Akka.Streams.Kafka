@@ -48,6 +48,9 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
     protected string CreateTopic(int number) => $"topic-{number}-{Uuid}";
     protected string CreateGroup(int number) => $"group-{number}-{Uuid}";
 
+    // A rebalance triggered by a consumer joining takes up to one heartbeat interval plus a group sync
+    protected static readonly TimeSpan RebalanceTimeout = TimeSpan.FromSeconds(15);
+
     protected ProducerSettings<Null, string> ProducerSettings
     {
         get { return BuildProducerSettings<Null, string>(); }
@@ -74,6 +77,9 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
             .WithBootstrapServers(Fixture.KafkaServer)
             .WithStopTimeout(TimeSpan.FromSeconds(1))
             .WithProperty("auto.offset.reset", "earliest")
+            // librdkafka only notices a rebalance on its next heartbeat (default 3s), which made
+            // rebalance specs race the 3s default expect timeout
+            .WithProperty("heartbeat.interval.ms", "500")
             .WithGroupId(group);
 
     protected ConsumerSettings<Null, TValue> CreateConsumerSettings<TValue>(string group) =>
@@ -81,6 +87,9 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
             .WithBootstrapServers(Fixture.KafkaServer)
             .WithStopTimeout(TimeSpan.FromSeconds(1))
             .WithProperty("auto.offset.reset", "earliest")
+            // librdkafka only notices a rebalance on its next heartbeat (default 3s), which made
+            // rebalance specs race the 3s default expect timeout
+            .WithProperty("heartbeat.interval.ms", "500")
             .WithGroupId(group);
 
     protected Task ProduceStrings<TKey>(string topic, IEnumerable<int> range,
