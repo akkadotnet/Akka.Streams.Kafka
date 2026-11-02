@@ -81,18 +81,18 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
 
         // All partitions should be revoked from consumer 1
         Log.Debug("Await a revoke to consumer 1");
-        var revokedPartitions = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsRevoked>()).Partitions;
+        var revokedPartitions = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsRevoked>(RebalanceTimeout)).Partitions;
         Log.Debug("Revoked partitions [{0}] from consumer 1", revokedPartitions);
 
         // Single partition should be assigned back to both consumers
         Log.Debug("Await assign to consumer 2");
         var assignedPartitionConsumer2 =
-            (await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Single();
+            (await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout)).Partitions.Single();
         Log.Debug("Assigned partition [{0}] to consumer 2", assignedPartitionConsumer2);
 
         Log.Debug("Awaiting assign to consumer 1");
         var assignedPartitionConsumer1 =
-            (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Single();
+            (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout)).Partitions.Single();
         Log.Debug("Assigned partition [{0}] to consumer 1", assignedPartitionConsumer1);
 
         // sanity check
@@ -166,21 +166,21 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
             .Run(Materializer);
 
         await probe2.RequestAsync(1);
-        var probe2RunningSubSourceProbes = await SubSourcesWithProbes(1, probe2);
+        var probe2RunningSubSourceProbes = await SubSourcesWithProbes(1, probe2, RebalanceTimeout);
 
         // All partitions should be revoked from consumer 1
         Log.Debug("Await a revoke to consumer 1");
-        var revokedPartitions = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsRevoked>()).Partitions;
+        var revokedPartitions = (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsRevoked>(RebalanceTimeout)).Partitions;
         Log.Debug("Revoked partitions [{0}] from consumer 1", revokedPartitions);
 
         // Single partition should be assigned back to both consumers
         Log.Debug("Await assign to consumer 2");
         var assignedPartitionConsumer2 =
-            (await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Single();
+            (await probe2RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout)).Partitions.Single();
 
         Log.Debug("Awaiting assign to consumer 1");
         var assignedPartitionConsumer1 =
-            (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>()).Partitions.Single();
+            (await probe1RebalanceActor.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout)).Partitions.Single();
 
         // sanity check
         Assert.NotEqual(assignedPartitionConsumer1, assignedPartitionConsumer2);
@@ -215,9 +215,10 @@ public class RebalanceIntegrationTests : KafkaIntegrationTests
 
         ValueTask<List<(TopicPartition, TestSubscriber.Probe<ConsumeResult<Null, string>>)>> SubSourcesWithProbes(
             int partitions,
-            TestSubscriber.Probe<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)> probe)
+            TestSubscriber.Probe<(TopicPartition, Source<ConsumeResult<Null, string>, NotUsed>)> probe,
+            TimeSpan? timeout = null)
         {
-            return probe.ExpectNextNAsync(partitions)
+            return probe.ExpectNextNAsync(partitions, timeout)
                 .Select(c =>
                 {
                     var (tp, source) = c;

@@ -152,10 +152,10 @@ public class CommittingSpec : KafkaIntegrationTests
             .Run(Sys);
 
         // Await an assignment to the new rebalance listener
-        var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>();
+        var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout);
 
         // Await revoke of all partitions in old rebalance listener
-        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>();
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>(RebalanceTimeout);
 
         // commit BEFORE the reassign finishes with an assignment
         var consumer1Read = Task.WhenAll(committables1.Select(async c =>
@@ -165,7 +165,7 @@ public class CommittingSpec : KafkaIntegrationTests
         }));
 
         // the rebalance finishes
-        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout);
 
         var finalResults = await consumer1Read;
         finalResults.Should().BeEquivalentTo(Numbers.Take(count).Select(c => c + "-p0")
@@ -226,9 +226,9 @@ public class CommittingSpec : KafkaIntegrationTests
             .Run(Sys);
 
         // Rebalance fully completes
-        var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>();
-        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>();
-        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>();
+        var tp2 = await rebalanceActor2.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout);
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsRevoked>(RebalanceTimeout);
+        await rebalanceActor1.ExpectMsgAsync<TopicPartitionsAssigned>(RebalanceTimeout);
 
         var partitionRevokedFromConsumer1 = tp2.Partitions.Single();
 

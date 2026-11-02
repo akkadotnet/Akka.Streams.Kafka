@@ -128,7 +128,7 @@ public class PlainSourceIntegrationTests : KafkaIntegrationTests
             .WithBootstrapServers("localhost:10092")
             .WithGroupId(group1);
 
-        var regex = new Regex("\\[localhost:10092\\/bootstrap: Connect to [a-zA-Z0-9#:.*]* failed:");
+        var regex = new Regex("\\[localhost:10092\\/bootstrap: Connect to [a-zA-Z0-9#:.*\\[\\]]* failed:");
         var logProbe = CreateTestProbe();
         Sys.EventStream.Subscribe<Info>(logProbe.Ref);
 
