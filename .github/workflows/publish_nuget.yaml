@@ -1,0 +1,74 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  publish:
+    name: Pack, Push to NuGet and Create Release
+    runs-on: ubuntu-latest
+    # Must match the environment in the nuget.org Trusted Publishing policy
+    environment: publish
+    permissions:
+      id-token: write # fetch the OIDC token exchanged for a short-lived NuGet API key
+      contents: write # create the GitHub release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ./global.json
+
+      - name: Update release notes and version
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Verify tag matches version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.VersionPrefix | Where-Object { $_ } | Select-Object -First 1
+          if ($version -ne '${{ github.ref_name }}') {
+            Write-Error "Tag '${{ github.ref_name }}' does not match VersionPrefix '$version' from RELEASE_NOTES.md"
+            exit 1
+          }
+
+      - name: Create packages
+        run: dotnet pack -c Release -o ./output
+
+      - name: NuGet login (OIDC)
+        # Exchanges the workflow's OIDC token for a short-lived NuGet API key under the
+        # Trusted Publishing policy on nuget.org. NUGET_USER is the nuget.org username of
+        # the package owner. See https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push packages to NuGet
+        run: dotnet nuget push "./output/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Extract latest release notes
+        shell: pwsh
+        run: |
+          $content = Get-Content RELEASE_NOTES.md -Raw
+          if ($content -match '(?s)(####.+?)(?=\n####|\z)') {
+            $Matches[1].Trim() | Set-Content RELEASE_NOTES_LATEST.md
+          } else {
+            $content | Set-Content RELEASE_NOTES_LATEST.md
+          }
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" ./output/*.nupkg \
+            --title "Akka.Streams.Kafka v${{ github.ref_name }}" \
+            --notes-file RELEASE_NOTES_LATEST.md \
+            $([[ "${{ github.ref_name }}" == *-* ]] && echo --prerelease)
