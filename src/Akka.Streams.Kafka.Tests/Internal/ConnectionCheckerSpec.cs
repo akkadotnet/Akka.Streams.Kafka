@@ -14,7 +14,6 @@ using Akka.Streams.Kafka.Internal;
 using Akka.Streams.Kafka.Settings;
 using Akka.Util;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Internal;
@@ -76,7 +75,7 @@ public class ConnectionCheckerSpec : Akka.TestKit.Xunit.TestKit
         var stopwatch = Stopwatch.StartNew();
         ExpectMsg<Metadata.ListTopics>(TimeSpan.FromSeconds(5));
         stopwatch.Stop();
-        stopwatch.Elapsed.Should().BeGreaterThan(minimum);
+        Assert.True((stopwatch.Elapsed) > (minimum));
     }
 
     private void WithCheckerActorRef(Action<IActorRef> block)

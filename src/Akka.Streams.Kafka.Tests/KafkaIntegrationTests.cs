@@ -19,7 +19,6 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
-using FluentAssertions;
 using Xunit;
 using Config = Akka.Configuration.Config;
 
@@ -136,7 +135,7 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
         AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
 
         if (assertIsSuccessful)
-            task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
+            Assert.True(task.IsCompletedSuccessfully);
     }
 
     /// <summary>
@@ -149,7 +148,7 @@ public abstract class KafkaIntegrationTests : Akka.TestKit.Xunit.TestKit
         AwaitCondition(() => task.IsCompleted, timeout, $"task should complete within {timeout} timeout");
 
         if (assertIsSuccessful)
-            task.IsCompletedSuccessfully.Should().Be(true, "task should compete successfully");
+            Assert.True(task.IsCompletedSuccessfully);
 
         return task.Result;
     }

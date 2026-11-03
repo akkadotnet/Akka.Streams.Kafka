@@ -13,7 +13,6 @@ using Akka.Streams.Kafka.Helpers;
 using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -53,6 +52,6 @@ public class SourceWithOffsetContextIntegrationTests : KafkaIntegrationTests
 
         AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
 
-        committedBatches.Select(r => r.Item2).Sum(batch => batch.BatchSize).Should().Be(10);
+        Assert.Equal(10, committedBatches.Select(r => r.Item2).Sum(batch => batch.BatchSize));
     }
 }

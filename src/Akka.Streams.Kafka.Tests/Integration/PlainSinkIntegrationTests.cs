@@ -16,7 +16,6 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 using Directive = Akka.Streams.Supervision.Directive;
 
@@ -75,7 +74,7 @@ public class PlainSinkIntegrationTests : KafkaIntegrationTests
             }
         }
 
-        messagesReceived.Should().Be(100);
+        Assert.Equal(100, messagesReceived);
     }
 
     [Fact]
@@ -154,7 +153,7 @@ public class PlainSinkIntegrationTests : KafkaIntegrationTests
             probe.ExpectNext();
         }
 
-        callCount.Should().Be(1);
+        Assert.Equal(1, callCount);
         probe.Cancel();
     }
 

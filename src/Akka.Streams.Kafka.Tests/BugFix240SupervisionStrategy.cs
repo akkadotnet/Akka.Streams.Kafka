@@ -20,7 +20,6 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.Kafka.Supervision;
 using Akka.Streams.Supervision;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 using Akka.Streams.TestKit;
 
@@ -76,7 +75,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         probe.Cancel();
 
-        callCount.Should().BeGreaterThan(0);
+        Assert.True((callCount) > (0));
     }
 
     [Fact]
@@ -125,7 +124,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         probe.Cancel();
 
-        callCount.Should().Be(1);
+        Assert.Equal(1, callCount);
     }
 
     // In this test, the exception happened inside the consumer source while it is deserializing the value
@@ -186,12 +185,11 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         probe.ExpectNoMsg(TimeSpan.FromSeconds(2));
         probe.Cancel();
 
-        pulled.Should().BeEquivalentTo(new[] { 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
-            opt => opt.WithStrictOrdering());
+        Assert.Equivalent(new[] { 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, pulled);
 
         // Decider should be called twice, because deciders are called in BaseSingleSourceLogic and KafkaConsumerActor 
-        callCount.Should().Be(2);
-        serializationCallCount.Should().Be(2);
+        Assert.Equal(2, callCount);
+        Assert.Equal(2, serializationCallCount);
     }
 
     [Fact]
@@ -234,9 +232,9 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         // stream fails at index 7
         var err = await probe.ExpectEventAsync();
-        err.Should().BeOfType<TestSubscriber.OnError>();
+        Assert.True((err) is TestSubscriber.OnError);
         var exception = ((TestSubscriber.OnError)err).Cause;
-        exception.Message.Should().Contain("BOOM!");
+        Assert.Contains("BOOM!", exception.Message);
 
         // stream should be dead here
         await probe.ExpectNoMsgAsync(TimeSpan.FromMilliseconds(200));
@@ -259,7 +257,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         // BUG: we 6 appears twice in this list not due to any Kafka stuff, but because the final stream element is the 6th element
         // and still gets emitted into the original stream even though its offset is never committed.
         // so we call .ToHashSet here to eliminate the duplicate.
-        offsets.ToHashSet().Should().BeEquivalentTo(Enumerable.Range(1, 11).Select(c => c.ToString()));
+        Assert.Equivalent(Enumerable.Range(1, 11).Select(c => c.ToString()), offsets.ToHashSet());
         return;
 
         Sink<CommittableMessage<Null, string>, NotUsed> CreateSink()
@@ -328,7 +326,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         await GuardWithTimeoutAsync(drainingControl.DrainAndShutdown(), TimeSpan.FromSeconds(10));
 
         // There should be only 1 decider call
-        callCount.Should().Be(1);
+        Assert.Equal(1, callCount);
 
         // Assert that all of the messages, except for those that failed in the stage, got committed
         var settings = CreateConsumerSettings<Null, string>(group);
@@ -347,7 +345,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
 
         // Message "5" is missing because the exception happened downstream of the source and we chose to
         // ignore it in the decider
-        messages.Should().BeEquivalentTo(new[] { "1", "2", "3", "4", "6", "7", "8", "9", "10" });
+        Assert.Equivalent(new[] { "1", "2", "3", "4", "6", "7", "8", "9", "10" }, messages);
         probe.Cancel();
         return;
 
@@ -397,7 +395,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
             Log.Info($"> [{i}]: {message}");
         }
 
-        callCount.Should().Be(1);
+        Assert.Equal(1, callCount);
         probe.Cancel();
         return;
 
@@ -452,7 +450,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
             Log.Info($"> [{i}]: {message}");
         }
 
-        decider.CallCount.Should().Be(1);
+        Assert.Equal(1, decider.CallCount);
         probe.Cancel();
     }
 
@@ -483,7 +481,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         probe.Request(elementsCount);
         probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
         // this is twice elementCount because Decider is called twice on each exceptions
-        callCount.Should().Be(elementsCount * 2);
+        Assert.Equal(elementsCount * 2, callCount);
         probe.Cancel();
         return;
 
@@ -525,7 +523,7 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
         probe.Request(elementsCount);
         probe.ExpectNoMsg(TimeSpan.FromSeconds(10));
         // this is twice elementCount because Decider is called twice on each exceptions
-        decider.CallCount.Should().Be(elementsCount * 2);
+        Assert.Equal(elementsCount * 2, decider.CallCount);
         probe.Cancel();
     }
 
@@ -573,10 +571,10 @@ public class BugFix240SupervisionStrategy : KafkaIntegrationTests
             .RunWith(this.SinkProbe<int>(), Materializer);
 
         var error = probe.Request(elementsCount).ExpectEvent(TimeSpan.FromSeconds(5));
-        error.Should().BeOfType<TestSubscriber.OnError>();
+        Assert.True((error) is TestSubscriber.OnError);
         var exception = ((TestSubscriber.OnError)error).Cause;
-        exception.Should().BeOfType<ConsumeException>();
-        ((ConsumeException)exception).Error.IsSerializationError().Should().BeTrue();
+        Assert.True((exception) is ConsumeException);
+        Assert.True(((ConsumeException)exception).Error.IsSerializationError());
 
         probe.ExpectNoMsg(TimeSpan.FromSeconds(5));
         probe.Cancel();

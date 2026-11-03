@@ -16,8 +16,6 @@ using Akka.Streams.Kafka.Messages;
 using Akka.Streams.Kafka.Settings;
 using Akka.TestKit.Extensions;
 using Confluent.Kafka;
-using FluentAssertions;
-using FluentAssertions.Extensions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -59,8 +57,8 @@ public class TransactionalIntegrationTests : KafkaIntegrationTests
         AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), consumer.IsShutdown);
         AssertTaskCompletesWithin(TimeSpan.FromSeconds(totalMessages), control.DrainAndShutdown());
 
-        var consumedMessages = await consumer.DrainAndShutdown().WaitAsync(10.Seconds());
-        consumedMessages.Should().HaveCount(totalMessages);
+        var consumedMessages = await consumer.DrainAndShutdown().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(totalMessages, (consumedMessages)?.Count());
     }
 
     private Flow<T, T, NotUsed> Business<T>() => Flow.Create<T>();

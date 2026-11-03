@@ -23,7 +23,6 @@ using Akka.TestKit.Extensions;
 using Akka.Util;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 using Debug = System.Diagnostics.Debug;
 
@@ -58,17 +57,18 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         // first message should not be committed but 'batched-up'
         sourceProbe.SendNext(msg1);
         await sourceProbe.ExpectNoMsgAsync(MessageAbsenceTimeout);
-        offsetFactory.Committer.Commits.Should().BeEmpty();
+        Assert.Empty(offsetFactory.Committer.Commits ?? []);
 
         // now send second message to complete the batch
         sourceProbe.SendNext(msg2);
 
         var committedBatch = await sinkProbe.ExpectNextAsync();
 
-        committedBatch.BatchSize.Should().Be(2);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg2.Offset.Offset);
-        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        Assert.Equal(2, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg2.Offset.Offset, committedBatch.Offsets.Values.First()!);
+        Assert.NotNull(offsetFactory.Committer.Commits);
+        Assert.Single(offsetFactory.Committer.Commits!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -86,10 +86,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
 
         sourceProbe.SendNext(msg);
         var committedBatch = await sinkProbe.ExpectNextAsync();
-        committedBatch.BatchSize.Should().Be(1);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg.Offset.Offset);
-        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        Assert.Equal(1, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg.Offset.Offset, committedBatch.Offsets.Values.Last());
+        Assert.Single(offsetFactory.Committer.Commits!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -112,10 +112,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         sourceProbe.SendNext(msg);
         var committedBatch = await sinkProbe.ExpectNextAsync(TimeSpan.FromMilliseconds(50));
 
-        committedBatch.BatchSize.Should().Be(1);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg.Offset.Offset);
-        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        Assert.Equal(1, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg.Offset.Offset, committedBatch.Offsets.Values.Last());
+        Assert.Single(offsetFactory.Committer.Commits!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -140,13 +140,13 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         // triggered by size
         var committedBatch2 = await sinkProbe.RequestNextAsync();
 
-        committedBatch.BatchSize.Should().Be(1);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg1.Offset.Offset);
+        Assert.Equal(1, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg1.Offset.Offset, committedBatch.Offsets.Values.First()!);
 
-        committedBatch2.BatchSize.Should().Be(2);
-        committedBatch2.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch2.Offsets.Values.Last().Should().Be(msg3.Offset.Offset);
+        Assert.Equal(2, committedBatch2.BatchSize);
+        Assert.Single(committedBatch2.Offsets); // 1 offset value per partition
+        Assert.Equal(msg3.Offset.Offset, committedBatch2.Offsets.Values.First()!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -169,10 +169,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
 
         var committedBatch = await sinkProbe.ExpectNextAsync();
 
-        committedBatch.BatchSize.Should().Be(1);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg1.Offset.Offset);
-        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        Assert.Equal(1, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg1.Offset.Offset, committedBatch.Offsets.Values.First()!);
+        Assert.Single(offsetFactory.Committer.Commits!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -197,10 +197,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
 
         var committedBatch = await sinkProbe.ExpectNextAsync();
 
-        committedBatch.BatchSize.Should().Be(2);
-        committedBatch.Offsets.Count.Should().Be(1); // 1 offset value per partition
-        committedBatch.Offsets.Values.Last().Should().Be(msg2.Offset.Offset);
-        offsetFactory.Committer.Commits.Count.Should().Be(1, "expected only one batch commit");
+        Assert.Equal(2, committedBatch.BatchSize);
+        Assert.Single(committedBatch.Offsets); // 1 offset value per partition
+        Assert.Equal(msg2.Offset.Offset, committedBatch.Offsets.Values.Last());
+        Assert.Single(offsetFactory.Committer.Commits!);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -229,10 +229,10 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         await sourceProbe.SendErrorAsync(testException);
 
         var receivedError = await PullTillFailureAsync(sinkProbe, 4);
-        receivedError.Should().Be(testException);
+        Assert.Equal(testException, receivedError);
 
         var commits = offsetFactory.Committer.Commits;
-        commits[^1].Offset.Value.Should().Be(10, "last offset commit should be exactly the one preceeding the failure");
+        Assert.Equal(10, commits[^1].Offset.Value);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -259,9 +259,8 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Values.Last().Should()
-            .Be(msg2.Offset.Offset, "expected only second message to be committed");
-        offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
+        Assert.Equal(msg2.Offset.Offset, lastBatch.Offsets.Values.Last()!);
+        Assert.Equal(2, offsetFactory.Committer.Commits.Count);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -290,9 +289,8 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Values.Last().Should()
-            .Be(batch2.Offsets.Values.First(), "expected only second message to be committed");
-        offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
+        Assert.Equal(batch2.Offsets.Values.First(), lastBatch.Offsets.Values.Last()!);
+        Assert.Equal(2, offsetFactory.Committer.Commits.Count);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -322,9 +320,8 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         var lastBatch = batches.MaxBy(c => c.Offsets.Values.Last().Value);
 
         Assert.NotNull(lastBatch);
-        lastBatch.Offsets.Values.Last().Should()
-            .Be(msg2.Offset.Offset, "expected only second message to be committed");
-        offsetFactory.Committer.Commits.Count.Should().Be(2, "expected only two commits");
+        Assert.Equal(msg2.Offset.Offset, lastBatch.Offsets.Values.Last()!);
+        Assert.Equal(2, offsetFactory.Committer.Commits.Count);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }
@@ -358,9 +355,9 @@ public class CommitCollectorStageSpecs : Akka.TestKit.Xunit.TestKit
         var lastBatch = lastBatches[0];
         var secondLastBatch = lastBatches[1];
 
-        lastBatch.Offsets.Values.Should().Contain(msg3.Offset.Offset, "expected the second offset of partition 1");
-        secondLastBatch.Offsets.Values.Should().Contain(msg2.Offset.Offset, "expected the first offset of partition 2");
-        offsetFactory.Committer.Commits.Count.Should().Be(3, "expected only three commits");
+        Assert.Contains(msg3.Offset.Offset, lastBatch.Offsets.Values);
+        Assert.Contains(msg2.Offset.Offset, secondLastBatch.Offsets.Values);
+        Assert.Equal(3, offsetFactory.Committer.Commits.Count);
 
         await control.Shutdown().WaitAsync(RemainingOrDefault);
     }

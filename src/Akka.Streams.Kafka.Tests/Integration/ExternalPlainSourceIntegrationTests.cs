@@ -20,7 +20,6 @@ using Akka.Streams.TestKit;
 using Akka.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 using Decider = Akka.Streams.Supervision.Decider;
 
@@ -106,12 +105,12 @@ public class ExternalPlainSourceIntegrationTests : KafkaIntegrationTests
 
         // First two stages should fail, and only stage without demand should keep going
         var ex = probe1.ExpectError();
-        ex.Should().BeOfType<ConsumeException>();
-        ((ConsumeException)ex).Error.IsSerializationError().Should().BeTrue();
+        Assert.True((ex) is ConsumeException);
+        Assert.True(((ConsumeException)ex).Error.IsSerializationError());
 
         ex = probe2.ExpectError();
-        ex.Should().BeOfType<ConsumeException>();
-        ((ConsumeException)ex).Error.IsSerializationError().Should().BeTrue();
+        Assert.True((ex) is ConsumeException);
+        Assert.True(((ConsumeException)ex).Error.IsSerializationError());
 
         probe3.Cancel();
 

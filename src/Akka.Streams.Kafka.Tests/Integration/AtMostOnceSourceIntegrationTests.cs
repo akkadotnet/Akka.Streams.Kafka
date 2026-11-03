@@ -12,7 +12,6 @@ using Akka.Streams.Kafka.Dsl;
 using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -41,7 +40,7 @@ public class AtMostOnceSourceIntegrationTests : KafkaIntegrationTests
 
         AwaitCondition(() => control.IsShutdown.IsCompletedSuccessfully, TimeSpan.FromSeconds(10));
 
-        (await task).Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => i.ToString()));
+        Assert.Equivalent(Enumerable.Range(1, 5).Select(i => i.ToString()), (await task));
     }
 
     [Fact(Skip = "Issue https://github.com/akkadotnet/Akka.Streams.Kafka/issues/66")]

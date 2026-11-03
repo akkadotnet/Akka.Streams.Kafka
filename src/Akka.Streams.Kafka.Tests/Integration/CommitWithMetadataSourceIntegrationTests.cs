@@ -14,7 +14,6 @@ using Akka.Streams.Kafka.Settings;
 using Akka.Streams.TestKit;
 using Akka.Util.Internal;
 using Confluent.Kafka;
-using FluentAssertions;
 using Xunit;
 
 namespace Akka.Streams.Kafka.Tests.Integration;
@@ -55,8 +54,8 @@ public class CommitWithMetadataSourceIntegrationTests : KafkaIntegrationTests
         probe.Within(TimeSpan.FromSeconds(10), () => probe.ExpectNextN(10)).ForEach(message =>
         {
             var offsetWithMeta = message.CommitableOffset as ICommittableOffsetMetadata;
-            offsetWithMeta.Should().NotBeNull();
-            offsetWithMeta!.Metadata.Should().Be(message.CommitableOffset.Offset.Offset.ToString());
+            Assert.NotNull(offsetWithMeta);
+            Assert.Equal(message.CommitableOffset.Offset.Offset.ToString(), offsetWithMeta!.Metadata);
         });
 
         probe.Cancel();
