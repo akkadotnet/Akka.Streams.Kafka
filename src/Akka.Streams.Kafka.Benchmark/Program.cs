@@ -41,6 +41,6 @@ public static class Program
             return;
         }
 
-        BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run();
+        BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run(args);
     }
 }

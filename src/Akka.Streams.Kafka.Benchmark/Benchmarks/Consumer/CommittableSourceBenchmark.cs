@@ -35,7 +35,7 @@ public class CommittableSourceBenchmark : KafkaConsumerBenchmark<int>
             .Select(ICommittable (message) => message.CommitableOffset)
             .Via(Committer.BatchFlow(committerSettings))
             // have to add this to make sure the `Take` stage gets what it needs
-            .SelectMany(c => new int[c.Offsets.Count])
+            .SelectMany(c => new int[c.BatchSize])
             .Select(c => c);
     }
 

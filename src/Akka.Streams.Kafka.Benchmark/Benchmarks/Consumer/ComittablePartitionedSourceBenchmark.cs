@@ -49,7 +49,7 @@ public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>
 
         partitionedSrc.RunWith(Sink.Ignore<NotUsed>(), ActorSystem);
 
-        return trueSource.SelectMany(c => new int[c.Offsets.Count])
+        return trueSource.SelectMany(c => new int[c.BatchSize])
             .Select(c => c)
             .MapMaterializedValue(_ => control);
     }

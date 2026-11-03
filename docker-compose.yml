@@ -10,7 +10,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     extra_hosts:
       - "moby:127.0.0.1"
-      - "localhost: 127.0.0.1"
+      - "localhost:127.0.0.1"
 
   kafka:
     image: confluentinc/cp-kafka:7.5.3
@@ -30,4 +30,4 @@ services:
       KAFKA_DELETE_TOPIC_ENABLE: "true"
     extra_hosts:
       - "moby:127.0.0.1"
-      - "localhost: 127.0.0.1"
+      - "localhost:127.0.0.1"
