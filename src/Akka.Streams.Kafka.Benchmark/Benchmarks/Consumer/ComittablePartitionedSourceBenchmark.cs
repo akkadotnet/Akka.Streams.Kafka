@@ -4,6 +4,7 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -33,7 +34,10 @@ public class CommittablePartitionedSourceBenchmark : KafkaConsumerBenchmark<int>
         var consumerSettings = CreateConsumerSettings<Null, string>()
             .WithMaxPollRecords(PollBatchSize);
         var committerSettings = CommitterSettings.Create(ActorSystem!)
-            .WithMaxBatch(CommitBatchSize);
+            .WithMaxBatch(CommitBatchSize)
+            // the default 10s max-interval holds back each partition's final partial batch,
+            // which adds ~10s of idle time to every iteration
+            .WithMaxInterval(TimeSpan.FromMilliseconds(100));
 
         var (control, partitionedSrc) = KafkaConsumer
             .CommittablePartitionedSource(consumerSettings, Subscriptions.Topics(TopicName))
