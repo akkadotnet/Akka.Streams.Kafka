@@ -4,6 +4,7 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.Threading.Tasks;
 using Akka.Streams.Dsl;
 using Akka.Streams.Kafka.Benchmark.Configs;
@@ -29,7 +30,10 @@ public class CommittableSourceBenchmark : KafkaConsumerBenchmark<int>
         var consumerSettings = CreateConsumerSettings<Null, string>()
             .WithMaxPollRecords(PollBatchSize);
         var committerSettings = CommitterSettings.Create(ActorSystem!)
-            .WithMaxBatch(CommitBatchSize);
+            .WithMaxBatch(CommitBatchSize)
+            // don't let a final partial batch wait for the default 10s max-interval
+            // (100k is a multiple of CommitBatchSize today, but keep this in line with the partitioned benchmark)
+            .WithMaxInterval(TimeSpan.FromMilliseconds(100));
 
         return KafkaConsumer.CommittableSource(consumerSettings, Subscriptions.Topics(TopicName))
             .Select(ICommittable (message) => message.CommitableOffset)
