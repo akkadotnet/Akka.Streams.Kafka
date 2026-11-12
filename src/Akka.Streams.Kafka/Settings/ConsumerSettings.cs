@@ -225,12 +225,11 @@ public sealed record ConsumerSettings<TKey, TValue>
         int bufferSize, string dispatcherId,
         IImmutableDictionary<string, string> properties,
         ConnectionCheckerSettings connectionCheckerSettings)
-    {
-        new ConsumerSettings<TKey, TValue>(
-            keyDeserializer, valueDeserializer, pollInterval, pollTimeout, commitTimeout, commitRefreshInterval,
+        : this(keyDeserializer, valueDeserializer, pollInterval, pollTimeout, commitTimeout, commitRefreshInterval,
             stopTimeout, positionTimeout, commitTimeWarning, partitionHandlerWarning, waitClosePartition,
             metadataRequestTimeout, drainingCheckInterval, autoCreateTopicsEnabled, bufferSize, dispatcherId,
-            properties, connectionCheckerSettings, null);
+            properties, connectionCheckerSettings, null)
+    {
     }
 
     public ConsumerSettings(
